@@ -1,1145 +1,1062 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence, useInView } from "framer-motion";
+import Link from "next/link";
+import Image from "next/image";
+import { motion } from "framer-motion";
+import { useMemo, useState } from "react";
 import {
-  Sparkles,
-  Link2,
-  Paintbrush,
-  ImageIcon,
-  Download,
-  Clock,
   ArrowRight,
   Check,
   ChevronDown,
-  ChevronUp,
   Menu,
+  Sparkles,
   X,
   Zap,
-  Globe,
-  Play,
+  Palette,
+  Workflow,
+  Rocket,
+  FileText,
+  Brain,
+  LayoutTemplate,
+  Share2,
 } from "lucide-react";
+import { TweetCard } from "@/components/kokonutui/tweet-card";
+import LandingHeroCarousel from "@/components/marketing/landing-hero-carousel";
+import HeroFlowAnimation, {
+  RotatingWord,
+} from "@/components/marketing/hero-flow-animation";
+import { LANDING_FAQ } from "@/lib/landing-faq";
 
-/* ─────────────────── HOOKS ─────────────────── */
+const NAV_ITEMS = [
+  { label: "Features", href: "#features" },
+  { label: "Processo", href: "#processo" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "FAQ", href: "#faq" },
+];
 
-function useScrollReveal(margin: string = "-80px") {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: margin as `${number}px` });
-  return { ref, isInView };
-}
+/** Botões alinhados ao neo-brutal (docs/design/neo-brutal-app-shell) */
+const BTN_PRIMARY =
+  "inline-flex items-center justify-center gap-2 rounded-xl border-2 border-[#0A0A0A] bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white shadow-[4px_4px_0_0_#0A0A0A] transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0_0_#0A0A0A] active:translate-x-0 active:translate-y-0 active:shadow-[4px_4px_0_0_#0A0A0A]";
+const BTN_SECONDARY =
+  "inline-flex items-center justify-center gap-2 rounded-xl border-2 border-[#0A0A0A] bg-[#FFFDF9] px-5 py-2.5 text-sm font-bold text-[#0A0A0A] shadow-[4px_4px_0_0_#0A0A0A] transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-white";
 
-/* ─────────────────── DATA ─────────────────── */
+const BTN_OUTLINE_DARK =
+  "inline-flex items-center justify-center gap-2 rounded-xl border-2 border-white bg-transparent px-5 py-2.5 text-sm font-bold text-white shadow-[4px_4px_0_0_rgba(255,255,255,0.9)] transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-white/10";
 
-const features = [
+const FEATURES = [
   {
-    icon: Sparkles,
-    title: "3 Variacoes com IA",
+    icon: Zap,
+    tag: "Velocidade",
+    title: "3 variações em 30 segundos",
     description:
-      "Cada ideia vira 3 opcoes: dados, storytelling e provocativa. Voce escolhe a melhor.",
+      "Cada ideia vira três ângulos diferentes — dados, história e provocação. Você escolhe o que mais soa com sua marca.",
+    accent: "#f59e0b",
   },
   {
-    icon: Link2,
-    title: "De link, video ou ideia",
+    icon: Palette,
+    tag: "Identidade",
+    title: "Parece você, não IA",
     description:
-      "Cole um artigo, video do YouTube ou descreva seu tema. A IA faz o resto.",
+      "Tom, exemplos e estrutura treinados na sua voz. Nada de frase genérica cheirando a ChatGPT sem personalidade.",
+    accent: "#EC6000",
   },
   {
-    icon: Paintbrush,
-    title: "Design automatico",
+    icon: Workflow,
+    tag: "Fluxo",
+    title: "Um app no lugar de cinco",
     description:
-      "Seu @handle, foto e nome aplicados em cada slide. Branco ou preto.",
+      "Ideia, geração, edição, export e publicação no mesmo produto. Sem Notion → ChatGPT → Figma → Canva → Meta.",
+    accent: "#60a5fa",
   },
   {
-    icon: ImageIcon,
-    title: "Imagens inteligentes",
+    icon: Rocket,
+    tag: "Export",
+    title: "Pronto pra postar hoje",
     description:
-      "Puxa da noticia, busca no Google ou gera com IA. Sempre relevante.",
-  },
-  {
-    icon: Download,
-    title: "Exporte ou publique",
-    description:
-      "PNG, PDF ou direto no Instagram, Twitter e LinkedIn. Sem fricao.",
-  },
-  {
-    icon: Clock,
-    title: "Onboarding em 2 min",
-    description:
-      "Configure uma vez, crie infinito. Perfil salvo para todos os carrosseis.",
+      "PNG em alta, proporção 4:5, brand kit aplicado. Você termina de gerar e publica antes do café esfriar.",
+    accent: "#a78bfa",
   },
 ];
 
-const steps = [
+const TESTIMONIALS: Array<{
+  name: string;
+  handle: string;
+  avatar?: string;
+  content: string[];
+  reply?: { name: string; handle: string; content: string };
+}> = [
   {
-    number: "01",
-    title: "Cole um link ou descreva sua ideia",
-    description:
-      "Artigo, video do YouTube, thread ou simplesmente descreva o tema que quer abordar.",
-  },
-  {
-    number: "02",
-    title: "IA gera 3 variacoes de carrossel",
-    description:
-      "Dados, storytelling e provocativa. Cada uma com abordagem diferente pro seu publico.",
-  },
-  {
-    number: "03",
-    title: "Escolha, edite e personalize",
-    description:
-      "Ajuste textos, troque imagens, mude cores. Tudo no editor visual.",
-  },
-  {
-    number: "04",
-    title: "Exporte ou publique direto",
-    description:
-      "Download em PNG/PDF ou publique direto no Instagram, Twitter e LinkedIn.",
-  },
-];
-
-const plans = [
-  {
-    name: "Free",
-    price: "$0",
-    period: "",
-    description: "Para testar e experimentar",
-    features: [
-      "3 carrosseis por mes",
-      "Marca d'agua PostFlow",
-      "Estilos basicos (branco/preto)",
-      "Export PNG",
-      "1 perfil",
+    name: "Ana Marketing",
+    handle: "anamarketing",
+    content: [
+      "Sequência Viral virou meu copiloto de conteúdo.",
+      "Faço carrossel em 3 minutos, não 3 horas.",
+      "Testei 6 ferramentas antes. Essa é a primeira que entende tom brasileiro de verdade 🙌",
     ],
-    cta: "Comecar gratis",
-    highlighted: false,
+    reply: {
+      name: "Sequência Viral",
+      handle: "sequencia-viralapp",
+      content: "Missão cumprida, Ana 🧡",
+    },
   },
   {
-    name: "Pro",
-    price: "$9.99",
-    period: "/mes",
-    description: "Para criadores consistentes",
-    features: [
-      "30 carrosseis por mes",
-      "Sem marca d'agua",
-      "Todos os estilos",
-      "Export PNG + PDF",
-      "Publicacao direta",
-      "3 perfis",
-      "Imagens com IA",
+    name: "Pedro Tech",
+    handle: "pedrotech",
+    content: [
+      "Testei 8 ferramentas de IA pra conteúdo em 2026.",
+      "Sequência Viral é a primeira que NÃO deixa o post cheirando a IA genérica.",
+      "Finalmente alguém entendeu o problema.",
     ],
-    cta: "Assinar Pro",
-    highlighted: true,
   },
   {
-    name: "Max",
-    price: "$29.99",
-    period: "/mes",
-    description: "Para times e agencias",
-    features: [
-      "Carrosseis ilimitados",
-      "API de integracao",
-      "3 seats inclusos",
-      "Analytics avancado",
-      "Custom branding",
-      "Suporte prioritario",
-      "Todos os recursos Pro",
+    name: "Lucas Cripto",
+    handle: "lucascripto",
+    content: [
+      "Minha agência usa pro time todo.",
+      "Economizamos ~15h/semana só em carrosséis.",
+      "ROI absurdo. Bom demais.",
     ],
-    cta: "Assinar Max",
-    highlighted: false,
+    reply: {
+      name: "Sequência Viral",
+      handle: "sequencia-viralapp",
+      content: "Partiu escalar isso 🚀",
+    },
+  },
+  {
+    name: "Camila UX",
+    handle: "camilaux",
+    content: [
+      "Sou designer e sempre odiei montar carrossel na mão.",
+      "O Sequência Viral gera variações que eu só ajusto o visual e publico.",
+      "Meu engajamento subiu 40% em 3 semanas.",
+    ],
+  },
+  {
+    name: "Rafa Finanças",
+    handle: "rafafinancas",
+    content: [
+      "Posto conteúdo de educação financeira todos os dias.",
+      "O Sequência Viral entende o tom que eu uso — direto, sem enrolação.",
+      "Economizo pelo menos 1h por post. Essencial pra mim.",
+    ],
+    reply: {
+      name: "Sequência Viral",
+      handle: "sequencia-viralapp",
+      content: "Constância + velocidade = resultado 💪",
+    },
+  },
+  {
+    name: "Thiago SaaS",
+    handle: "thiagosaas",
+    content: [
+      "Gerencio 4 contas de clientes na agência.",
+      "Cada uma com tom diferente. O Sequência Viral respeita o perfil de cada uma.",
+      "Mudou completamente nosso workflow de produção de conteúdo.",
+    ],
+  },
+  {
+    name: "Juliana Coach",
+    handle: "julianacoach",
+    content: [
+      "Antes eu travava olhando pra tela em branco por 40 minutos.",
+      "Agora colo um insight, gero 3 variações e publico em 5 min.",
+      "Meus alunos acham que eu contratei um social media 😂",
+    ],
+  },
+  {
+    name: "Felipe Dev",
+    handle: "felipedev",
+    content: [
+      "A exportação em PNG pixel-perfect foi o que me ganhou.",
+      "Tentei outras ferramentas e todas saíam borradas ou fora de proporção.",
+      "Aqui é 1080×1350, nítido, pronto pra postar.",
+    ],
+    reply: {
+      name: "Sequência Viral",
+      handle: "sequencia-viralapp",
+      content: "Pixel por pixel, sempre 🎯",
+    },
+  },
+  {
+    name: "Marina Nutrição",
+    handle: "marinanutri",
+    content: [
+      "Uso pra transformar artigos do blog em carrosséis.",
+      "Cole o link, gera, edita e publica. Simples assim.",
+      "Meu alcance no Instagram triplicou desde que comecei.",
+    ],
   },
 ];
 
-const testimonials = [
-  {
-    quote:
-      "PostFlow mudou como eu produzo conteudo. De 2h por carrossel para 5 minutos.",
-    name: "Ana Silva",
-    handle: "@anamarketing",
-    role: "Content Creator",
-    initials: "AS",
-  },
-  {
-    quote:
-      "As 3 variacoes sao geniais. Sempre tem uma que eu nao teria pensado.",
-    name: "Pedro Mendes",
-    handle: "@pedrotech",
-    role: "Tech Creator",
-    initials: "PM",
-  },
-  {
-    quote:
-      "Finalmente um gerador de carrossel que entende tom de voz brasileiro.",
-    name: "Lucas Ferreira",
-    handle: "@lucascripto",
-    role: "Crypto Educator",
-    initials: "LF",
-  },
-];
 
-const comparisonFeatures = [
-  { name: "Carrosseis com IA", free: true, pro: true, max: true },
-  { name: "3 variacoes por ideia", free: true, pro: true, max: true },
-  { name: "Export PNG", free: true, pro: true, max: true },
-  { name: "Marca d'agua removida", free: false, pro: true, max: true },
-  { name: "Todos os estilos", free: false, pro: true, max: true },
-  { name: "Export PDF", free: false, pro: true, max: true },
-  { name: "Publicacao direta", free: false, pro: true, max: true },
-  { name: "Imagens com IA", free: false, pro: true, max: true },
-  { name: "Multiplos perfis", free: false, pro: true, max: true },
-  { name: "API de integracao", free: false, pro: false, max: true },
-  { name: "Analytics avancado", free: false, pro: false, max: true },
-  { name: "Custom branding", free: false, pro: false, max: true },
-  { name: "Suporte prioritario", free: false, pro: false, max: true },
-];
-
-const faqs = [
-  {
-    question: "Preciso saber design para usar o PostFlow?",
-    answer:
-      "Nao. O PostFlow gera o design automaticamente com base no seu perfil. Voce so escolhe entre as variacoes e edita se quiser. Zero conhecimento tecnico necessario.",
-  },
-  {
-    question: "Posso usar para clientes da minha agencia?",
-    answer:
-      "Sim. No plano Max voce tem 3 seats e custom branding. Cada perfil pode ter foto, nome e @handle diferentes. Ideal para agencias.",
-  },
-  {
-    question: "Quais plataformas sao suportadas?",
-    answer:
-      "Instagram (carrossel), Twitter/X (thread visual) e LinkedIn (documento/carrossel). Voce exporta no formato otimizado pra cada uma.",
-  },
-  {
-    question: "A IA gera as imagens dos slides?",
-    answer:
-      "Sim. O PostFlow puxa imagens do artigo original, busca no Google Images ou gera com IA. Voce escolhe qual usar em cada slide.",
-  },
-  {
-    question: "Posso cancelar a assinatura a qualquer momento?",
-    answer:
-      "Sim, sem compromisso. Cancele quando quiser pelo dashboard. Voce mantem acesso ate o fim do periodo pago.",
-  },
-  {
-    question: "Tem limite de slides por carrossel?",
-    answer:
-      "Ate 15 slides por carrossel. A IA sugere o numero ideal baseado no conteudo, mas voce pode ajustar.",
-  },
-];
-
-const carouselSlides = [
-  {
-    heading: "5 automacoes que economizam 20h por semana",
-    body: "A maioria dos criadores perde tempo em tarefas que uma IA resolve em segundos. Aqui estao as 5 que mudaram meu fluxo de trabalho.",
-    slideNumber: 1,
-  },
-  {
-    heading: "1. Agendamento inteligente de posts",
-    body: "Pare de escolher horarios manualmente. Ferramentas como Buffer e Later analisam seu publico e postam no melhor momento.",
-    slideNumber: 2,
-  },
-  {
-    heading: "2. Transcricao automatica de videos",
-    body: "Grave um video de 10 min e transforme em 5 posts de texto. Whisper + GPT fazem isso em 30 segundos.",
-    slideNumber: 3,
-  },
-];
-
-/* ─────────────────── COMPONENTS ─────────────────── */
-
-function NavBar() {
-  const [scrolled, setScrolled] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
+function LogoMark() {
   return (
-    <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? "bg-white/80 backdrop-blur-xl border-b border-[var(--border)] shadow-sm"
-          : "bg-transparent"
-      }`}
+    <span
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-[#0A0A0A] bg-[var(--accent)]"
+      style={{ boxShadow: "3px 3px 0 0 #0A0A0A" }}
     >
-      <div className="mx-auto max-w-6xl px-6 flex items-center justify-between h-16">
-        <a
-          href="#"
-          className="flex items-center gap-2"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/postflow-icon.png" alt="PostFlow" className="w-8 h-8 rounded-lg" />
-          <span className="font-[family-name:var(--font-serif)] text-xl tracking-tight">
-            PostFlow
-          </span>
-        </a>
-
-        {/* Desktop links */}
-        <div className="hidden md:flex items-center gap-8 text-sm text-[var(--muted)]">
-          <a
-            href="#features"
-            className="hover:text-[var(--foreground)] transition-colors"
-          >
-            Features
-          </a>
-          <a
-            href="#pricing"
-            className="hover:text-[var(--foreground)] transition-colors"
-          >
-            Pricing
-          </a>
-          <a
-            href="#faq"
-            className="hover:text-[var(--foreground)] transition-colors"
-          >
-            FAQ
-          </a>
-        </div>
-
-        <div className="hidden md:block">
-          <a
-            href="/app/login"
-            className="btn-scale inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-dark)] transition-colors"
-          >
-            Get Started Free
-          </a>
-        </div>
-
-        {/* Mobile menu button */}
-        <button
-          className="md:hidden p-2"
-          onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label="Toggle menu"
-        >
-          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
-      </div>
-
-      {/* Mobile menu */}
-      <AnimatePresence>
-        {mobileOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="md:hidden bg-white/95 backdrop-blur-xl border-b border-[var(--border)] overflow-hidden"
-          >
-            <div className="px-6 py-4 flex flex-col gap-4">
-              <a
-                href="#features"
-                className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]"
-                onClick={() => setMobileOpen(false)}
-              >
-                Features
-              </a>
-              <a
-                href="#pricing"
-                className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]"
-                onClick={() => setMobileOpen(false)}
-              >
-                Pricing
-              </a>
-              <a
-                href="#faq"
-                className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]"
-                onClick={() => setMobileOpen(false)}
-              >
-                FAQ
-              </a>
-              <a
-                href="/app/login"
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-[var(--accent)] text-white text-sm font-medium"
-                onClick={() => setMobileOpen(false)}
-              >
-                Get Started Free
-              </a>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </nav>
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="white"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+      </svg>
+    </span>
   );
 }
 
-function CarouselMockup() {
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % carouselSlides.length);
-    }, 3500);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, []);
-
-  const slide = carouselSlides[currentSlide];
-
-  return (
-    <div className="w-full max-w-sm mx-auto">
-      <div className="bg-white rounded-2xl border border-[var(--border)] shadow-xl shadow-black/5 overflow-hidden">
-        {/* Handle header */}
-        <div className="px-5 pt-5 pb-3 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--accent)] to-[var(--accent-light)] flex items-center justify-center text-white text-sm font-semibold">
-            GM
-          </div>
-          <div>
-            <p className="text-sm font-semibold leading-tight">
-              Gabriel Madureira
-            </p>
-            <p className="text-xs text-[var(--muted)]">@madureira</p>
-          </div>
-        </div>
-
-        {/* Slide content */}
-        <div className="px-5 pb-5 min-h-[200px]">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentSlide}
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              transition={{ duration: 0.4, ease: "easeInOut" }}
-            >
-              <h3 className="font-[family-name:var(--font-serif)] text-xl leading-snug mb-3">
-                {slide.heading}
-              </h3>
-              <p className="text-sm text-[var(--muted)] leading-relaxed">
-                {slide.body}
-              </p>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* Slide indicator */}
-        <div className="px-5 pb-4 flex items-center justify-between">
-          <div className="flex gap-1.5">
-            {carouselSlides.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentSlide(i)}
-                className={`h-2 rounded-full transition-all duration-500 ease-out ${
-                  i === currentSlide
-                    ? "bg-[var(--accent)] w-6"
-                    : "bg-[var(--border)] w-2"
-                }`}
-                aria-label={`Go to slide ${i + 1}`}
-              />
-            ))}
-          </div>
-          <span className="text-xs text-[var(--muted)] tabular-nums">
-            {slide.slideNumber}/8
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FAQItem({
-  question,
-  answer,
-}: {
-  question: string;
-  answer: string;
-}) {
+function Header() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="border-b border-[var(--border)]">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between py-5 text-left group"
-      >
-        <span className="font-medium pr-4 group-hover:text-[var(--accent)] transition-colors">{question}</span>
-        <motion.div
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-          className="text-[var(--muted)] shrink-0"
+    <header className="sticky top-0 z-50 border-b-2 border-[#0A0A0A] bg-[#FFFDF9]/95 backdrop-blur-sm">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
+        <Link href="/" className="flex items-center gap-3">
+          <LogoMark />
+          <span className="editorial-serif text-xl text-[#0A0A0A]">
+            Sequência Viral<span className="text-[var(--accent)]">.</span>
+          </span>
+        </Link>
+
+        <nav className="hidden items-center gap-2 md:flex">
+          {NAV_ITEMS.map((item) => (
+            <a
+              key={item.label}
+              href={item.href}
+              className="rounded-xl px-3 py-2 text-sm font-semibold text-[#0A0A0A]/70 transition-colors hover:bg-white hover:text-[#0A0A0A] hover:shadow-[inset_0_0_0_1px_rgba(10,10,10,0.12)]"
+            >
+              {item.label}
+            </a>
+          ))}
+          <Link href="/app/login" className={`${BTN_PRIMARY} ml-2`}>
+            Começar grátis
+          </Link>
+        </nav>
+
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="rounded-xl border-2 border-[#0A0A0A] bg-white p-2 shadow-[3px_3px_0_0_#0A0A0A] md:hidden"
+          aria-label="Abrir menu"
         >
-          <ChevronDown size={18} />
+          {open ? <X size={18} /> : <Menu size={18} />}
+        </button>
+      </div>
+
+      {open && (
+        <div className="border-t-2 border-[#0A0A0A] bg-[#FFFDF9] px-5 py-4 md:hidden">
+          <div className="flex flex-col gap-2">
+            {NAV_ITEMS.map((item) => (
+              <a
+                key={item.label}
+                href={item.href}
+                className="rounded-xl px-3 py-2 text-sm font-semibold text-[#0A0A0A]/80 hover:bg-white"
+              >
+                {item.label}
+              </a>
+            ))}
+            <Link href="/app/login" className={`${BTN_PRIMARY} mt-2 w-fit`}>
+              Começar grátis
+            </Link>
+          </div>
+        </div>
+      )}
+    </header>
+  );
+}
+
+function Hero() {
+  return (
+    <section className="relative overflow-hidden bg-[#FAFAF8] px-5 pb-0 pt-20 sm:pt-28">
+      {/* Subtle radial gradient — matches Chatsheet light feel */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 70% 50% at 50% 55%, rgba(236,96,0,0.04) 0%, transparent 70%)",
+        }}
+      />
+
+      {/* Dot grid — extends across entire hero like Chatsheet */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.2]"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 1px 1px, rgba(15,23,42,0.06) 1px, transparent 0)",
+          backgroundSize: "28px 28px",
+        }}
+      />
+
+      {/* ─── Text content (z-10, sits above animation) ─── */}
+      <div className="relative z-10 mx-auto max-w-5xl text-center">
+        {/* Badge */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#E8E8E5] bg-white/90 px-4 py-2 shadow-sm backdrop-blur-sm"
+        >
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-black text-white">
+            P
+          </span>
+          <span className="text-[13px] font-semibold text-[#0A0A0A]/70">
+            Criador de conteúdo com IA
+          </span>
         </motion.div>
-      </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="overflow-hidden"
-          >
-            <p className="pb-5 text-[var(--muted)] text-sm leading-relaxed">
-              {answer}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
+        {/* Headline */}
+        <motion.h1
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="editorial-serif mx-auto max-w-3xl text-[2.5rem] leading-[0.95] text-[#0A0A0A] sm:text-[3.5rem] lg:text-[4.25rem]"
+        >
+          Transforme{" "}
+          <RotatingWord />
+          <br />
+          em posts{" "}
+          <span className="italic text-[var(--accent)]">virais</span>
+          <span className="text-[#0A0A0A]">.</span>
+        </motion.h1>
+
+        {/* Subtitle */}
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.6 }}
+          className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-[var(--muted)]"
+        >
+          Cole um link, um PDF, uma ideia solta. O Sequência Viral devolve um carrossel
+          pronto pra publicar — com a voz da sua marca, em 30 segundos.
+        </motion.p>
+
+        {/* CTA buttons */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.6 }}
+          className="mt-8 flex flex-wrap items-center justify-center gap-3"
+        >
+          <Link href="/app/login" className={BTN_PRIMARY}>
+            Criar grátis
+            <ArrowRight size={16} />
+          </Link>
+          <Link href="#processo" className={BTN_SECONDARY}>
+            Como funciona
+          </Link>
+        </motion.div>
+
+        {/* Trust bullets */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[11px] uppercase tracking-widest text-[var(--muted)]"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Check size={14} className="text-[var(--accent)]" strokeWidth={2.5} />
+            Sem cartão
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Check size={14} className="text-[var(--accent)]" strokeWidth={2.5} />
+            5 carrosséis grátis
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Check size={14} className="text-[var(--accent)]" strokeWidth={2.5} />
+            Export PNG
+          </span>
+        </motion.p>
+      </div>
+
+      {/* ─── Animation scene — overlaps with text, fills entire hero ─── */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3, duration: 1 }}
+        className="relative z-[1] -mt-8 sm:-mt-12"
+      >
+        <HeroFlowAnimation />
+      </motion.div>
+
+      {/* Bottom fade to next section */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#FAFAF8] to-transparent" />
+    </section>
+  );
+}
+
+function TrustStrip() {
+  return (
+    <div className="border-b border-[#E8E8E5] bg-[#FAFAF8] py-5">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-2 px-5 font-mono text-[11px] uppercase tracking-widest text-[#0A0A0A]/50">
+        <span className="flex items-center gap-2">
+          <Zap size={14} className="text-[var(--accent)]" />
+          3 variações por ideia
+        </span>
+        <span className="hidden sm:inline text-[#0A0A0A]/15">|</span>
+        <span className="flex items-center gap-2">
+          <Palette size={14} className="text-[var(--accent)]" />
+          Branding automático
+        </span>
+        <span className="hidden sm:inline text-[#0A0A0A]/15">|</span>
+        <span className="flex items-center gap-2">
+          <Sparkles size={14} className="text-[var(--accent)]" />
+          A partir de $9.99/mês no Pro
+        </span>
+      </div>
     </div>
   );
 }
 
-/* ─────────────────── SECTIONS ─────────────────── */
-
-function SocialProof() {
+function MobileStickyCtA() {
   return (
-    <section className="py-12 border-b border-[var(--border)]">
-      <div className="mx-auto max-w-6xl px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="text-center"
-        >
-          <p className="text-[var(--muted)] text-sm mb-6">
-            Trusted by content creators who want to grow faster
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-16 opacity-40">
-            <span className="text-lg font-semibold tracking-tight">@anamarketing</span>
-            <span className="text-lg font-semibold tracking-tight">@pedrotech</span>
-            <span className="text-lg font-semibold tracking-tight">@lucascripto</span>
-            <span className="text-lg font-semibold tracking-tight">@rafadesign</span>
-            <span className="text-lg font-semibold tracking-tight">@brunogrowth</span>
+    <div className="fixed bottom-0 inset-x-0 z-40 border-t-2 border-[#0A0A0A] bg-[#FFFDF9] p-3 md:hidden">
+      <Link href="/app/login" className={`${BTN_PRIMARY} w-full justify-center py-3 text-base`}>
+        Criar grátis
+        <ArrowRight size={16} />
+      </Link>
+    </div>
+  );
+}
+
+function Features() {
+  return (
+    <section id="features" className="mx-auto max-w-6xl px-5 py-24">
+      <div className="mb-14 max-w-2xl">
+        <span className="tag-pill">
+          <Zap size={13} className="text-[var(--accent)]" />
+          Features
+        </span>
+        <h2 className="editorial-serif mt-6 text-[2.75rem] leading-[0.95] text-[#0A0A0A] sm:text-5xl">
+          Tudo que você precisa.
+          <br />
+          <span className="text-[var(--muted)]">Nada que você não precisa.</span>
+        </h2>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        {FEATURES.map((item) => {
+          const Icon = item.icon;
+          return (
+            <article key={item.title} className="card-offset p-8">
+              <div className="flex items-start justify-between gap-4">
+                <span
+                  className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-2 border-[#0A0A0A] text-white"
+                  style={{
+                    background: `linear-gradient(180deg, ${item.accent}, ${item.accent}dd)`,
+                    boxShadow: "3px 3px 0 0 #0A0A0A",
+                  }}
+                >
+                  <Icon size={20} strokeWidth={2.3} />
+                </span>
+                <span className="rounded-full border-2 border-[#0A0A0A] bg-white px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-widest text-[#0A0A0A]">
+                  {item.tag}
+                </span>
+              </div>
+              <h3 className="mt-7 text-[22px] font-bold leading-tight tracking-tight text-[#0A0A0A]">
+                {item.title}
+              </h3>
+              <p className="mt-3 text-[15px] leading-relaxed text-[var(--muted)]">
+                {item.description}
+              </p>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function Processo() {
+  const steps = useMemo(
+    () =>
+      [
+        {
+          title: "Input",
+          desc: "Você envia ideia, link ou transcrição.",
+          icon: FileText,
+        },
+        {
+          title: "Estratégia",
+          desc: "A IA propõe estrutura com gancho, narrativa e CTA.",
+          icon: Brain,
+        },
+        {
+          title: "Design",
+          desc: "O carrossel nasce com estilo consistente e pronto para edição.",
+          icon: LayoutTemplate,
+        },
+        {
+          title: "Distribuição",
+          desc: "Export em PNG e publicação nas redes sem quebrar o fluxo.",
+          icon: Share2,
+        },
+      ] as const,
+    []
+  );
+
+  return (
+    <section id="processo" className="mx-auto max-w-6xl px-5 py-20">
+      <div className="card-offset-orange p-8 md:p-10">
+        <div className="grid gap-10 lg:grid-cols-[1fr_minmax(0,280px)] lg:items-start">
+          <div>
+            <span className="tag-pill border-white/50 bg-white/10 text-white">
+              Processo
+            </span>
+            <h2 className="editorial-serif mt-6 max-w-3xl text-4xl leading-[0.92] text-white md:text-[3.5rem]">
+              Conteúdo não deveria precisar de 5 ferramentas diferentes.
+            </h2>
+            <p className="mt-5 max-w-2xl text-white/85">
+              Notion pra ideia, ChatGPT pro texto, Figma pro visual, Canva pra ajustar, Meta
+              pra postar. Cada ferramenta mata um pedaço da consistência — e do seu tempo.
+            </p>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              {steps.map(({ title, desc, icon: StepIcon }) => (
+                <div
+                  key={title}
+                  className="flex gap-4 rounded-2xl border-2 border-white/35 bg-white/10 p-4 shadow-[3px_3px_0_0_rgba(10,10,10,0.35)]"
+                >
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-white/50 bg-white/15 text-white">
+                    <StepIcon size={20} strokeWidth={2.25} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold uppercase tracking-wide text-white">{title}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-white/85">{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </motion.div>
+
+          <div className="relative mx-auto w-full max-w-[280px] lg:mx-0 lg:max-w-none">
+            <div className="rounded-3xl border-2 border-[#0A0A0A] bg-white/10 p-2 shadow-[6px_6px_0_0_#0A0A0A]">
+              <div className="overflow-hidden rounded-2xl border border-white/20 bg-[#FFFDF9]/95">
+                <Image
+                  src="/brand/landing/process-spot.png"
+                  alt="Fluxo: ideia, criação e publicação"
+                  width={560}
+                  height={560}
+                  className="h-auto w-full object-cover"
+                  sizes="280px"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const PLANS_DATA = [
+  {
+    id: "free",
+    name: "Free",
+    price: "$0",
+    period: "",
+    tagline: "Pra experimentar",
+    bullets: [
+      "5 carrosséis/mês",
+      "Marca d'água Sequência Viral",
+      "Estilos básicos",
+      "Export PNG",
+      "1 perfil",
+    ],
+    cta: "Criar conta grátis",
+    href: "/app/login",
+    highlighted: false,
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "$9.99",
+    period: "/mês",
+    tagline: "Pra quem posta todo dia",
+    bullets: [
+      "30 carrosséis/mês",
+      "Sem marca d'água",
+      "Todos os estilos",
+      "Imagens com IA",
+      "Export PNG",
+      "1 perfil",
+    ],
+    cta: "Assinar Pro",
+    href: "/app/checkout?plan=pro",
+    highlighted: true,
+  },
+  {
+    id: "business",
+    name: "Business",
+    price: "$29.99",
+    period: "/mês",
+    tagline: "Pra times e agências",
+    bullets: [
+      "Carrosséis ilimitados",
+      "3 seats inclusos",
+      "Suporte prioritário",
+      "Custom branding",
+      "Analytics avançado",
+      "API de integração",
+    ],
+    cta: "Assinar Business",
+    href: "/app/checkout?plan=business",
+    highlighted: false,
+  },
+] as const;
+
+function Pricing() {
+  return (
+    <section id="pricing" className="relative mx-auto max-w-6xl border-t-2 border-[#0A0A0A]/10 px-5 py-24">
+      <div className="mb-14 max-w-2xl">
+        <span className="tag-pill">
+          <Rocket size={13} className="text-[var(--accent)]" />
+          Planos
+        </span>
+        <h2 className="editorial-serif mt-6 text-[2.75rem] leading-[0.95] text-[#0A0A0A] sm:text-5xl">
+          Simples e transparente.
+          <br />
+          <span className="text-[var(--muted)]">Comece grátis hoje.</span>
+        </h2>
+      </div>
+
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        {PLANS_DATA.map((plan) => {
+          const isHighlighted = plan.highlighted;
+
+          if (isHighlighted) {
+            return (
+              <article
+                key={plan.id}
+                className="relative flex flex-col overflow-hidden rounded-[28px] border-2 border-[#0A0A0A] shadow-[8px_8px_0_0_#0A0A0A] lg:-translate-y-2"
+              >
+                <span className="absolute right-4 top-4 z-10 rounded-full border-2 border-[#0A0A0A] bg-[#0A0A0A] px-2.5 py-1 text-[8px] font-bold uppercase tracking-widest text-white">
+                  Mais popular
+                </span>
+
+                <div className="relative bg-[#FFFDF9] p-8 pb-6">
+                  <div className="flex items-start gap-2">
+                    <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-[var(--accent)]">
+                      • {plan.tagline}
+                    </p>
+                    <span className="shrink-0 rounded-full border-2 border-[#0A0A0A] bg-[#B8F5C8] px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#0A0A0A]">
+                      −50%
+                    </span>
+                  </div>
+                  <h3 className="editorial-serif mt-4 text-[1.85rem] leading-[1.05] text-[#0A0A0A]">
+                    Perfeito pra quem
+                    <br />
+                    <span className="italic text-[var(--accent)]">publica todo dia</span>
+                  </h3>
+                  <div className="mt-5">
+                    <span className="text-xs font-semibold text-[var(--muted)] line-through">
+                      $19.99
+                    </span>
+                    <div className="mt-1 flex items-baseline gap-1">
+                      <span className="text-5xl font-bold leading-none tracking-tight text-[#0A0A0A]">
+                        {plan.price}
+                      </span>
+                      <span className="text-sm font-semibold text-[var(--muted)]">
+                        {plan.period}
+                      </span>
+                    </div>
+                  </div>
+                  <Link href={plan.href} className={`${BTN_PRIMARY} mt-5 w-full`}>
+                    {plan.cta}
+                    <ArrowRight size={15} />
+                  </Link>
+                </div>
+
+                <div
+                  className="flex-1 p-8"
+                  style={{
+                    background: "linear-gradient(135deg, #FF8534 0%, #EC6000 55%, #C94E00 100%)",
+                  }}
+                >
+                  <ul className="grid gap-3 sm:grid-cols-2">
+                    {plan.bullets.map((bullet) => (
+                      <li
+                        key={bullet}
+                        className="flex items-center gap-2 text-[13px] font-semibold text-white"
+                      >
+                        <Check size={15} className="shrink-0 text-white/90" strokeWidth={3} />
+                        {bullet}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </article>
+            );
+          }
+
+          return (
+            <article key={plan.id} className="card-offset flex flex-col p-8">
+              <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">
+                • {plan.tagline}
+              </p>
+              <h3 className="editorial-serif mt-3 text-[1.65rem] leading-tight text-[#0A0A0A]">
+                {plan.name}
+              </h3>
+              <div className="mt-5 flex items-baseline gap-1">
+                <span className="text-5xl font-bold leading-none tracking-tight text-[#0A0A0A]">
+                  {plan.price}
+                </span>
+                {plan.period && (
+                  <span className="text-sm font-semibold text-[var(--muted)]">{plan.period}</span>
+                )}
+              </div>
+              <ul className="mt-7 flex-1 space-y-3">
+                {plan.bullets.map((bullet) => (
+                  <li key={bullet} className="flex items-start gap-2.5 text-sm text-[#0A0A0A]/85">
+                    <Check
+                      size={15}
+                      className="mt-0.5 shrink-0 text-[var(--accent)]"
+                      strokeWidth={2.5}
+                    />
+                    {bullet}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href={plan.href}
+                className={`${BTN_SECONDARY} mt-8 w-full border-[#0A0A0A] bg-white hover:bg-[#FFFDF9]`}
+              >
+                {plan.cta}
+                <ArrowRight size={15} />
+              </Link>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
 }
 
 function Testimonials() {
-  return (
-    <section className="py-24 md:py-32">
-      <div className="mx-auto max-w-6xl px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-16"
-        >
-          <h2 className="font-[family-name:var(--font-serif)] text-3xl sm:text-4xl tracking-tight mb-4">
-            O que criadores dizem
-          </h2>
-          <p className="text-[var(--muted)] text-lg max-w-xl mx-auto">
-            Quem usa PostFlow nao volta pro metodo manual.
-          </p>
-        </motion.div>
+  const col1 = TESTIMONIALS.filter((_, i) => i % 3 === 0);
+  const col2 = TESTIMONIALS.filter((_, i) => i % 3 === 1);
+  const col3 = TESTIMONIALS.filter((_, i) => i % 3 === 2);
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {testimonials.map((t, i) => (
-            <motion.div
-              key={t.handle}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.4, delay: i * 0.1 }}
-              className="p-6 rounded-2xl border border-[var(--border)] bg-white"
-            >
-              <p className="text-[var(--foreground)] leading-relaxed mb-6">
-                &ldquo;{t.quote}&rdquo;
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--accent)] to-[var(--accent-light)] flex items-center justify-center text-white text-xs font-semibold">
-                  {t.initials}
-                </div>
-                <div>
-                  <p className="text-sm font-semibold leading-tight">
-                    {t.name}
-                  </p>
-                  <p className="text-xs text-[var(--muted)]">
-                    {t.handle} &middot; {t.role}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+  const renderCard = (item: (typeof TESTIMONIALS)[number]) => (
+    <TweetCard
+      key={item.handle}
+      authorName={item.name}
+      authorHandle={item.handle}
+      avatarUrl={item.avatar}
+      content={item.content}
+      className="rounded-[24px] border-2 border-[#0A0A0A] bg-[#FFFDF9] shadow-[6px_6px_0_0_#0A0A0A]"
+      reply={
+        item.reply
+          ? {
+              authorName: item.reply.name,
+              authorHandle: item.reply.handle,
+              content: item.reply.content,
+            }
+          : undefined
+      }
+    />
+  );
+
+  return (
+    <section className="mx-auto max-w-6xl px-5 py-24">
+      <div className="mb-14 text-center">
+        <span className="tag-pill">
+          <Sparkles size={13} className="text-[var(--accent)]" />
+          Quem usa
+        </span>
+        <h2 className="editorial-serif mt-6 text-[2.75rem] leading-[0.95] text-[#0A0A0A] sm:text-5xl">
+          Quem usa, continua usando.{" "}
+          <span className="text-[var(--muted)]">E conta por aí.</span>
+        </h2>
+        <p className="mx-auto mt-4 max-w-lg text-[var(--muted)]">
+          Creators, agências e freelancers que trocaram horas de design por minutos de resultado.
+        </p>
+      </div>
+
+      {/* Masonry columns */}
+      <div className="hidden lg:grid lg:grid-cols-3 lg:gap-5">
+        <div className="flex flex-col gap-5">{col1.map(renderCard)}</div>
+        <div className="flex flex-col gap-5">{col2.map(renderCard)}</div>
+        <div className="flex flex-col gap-5">{col3.map(renderCard)}</div>
+      </div>
+
+      {/* Mobile/tablet: 2 cols or 1 col */}
+      <div className="grid gap-5 md:grid-cols-2 lg:hidden">
+        {TESTIMONIALS.map(renderCard)}
       </div>
     </section>
   );
 }
 
-function Hero() {
+function Faq() {
+  const [open, setOpen] = useState(0);
   return (
-    <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
-      {/* Grid pattern background */}
-      <div className="absolute inset-0 hero-grid" />
-      {/* Subtle gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-b from-purple-50/50 via-white to-white pointer-events-none" />
-      {/* Floating purple gradient blob */}
-      <div className="hero-blob top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/4 animate-float" />
-
-      <div className="relative mx-auto max-w-6xl px-6 py-20 md:py-32">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          {/* Left -- Copy */}
-          <div>
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-purple-50 border border-purple-100 text-[var(--accent)] text-xs font-medium mb-6">
-                <Zap size={14} />
-                IA que cria carrosseis em 30 segundos
-              </div>
-
-              <h1 className="font-[family-name:var(--font-serif)] text-4xl sm:text-5xl md:text-[3.5rem] leading-[1.1] tracking-tight mb-6">
-                Transforme qualquer ideia
-                <br />
-                <span className="text-[var(--accent)]">
-                  em um carrossel viral.
-                </span>
-              </h1>
-
-              <p className="text-lg text-[var(--muted)] leading-relaxed mb-8 max-w-lg">
-                IA cria 3 variacoes. Voce escolhe. Design automatico com seu
-                @handle. Pronto pra postar.
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-3">
-                <a
-                  href="/app/login"
-                  className="btn-scale btn-glow inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-[var(--accent)] text-white font-medium hover:bg-[var(--accent-dark)] transition-colors text-sm"
-                >
-                  Criar meu primeiro carrossel — gratis
-                  <ArrowRight size={16} />
-                </a>
-                <a
-                  href="#how-it-works"
-                  className="btn-scale inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full border border-[var(--border)] text-[var(--foreground)] font-medium hover:bg-[var(--card)] transition-colors text-sm"
-                >
-                  <Play size={14} />
-                  Ver como funciona
-                </a>
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Right -- Carousel mockup */}
-          <motion.div
-            initial={{ opacity: 0, y: 32 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.2 }}
-            className="animate-float"
-            style={{ animationDuration: "6s" }}
-          >
-            <CarouselMockup />
-          </motion.div>
-        </div>
+    <section id="faq" className="mx-auto max-w-4xl px-5 py-20">
+      <div className="mb-8 text-center">
+        <span className="tag-pill">FAQ</span>
+        <h2 className="editorial-serif mt-6 text-5xl leading-[0.95] text-[#0A0A0A]">
+          Dúvidas antes de começar?
+        </h2>
       </div>
-    </section>
-  );
-}
 
-function Features() {
-  const { ref, isInView } = useScrollReveal();
-
-  return (
-    <section id="features" className="py-24 md:py-32" ref={ref}>
-      <div className="mx-auto max-w-6xl px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-16"
-        >
-          <h2 className="font-[family-name:var(--font-serif)] text-3xl sm:text-4xl tracking-tight mb-4">
-            Tudo que voce precisa.
-            <br />
-            Nada que voce nao precisa.
-          </h2>
-          <p className="text-[var(--muted)] text-lg max-w-xl mx-auto">
-            Do input a publicacao em minutos. Sem curva de aprendizado.
-          </p>
-        </motion.div>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {features.map((feature, i) => (
-            <motion.div
-              key={feature.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.4, delay: i * 0.08 }}
-              className="card-lift group p-6 rounded-2xl border border-[var(--border)] bg-white hover:border-[var(--accent)]/30 transition-all duration-300"
-            >
-              <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-[var(--accent)] mb-4 group-hover:bg-[var(--accent)] group-hover:text-white transition-colors duration-300">
-                <feature.icon size={20} />
-              </div>
-              <h3 className="font-semibold mb-2">{feature.title}</h3>
-              <p className="text-sm text-[var(--muted)] leading-relaxed">
-                {feature.description}
-              </p>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function HowItWorks() {
-  const { ref, isInView } = useScrollReveal();
-
-  return (
-    <section id="how-it-works" className="py-24 md:py-32 bg-[var(--card)]" ref={ref}>
-      <div className="mx-auto max-w-6xl px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-16"
-        >
-          <h2 className="font-[family-name:var(--font-serif)] text-3xl sm:text-4xl tracking-tight mb-4">
-            Como funciona
-          </h2>
-          <p className="text-[var(--muted)] text-lg max-w-xl mx-auto">
-            4 passos. Menos de 2 minutos.
-          </p>
-        </motion.div>
-
-        <div className="grid md:grid-cols-4 gap-8">
-          {steps.map((step, i) => (
-            <motion.div
-              key={step.number}
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.4, delay: i * 0.12 }}
-              className="relative"
-            >
-              {/* Connector line */}
-              {i < steps.length - 1 && (
-                <div className="hidden md:block absolute top-8 left-[calc(100%_-_16px)] w-[calc(100%_-_32px)] h-px bg-[var(--border)]" />
-              )}
-
-              <div className="font-[family-name:var(--font-serif)] text-4xl text-[var(--accent)]/20 mb-3">
-                {step.number}
-              </div>
-              <h3 className="font-semibold mb-2 text-[15px]">{step.title}</h3>
-              <p className="text-sm text-[var(--muted)] leading-relaxed">
-                {step.description}
-              </p>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Pricing() {
-  const { ref, isInView } = useScrollReveal();
-
-  return (
-    <section id="pricing" className="py-24 md:py-32" ref={ref}>
-      <div className="mx-auto max-w-6xl px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-16"
-        >
-          <h2 className="font-[family-name:var(--font-serif)] text-3xl sm:text-4xl tracking-tight mb-4">
-            Simples e transparente
-          </h2>
-          <p className="text-[var(--muted)] text-lg max-w-xl mx-auto">
-            Comece gratis. Escale quando quiser.
-          </p>
-        </motion.div>
-
-        <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-          {plans.map((plan, i) => (
-            <motion.div
-              key={plan.name}
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.4, delay: i * 0.1 }}
-              className={`card-lift relative p-6 rounded-2xl border ${
-                plan.highlighted
-                  ? "border-[var(--accent)] bg-white shadow-xl shadow-purple-500/10"
-                  : "border-[var(--border)] bg-white"
-              }`}
-            >
-              {plan.highlighted && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-[var(--accent)] text-white text-xs font-medium">
-                  Mais popular
-                </div>
-              )}
-
-              <div className="mb-6">
-                <h3 className="font-semibold text-lg mb-1">{plan.name}</h3>
-                <p className="text-sm text-[var(--muted)] mb-4">
-                  {plan.description}
-                </p>
-                <div className="flex items-baseline gap-1">
-                  <span className="font-[family-name:var(--font-serif)] text-4xl">
-                    {plan.price}
-                  </span>
-                  {plan.period && (
-                    <span className="text-sm text-[var(--muted)]">
-                      {plan.period}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <ul className="space-y-3 mb-6">
-                {plan.features.map((feature) => (
-                  <li
-                    key={feature}
-                    className="flex items-start gap-2.5 text-sm"
-                  >
-                    <Check
-                      size={16}
-                      className={`mt-0.5 shrink-0 ${
-                        plan.highlighted
-                          ? "text-[var(--accent)]"
-                          : "text-[var(--success)]"
-                      }`}
-                    />
-                    <span className="text-[var(--muted)]">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
+      <div className="space-y-3">
+        {LANDING_FAQ.map((item, index) => {
+          const isOpen = open === index;
+          return (
+            <article key={item.q} className="card-offset p-5">
               <button
-                className={`btn-scale w-full py-3 rounded-full text-sm font-medium transition-colors ${
-                  plan.highlighted
-                    ? "bg-[var(--accent)] text-white hover:bg-[var(--accent-dark)]"
-                    : "border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--card)]"
-                }`}
+                type="button"
+                onClick={() => setOpen((prev) => (prev === index ? -1 : index))}
+                className="flex w-full items-center justify-between gap-3 text-left"
+                aria-expanded={isOpen}
+                aria-controls={`faq-answer-${index}`}
               >
-                {plan.cta}
+                <span className="text-base font-bold text-[#0A0A0A]">{item.q}</span>
+                <ChevronDown className={`transition-transform ${isOpen ? "rotate-180" : ""}`} size={18} />
               </button>
-
-              {!plan.highlighted && plan.name === "Free" && (
-                <p className="text-xs text-[var(--muted)] text-center mt-3">
-                  Sem cartao de credito
-                </p>
-              )}
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Comparison Table */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="mt-16 max-w-4xl mx-auto"
-        >
-          <h3 className="font-[family-name:var(--font-serif)] text-2xl tracking-tight text-center mb-8">
-            Compare os planos
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)]">
-                  <th className="text-left py-3 pr-4 font-medium text-[var(--muted)]">
-                    Recurso
-                  </th>
-                  <th className="text-center py-3 px-4 font-medium">Free</th>
-                  <th className="text-center py-3 px-4 font-medium text-[var(--accent)]">
-                    Pro
-                  </th>
-                  <th className="text-center py-3 px-4 font-medium">Max</th>
-                </tr>
-              </thead>
-              <tbody>
-                {comparisonFeatures.map((feat) => (
-                  <tr
-                    key={feat.name}
-                    className="border-b border-[var(--border)]/50"
-                  >
-                    <td className="py-3 pr-4 text-[var(--muted)]">
-                      {feat.name}
-                    </td>
-                    <td className="text-center py-3 px-4">
-                      {feat.free ? (
-                        <Check
-                          size={16}
-                          className="inline-block text-[var(--success)]"
-                        />
-                      ) : (
-                        <span className="text-[var(--border)]">&mdash;</span>
-                      )}
-                    </td>
-                    <td className="text-center py-3 px-4">
-                      {feat.pro ? (
-                        <Check
-                          size={16}
-                          className="inline-block text-[var(--accent)]"
-                        />
-                      ) : (
-                        <span className="text-[var(--border)]">&mdash;</span>
-                      )}
-                    </td>
-                    <td className="text-center py-3 px-4">
-                      {feat.max ? (
-                        <Check
-                          size={16}
-                          className="inline-block text-[var(--success)]"
-                        />
-                      ) : (
-                        <span className="text-[var(--border)]">&mdash;</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
+              {isOpen && <p id={`faq-answer-${index}`} className="mt-3 text-sm text-[var(--muted)]">{item.a}</p>}
+            </article>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-function CarouselPreviewSection() {
-  const { ref, isInView } = useScrollReveal();
-
+function FinalCta() {
   return (
-    <section className="py-24 md:py-32 bg-[var(--card)]" ref={ref}>
-      <div className="mx-auto max-w-6xl px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-16"
-        >
-          <h2 className="font-[family-name:var(--font-serif)] text-3xl sm:text-4xl tracking-tight mb-4">
-            Veja o resultado
-          </h2>
-          <p className="text-[var(--muted)] text-lg max-w-xl mx-auto">
-            Cada carrossel sai com seu branding, pronto pra postar.
-          </p>
-        </motion.div>
+    <section className="relative overflow-hidden border-t-4 border-[var(--accent)] bg-[#0A0A0A] py-28">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.12]"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(-12deg, transparent, transparent 18px, rgba(255,133,52,0.35) 18px, rgba(255,133,52,0.35) 20px)",
+        }}
+      />
 
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={isInView ? { opacity: 1, scale: 1 } : {}}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          <CarouselMockup />
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-function FAQ() {
-  const { ref, isInView } = useScrollReveal();
-
-  return (
-    <section id="faq" className="py-24 md:py-32" ref={ref}>
-      <div className="mx-auto max-w-2xl px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-12"
-        >
-          <h2 className="font-[family-name:var(--font-serif)] text-3xl sm:text-4xl tracking-tight mb-4">
-            Perguntas frequentes
-          </h2>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          {faqs.map((faq) => (
-            <FAQItem
-              key={faq.question}
-              question={faq.question}
-              answer={faq.answer}
-            />
-          ))}
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-function FinalCTA() {
-  const { ref, isInView } = useScrollReveal();
-
-  return (
-    <section className="py-24 md:py-32 bg-[var(--foreground)]" ref={ref}>
-      <div className="mx-auto max-w-3xl px-6 text-center">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5 }}
-        >
-          <h2 className="font-[family-name:var(--font-serif)] text-3xl sm:text-4xl md:text-5xl tracking-tight text-white mb-6">
-            Seu primeiro carrossel
-            <br />
-            em 30 segundos.
-          </h2>
-          <p className="text-gray-400 text-lg mb-8 max-w-lg mx-auto">
-            Sem cadastro complicado. Cole um link, escolha o estilo e exporte.
-          </p>
-          <a
-            href="/app/login"
-            className="btn-scale inline-flex items-center gap-2 px-8 py-4 rounded-full bg-[var(--accent)] text-white font-medium hover:bg-[var(--accent-light)] transition-colors"
-          >
-            Comecar agora — gratis
+      <div className="relative mx-auto max-w-4xl px-5 text-center">
+        <span className="inline-flex items-center gap-2 rounded-full border-2 border-white/40 bg-[#0A0A0A] px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-widest text-white/90">
+          <Sparkles size={13} className="text-[var(--accent-light)]" />
+          Pronto pro primeiro post?
+        </span>
+        <h2 className="editorial-serif mt-8 text-[3rem] leading-[0.92] text-white sm:text-[4.5rem] lg:text-[5.5rem]">
+          Seu primeiro carrossel
+          <br />
+          <span className="text-[var(--accent-light)] italic">em 30 segundos.</span>
+        </h2>
+        <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-white/70">
+          Cole um link, um texto ou só uma ideia. O Sequência Viral devolve um carrossel pronto —
+          com sua voz, sua cara, seu timing.
+        </p>
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+          <Link href="/app/login" className={`${BTN_PRIMARY} px-8 py-4 text-base`}>
+            Começar grátis
             <ArrowRight size={18} />
-          </a>
-        </motion.div>
+          </Link>
+          <Link href="/roadmap" className={`${BTN_OUTLINE_DARK} px-6 py-3.5`}>
+            Ver roadmap
+          </Link>
+        </div>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 font-mono text-[10px] uppercase tracking-widest text-white/45">
+          <span className="inline-flex items-center gap-1.5">
+            <Check size={14} className="text-[var(--accent-light)]" strokeWidth={2.5} /> Sem cartão
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Check size={14} className="text-[var(--accent-light)]" strokeWidth={2.5} /> 5 carrosséis
+            grátis
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Check size={14} className="text-[var(--accent-light)]" strokeWidth={2.5} /> Cancele quando
+            quiser
+          </span>
+        </div>
       </div>
     </section>
   );
 }
 
 function Footer() {
+  const year = new Date().getFullYear();
   return (
-    <footer className="border-t border-[var(--border)] py-12">
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="grid sm:grid-cols-4 gap-8">
+    <footer className="border-t-2 border-[#0A0A0A] bg-[#FFFDF9] px-5 pt-16 pb-8 text-sm">
+      <div className="mx-auto max-w-6xl">
+        {/* Top grid */}
+        <div className="grid gap-10 md:grid-cols-4 mb-12">
           {/* Brand */}
-          <div className="sm:col-span-1">
-            <div className="flex items-center gap-2 mb-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/postflow-icon.png" alt="PostFlow" className="w-6 h-6 rounded" />
-              <span className="font-[family-name:var(--font-serif)] text-lg">
-                PostFlow
+          <div className="md:col-span-1">
+            <div className="flex items-center gap-3 mb-4">
+              <LogoMark />
+              <span className="editorial-serif text-lg text-[#0A0A0A]">
+                Sequência Viral<span className="text-[var(--accent)]">.</span>
               </span>
             </div>
-            <p className="text-sm text-[var(--muted)] leading-relaxed">
-              Transforme ideias em carrosseis virais com IA.
+            <p className="text-[13px] text-[#0A0A0A]/60 leading-relaxed mb-5">
+              Carrosséis com IA que parecem feitos por você. Cole um link, descreva uma ideia e publique em 30 segundos.
             </p>
+            <a
+              href="https://kaleidos.com.br"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#0A0A0A]/10 bg-white px-3 py-2 text-[11px] text-[#0A0A0A]/50 hover:border-[#0A0A0A]/25 hover:text-[#0A0A0A]/70 transition-all"
+            >
+              <span>Powered by</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/kaleidos-logo.svg"
+                alt="Kaleidos"
+                className="inline-block h-4 w-auto"
+              />
+              <span className="font-bold">Kaleidos</span>
+            </a>
           </div>
 
-          {/* Product */}
+          {/* Produto */}
           <div>
-            <h4 className="font-medium text-sm mb-3">Produto</h4>
-            <ul className="space-y-2 text-sm text-[var(--muted)]">
+            <h4 className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#0A0A0A]/40 mb-4">
+              Produto
+            </h4>
+            <ul className="space-y-2.5">
               <li>
-                <a
-                  href="#features"
-                  className="hover:text-[var(--foreground)] transition-colors"
-                >
-                  Features
-                </a>
+                <Link href="/app/login" className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors">
+                  Criar carrossel
+                </Link>
               </li>
               <li>
-                <a
-                  href="#pricing"
-                  className="hover:text-[var(--foreground)] transition-colors"
-                >
-                  Pricing
-                </a>
+                <Link href="/#pricing" className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors">
+                  Planos e preços
+                </Link>
               </li>
               <li>
-                <a
-                  href="#faq"
-                  className="hover:text-[var(--foreground)] transition-colors"
-                >
+                <Link href="/roadmap" className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors">
+                  Roadmap
+                </Link>
+              </li>
+              <li>
+                <Link href="/#faq" className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors">
                   FAQ
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
 
-          {/* Company */}
+          {/* Conteúdo */}
           <div>
-            <h4 className="font-medium text-sm mb-3">Empresa</h4>
-            <ul className="space-y-2 text-sm text-[var(--muted)]">
+            <h4 className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#0A0A0A]/40 mb-4">
+              Conteúdo
+            </h4>
+            <ul className="space-y-2.5">
               <li>
-                <a
-                  href="/blog"
-                  className="hover:text-[var(--foreground)] transition-colors"
-                >
+                <Link href="/blog" className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors">
                   Blog
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="#"
-                  className="hover:text-[var(--foreground)] transition-colors"
-                >
+                <Link href="/blog/como-criar-carrosseis-virais-instagram-2026" className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors">
+                  Guia: carrosséis virais
+                </Link>
+              </li>
+              <li>
+                <Link href="/blog/como-usar-ia-criar-conteudo-redes-sociais" className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors">
+                  IA para conteúdo
+                </Link>
+              </li>
+              <li>
+                <Link href="/blog/guia-completo-tamanhos-instagram-twitter-linkedin" className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors">
+                  Guia de tamanhos
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Empresa */}
+          <div>
+            <h4 className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#0A0A0A]/40 mb-4">
+              Empresa
+            </h4>
+            <ul className="space-y-2.5">
+              <li>
+                <a href="mailto:hi@sequencia-viral.app" className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors">
                   Contato
                 </a>
               </li>
               <li>
-                <a
-                  href="#"
-                  className="hover:text-[var(--foreground)] transition-colors"
-                >
-                  Sobre
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          {/* Legal */}
-          <div>
-            <h4 className="font-medium text-sm mb-3">Legal</h4>
-            <ul className="space-y-2 text-sm text-[var(--muted)]">
-              <li>
-                <a
-                  href="#"
-                  className="hover:text-[var(--foreground)] transition-colors"
-                >
-                  Termos de Uso
-                </a>
+                <Link href="/terms" className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors">
+                  Termos de uso
+                </Link>
               </li>
               <li>
-                <a
-                  href="#"
-                  className="hover:text-[var(--foreground)] transition-colors"
-                >
+                <Link href="/privacy" className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors">
                   Privacidade
+                </Link>
+              </li>
+              <li>
+                <a
+                  href="https://twitter.com/sequencia-viralapp"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors"
+                >
+                  Twitter / X
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://instagram.com/sequencia-viralapp"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[13px] text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-colors"
+                >
+                  Instagram
                 </a>
               </li>
             </ul>
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-[var(--muted)]">
-            &copy; {new Date().getFullYear()} PostFlow. Todos os direitos
-            reservados.
+        {/* Divider + bottom */}
+        <div className="border-t border-[#0A0A0A]/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-[12px] text-[#0A0A0A]/40">
+            &copy; {year} Sequência Viral. Todos os direitos reservados.
           </p>
-          <div className="flex items-center gap-4 text-sm text-[var(--muted)]">
+          <p className="text-[12px] text-[#0A0A0A]/40">
+            Feito com ☕ por{" "}
             <a
-              href="https://twitter.com/madureira"
+              href="https://kaleidos.com.br"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-[var(--foreground)] transition-colors"
+              className="font-semibold hover:text-[#0A0A0A]/70 transition-colors"
             >
-              <Globe size={16} />
+              Kaleidos
             </a>
-          </div>
+          </p>
         </div>
       </div>
     </footer>
   );
 }
 
-/* ─────────────────── PAGE ─────────────────── */
-
-export default function Home() {
+export default function HomePage() {
   return (
-    <>
-      <NavBar />
-      <main>
-        <Hero />
-        <SocialProof />
-        <Features />
-        <HowItWorks />
-        <Testimonials />
-        <Pricing />
-        <CarouselPreviewSection />
-        <FAQ />
-        <FinalCTA />
-      </main>
+    <div className="min-h-screen bg-[#FAFAF8] text-[#0A0A0A] pb-16 md:pb-0">
+      <Header />
+      <Hero />
+      <TrustStrip />
+      <Features />
+      <Processo />
+      <Pricing />
+      <Testimonials />
+      <Faq />
+      <FinalCta />
       <Footer />
-    </>
+      <MobileStickyCtA />
+    </div>
   );
 }

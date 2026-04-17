@@ -1,63 +1,61 @@
 import type { Metadata } from "next";
-import { Inter, DM_Serif_Display } from "next/font/google";
+import { Plus_Jakarta_Sans, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { LANDING_FAQ } from "@/lib/landing-faq";
 import "./globals.css";
 
-const inter = Inter({
+const jakarta = Plus_Jakarta_Sans({
   variable: "--font-sans",
   subsets: ["latin"],
 });
 
-const dmSerif = DM_Serif_Display({
+const instrumentSerif = Instrument_Serif({
   variable: "--font-serif",
   subsets: ["latin"],
   weight: "400",
+  style: ["normal", "italic"],
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
-  title: "PostFlow — AI Carousel Generator for Instagram, Twitter & LinkedIn",
+  title: "Sequência Viral — Carrosséis com IA para Instagram, LinkedIn e X",
   description:
-    "Create viral carousels in 30 seconds with AI. 3 variations per idea, automatic branding, and direct publishing. The best carousel maker for content creators.",
-  metadataBase: new URL("https://postflow.app"),
+    "Gere até 3 variações por ideia, com branding consistente e export em PNG. Um fluxo único para creators e times — do texto ao post.",
+  metadataBase: new URL("https://sequencia-viral.app"),
   keywords: [
-    "carousel generator",
-    "instagram carousel ai",
-    "thread generator",
-    "social media content ai",
-    "carousel maker",
-    "linkedin carousel maker",
-    "ai content generator",
     "gerador de carrossel",
+    "carrossel instagram ia",
     "criar carrossel instagram",
-    "carousel design tool",
+    "carousel maker",
+    "linkedin carousel",
+    "conteúdo redes sociais ia",
+    "thread visual",
+    "sequencia-viral",
+    "export png carrossel",
   ],
   alternates: {
-    canonical: "https://postflow.app",
+    canonical: "https://sequencia-viral.app",
   },
   openGraph: {
-    title: "PostFlow — AI Carousel Generator | 3 Variations in 30 Seconds",
+    title: "Sequência Viral — Carrosséis com IA em um fluxo só",
     description:
-      "Create viral carousels in 30 seconds with AI. 3 variations per idea, automatic branding, and direct publishing to Instagram, Twitter & LinkedIn.",
+      "Ideia, geração, edição e export PNG no mesmo lugar. Menos ferramentas, mais consistência para Instagram, LinkedIn e X.",
     type: "website",
-    url: "https://postflow.app",
-    siteName: "PostFlow",
+    url: "https://sequencia-viral.app",
+    siteName: "Sequência Viral",
     locale: "pt_BR",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "PostFlow — AI Carousel Generator",
-      },
-    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "PostFlow — AI Carousel Generator",
+    title: "Sequência Viral — Carrosséis com IA",
     description:
-      "Turn any idea into a viral carousel. 3 AI variations in 30 seconds. Auto-branding. Direct publishing.",
-    site: "@postflow",
-    creator: "@madureira",
-    images: ["/og-image.png"],
+      "Três variações por ideia, branding automático e export em PNG. Feito para quem publica em escala.",
+    site: "@sequencia-viral",
+    creator: "@sequencia-viral",
   },
   robots: {
     index: true,
@@ -75,10 +73,10 @@ export const metadata: Metadata = {
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  name: "PostFlow",
+  name: "Sequência Viral",
   description:
-    "AI-powered carousel and thread generator for Instagram, Twitter, and LinkedIn. Create 3 variations in 30 seconds with automatic branding.",
-  url: "https://postflow.app",
+    "Geração de carrosséis e threads visuais com IA para Instagram, X e LinkedIn. Três variações por ideia e export em PNG.",
+  url: "https://sequencia-viral.app",
   applicationCategory: "DesignApplication",
   operatingSystem: "Web",
   offers: [
@@ -87,7 +85,7 @@ const jsonLd = {
       name: "Free",
       price: "0",
       priceCurrency: "USD",
-      description: "3 carousels per month with PostFlow watermark",
+      description: "5 carrosséis por mês com marca d'água Sequência Viral",
     },
     {
       "@type": "Offer",
@@ -95,80 +93,34 @@ const jsonLd = {
       price: "9.99",
       priceCurrency: "USD",
       billingIncrement: "P1M",
-      description: "30 carousels per month, no watermark, all features",
+      description: "30 carrosséis por mês, sem marca d'água, export PNG",
     },
     {
       "@type": "Offer",
-      name: "Max",
+      name: "Business",
       price: "29.99",
       priceCurrency: "USD",
       billingIncrement: "P1M",
-      description: "Unlimited carousels, API, 3 seats, analytics",
+      description: "Carrosséis ilimitados, API, 3 seats, analytics",
     },
   ],
   featureList: [
-    "3 AI-generated variations per idea",
-    "Automatic branding with profile photo and handle",
-    "Direct publishing to Instagram, Twitter, LinkedIn",
-    "URL, video, and text input support",
-    "AI image generation",
-    "PNG and PDF export",
+    "3 variações geradas por IA a partir de uma ideia",
+    "Branding com foto de perfil e @handle",
+    "Entrada por URL, vídeo (YouTube) ou texto",
+    "Imagens sugeridas por IA ou busca",
+    "Export em PNG otimizado para redes (PDF em roadmap)",
   ],
 };
 
 const faqJsonLd = {
   "@context": "https://schema.org",
   "@type": "FAQPage",
-  mainEntity: [
-    {
-      "@type": "Question",
-      name: "Preciso saber design para usar o PostFlow?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Nao. O PostFlow gera o design automaticamente com base no seu perfil. Voce so escolhe entre as variacoes e edita se quiser. Zero conhecimento tecnico necessario.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Posso usar para clientes da minha agencia?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Sim. No plano Max voce tem 3 seats e custom branding. Cada perfil pode ter foto, nome e @handle diferentes. Ideal para agencias.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Quais plataformas sao suportadas?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Instagram (carrossel), Twitter/X (thread visual) e LinkedIn (documento/carrossel). Voce exporta no formato otimizado pra cada uma.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "A IA gera as imagens dos slides?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Sim. O PostFlow puxa imagens do artigo original, busca no Google Images ou gera com IA. Voce escolhe qual usar em cada slide.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Posso cancelar a assinatura a qualquer momento?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Sim, sem compromisso. Cancele quando quiser pelo dashboard. Voce mantem acesso ate o fim do periodo pago.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Tem limite de slides por carrossel?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Ate 15 slides por carrossel. A IA sugere o numero ideal baseado no conteudo, mas voce pode ajustar.",
-      },
-    },
-  ],
+  mainEntity: LANDING_FAQ.map((item) => ({
+    "@type": "Question" as const,
+    name: item.q,
+    acceptedAnswer: { "@type": "Answer" as const, text: item.a },
+  })),
 };
 
 export default function RootLayout({
@@ -179,9 +131,11 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${inter.variable} ${dmSerif.variable} antialiased`}
+      suppressHydrationWarning
+      className={`${jakarta.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} antialiased`}
     >
       <head>
+        <script dangerouslySetInnerHTML={{ __html: `try{if(localStorage.getItem("sequencia-viral_theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}` }} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

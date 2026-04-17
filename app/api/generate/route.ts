@@ -1,11 +1,13 @@
 import { extractContentFromUrl } from "@/lib/url-extractor";
 import { getYouTubeTranscript } from "@/lib/youtube-transcript";
+import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 
 export const maxDuration = 60;
 
 interface GenerateRequest {
   topic: string;
-  sourceType: "idea" | "link" | "video" | "ai";
+  sourceType: "idea" | "link" | "video" | "instagram" | "ai";
   sourceUrl?: string;
   niche: string;
   tone: string;
@@ -21,6 +23,7 @@ interface Slide {
 interface Variation {
   title: string;
   style: "data" | "story" | "provocative";
+  ctaType?: "save" | "comment" | "share";
   slides: Slide[];
 }
 
@@ -30,6 +33,51 @@ interface GenerateResponse {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (!auth.ok) {
+      return auth.response;
+    }
+    const { user } = auth;
+
+    const limiter = checkRateLimit({
+      key: getRateLimitKey(request, "generate", user.id),
+      limit: 50,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!limiter.allowed) {
+      return Response.json(
+        { error: "Rate limit exceeded. Try again later." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(limiter.retryAfterSec),
+          },
+        }
+      );
+    }
+
+    const sb = createServiceRoleSupabaseClient();
+    if (sb) {
+      const { data: prof } = await sb
+        .from("profiles")
+        .select("usage_count, usage_limit, plan")
+        .eq("id", user.id)
+        .single();
+      if (prof) {
+        const limit = prof.usage_limit ?? 5;
+        const count = prof.usage_count ?? 0;
+        if (count >= limit) {
+          return Response.json(
+            {
+              error: `Você atingiu o limite de ${limit} carrosséis do plano ${prof.plan || "free"}. Faça upgrade para continuar gerando.`,
+              code: "PLAN_LIMIT_REACHED",
+            },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     const body: GenerateRequest = await request.json();
     const { topic, sourceType, sourceUrl, niche, tone, language } = body;
 
@@ -37,9 +85,22 @@ export async function POST(request: Request) {
       return Response.json({ error: "Topic is required" }, { status: 400 });
     }
 
+    if (topic && topic.length > 5000) {
+      return Response.json({ error: "Topic is too long (max 5000 chars)" }, { status: 400 });
+    }
+    if (sourceUrl && sourceUrl.length > 2000) {
+      return Response.json({ error: "URL is too long (max 2000 chars)" }, { status: 400 });
+    }
+
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      // Return mock data for development without API key
+      if (process.env.NODE_ENV === "production") {
+        console.error("[generate] ANTHROPIC_API_KEY missing in production");
+        return Response.json(
+          { error: "Geração com IA não está configurada no servidor." },
+          { status: 503 }
+        );
+      }
       return Response.json(getMockResponse(topic || "Sample Topic"));
     }
 
@@ -68,34 +129,163 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+    } else if (sourceType === "instagram" && sourceUrl) {
+      try {
+        const { extractInstagramContent } = await import(
+          "@/lib/instagram-extractor"
+        );
+        sourceContent = await extractInstagramContent(sourceUrl);
+      } catch (err) {
+        return Response.json(
+          {
+            error: `Falha ao extrair o post do Instagram: ${
+              err instanceof Error ? err.message : "erro desconhecido"
+            }. Dica: cole a legenda como texto no modo "Minha ideia".`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // 2. Build the prompt
-    const systemPrompt = `You are a viral content creator specializing in Instagram carousels and Twitter threads.
-You generate content in ${language || "English"}.
-Tone: ${tone || "professional"}.
-Niche: ${niche || "general"}.
+    const langCode = (language || "pt-br").toLowerCase();
+    const isPtBr = langCode === "pt-br" || langCode === "pt";
+    const languageInstruction = isPtBr
+      ? `LANGUAGE: PORTUGUÊS BRASILEIRO (pt-BR). Escreva TODO o conteúdo — headings, body, CTA, image queries — em português brasileiro coloquial. NUNCA use inglês no heading ou body. Use "você", não "tu". Imagem queries devem ser em inglês (são usadas em busca de imagens stock).`
+      : langCode === "en"
+        ? "LANGUAGE: ENGLISH. Write all heading, body, and CTA in English."
+        : langCode === "es"
+          ? "LANGUAGE: ESPAÑOL. Escribe todo el heading, body y CTA en español."
+          : `LANGUAGE: ${language}`;
 
-Given a topic or source content, create 3 DIFFERENT carousel variations.
-Each carousel has 6-10 slides.
-Each slide has: heading (max 8 words, bold, impactful), body (2-3 short lines, actionable), imageQuery (2-3 word search term for a relevant image).
+    const systemPrompt = `You are an elite social media content strategist who creates viral Instagram carousels and LinkedIn document posts. You have deep expertise in copywriting, engagement psychology, and platform algorithms.
 
-Variation A: Data-driven — focus on statistics, numbers, comparisons, proof
-Variation B: Story-driven — narrative arc, personal angle, relatable scenario, emotional hook
-Variation C: Provocative — hot takes, challenges status quo, bold claims, contrarian view
+${languageInstruction}
+TONE: ${tone || "professional"}
+NICHE: ${niche || "general"}
 
-First slide is always a HOOK that stops the scroll.
-Last slide is always a CTA with the user's handle.
+# YOUR MISSION
+Create 3 radically different carousel variations from the given topic/content. Each must be independently excellent — not just tone variations of the same text.
 
-Return as JSON: { variations: [{ title, style: "data"|"story"|"provocative", slides: [{heading, body, imageQuery}] }] }
+# CAROUSEL ARCHITECTURE (6-10 slides each)
 
-IMPORTANT: Return ONLY valid JSON, no markdown code blocks, no extra text.`;
+## SLIDE 1 — THE HOOK (most critical slide)
+The hook MUST stop the scroll in under 0.7 seconds. Max 10 words in the heading.
+The hook must answer: "Is this for me?" and "What do I gain by swiping?"
+
+Use one of these 12 proven hook patterns (choose the BEST one for each variation):
+- **Number + Consequence**: "7 ferramentas de IA que substituem uma equipe de 5" (not just "7 ferramentas de IA")
+- **Contrarian/Pattern Interrupt**: "Pare de fazer conteudo educativo." (challenges belief, forces read)
+- **Story/Transformation**: "Em 2024 perdi R$50k em um mes." (vulnerability + curiosity about outcome)
+- **Question + Data**: "Sabia que 90% dos carrosseis falham no slide 1?" (stat + reflexao)
+- **Curiosity Gap**: "A estrategia que ninguem fala..." (incomplete info the brain needs to complete)
+- **Bold Claim/Result**: "Este metodo gera 3x mais saves. Leva 10 min." (specific promise + low effort)
+- **Reveal/Exclusivity**: "O framework que uso pra gerar R$100k/mes" (insider access feeling)
+- **This vs That**: "Creator 2023 vs Creator 2026" (comparison + self-identification)
+- **Fear/Urgency**: "Se nao fizer isso em 2026, vai ficar pra tras" (loss aversion)
+- **Authority Proof**: "Analisei 1.000 carrosseis virais. Aqui o padrao." (credibility + data)
+- **Audience Targeting**: "Se voce e creator com menos de 1.000 seguidores..." (personal call-out)
+- **"I Was Wrong"**: "Passei 2 anos fazendo conteudo errado." (vulnerability + credibility)
+
+Rules for hooks:
+- Max 10 words in the heading — shorter hits harder
+- The body must CREATE TENSION that only swiping resolves
+- Never reveal the answer in slide 1
+
+## SLIDES 2-N (The Build)
+Each slide must:
+- Start with a mini-hook (first 3 words must earn the next swipe)
+- Deliver ONE clear idea per slide (not multiple)
+- Use concrete examples, numbers, names — never vague platitudes
+- Build toward a climax or revelation
+- Body text: max 3 short lines. Use line breaks for readability.
+
+Slide progression patterns:
+- **List**: Each slide = one item (numbered). Build from good to BEST.
+- **Story arc**: Setup → Conflict → Turning point → Lesson
+- **Framework**: Problem → Why it matters → Step 1 → Step 2 → Step 3 → Result
+- **Myth-busting**: Myth → Truth → Evidence → Action
+
+## LAST SLIDE — THE CTA (strategic, not generic)
+The CTA MUST match the content type. Never be generic "follow me".
+
+CHOOSE THE RIGHT CTA based on content. ALGORITHM CONTEXT (Instagram 2026):
+- DM Shares weight 3-5x more than likes
+- Saves are the 2nd strongest signal
+- Comments that generate replies boost reach
+- Likes have the lowest algorithmic weight
+
+CTA MATRIX:
+- **Educational/how-to** → "Salve pra consultar depois" (SAVES = strongest signal after DM shares)
+- **Controversial/opinion** → "Concorda? Discorda? Comenta sua visao" (COMMENTS that spark debate)
+- **Relatable/personal story** → "Envia pros DMs de alguem que precisa ler isso" (DM SHARES = highest weight)
+- **Actionable tips/tools** → "Salve e aplique esta semana. Depois volta e me conta" (SAVES + delayed COMMENTS)
+- **Data/comparison** → "Qual desses voce ja usa? Comenta o numero" (low-friction COMMENTS)
+- **Case study/results** → "Compartilha com alguem que precisa + siga pra mais" (SHARES + FOLLOW)
+
+The CTA slide must also include: user's @handle + "siga para mais [niche topic]". Never just "follow me" — specify WHAT they'll get.
+
+# VARIATION STYLES
+
+**Variation A — DADOS & PROOF**
+- Lead with statistics, percentages, comparisons
+- Use "antes vs depois" framing
+- Include specific tools, frameworks, or methods with names
+- Credibility-driven: cite sources, reference studies, show numbers
+- Best CTA: Save-focused (educational value)
+
+**Variation B — STORYTELLING & NARRATIVE**
+- Personal or relatable story arc
+- Start vulnerable, end with insight
+- Use "eu" perspective or hypothetical "imagine que..."
+- Emotional connection before intellectual takeaway
+- Best CTA: Share/tag-focused (emotional resonance)
+
+**Variation C — PROVOCATIVA & CONTRARIAN**
+- Challenge conventional wisdom directly
+- Bold opening that creates strong reaction
+- "A maioria faz X. Os melhores fazem Y."
+- Back up bold claims with evidence in subsequent slides
+- Best CTA: Comment-focused (debate/discussion)
+
+# COPYWRITING RULES
+1. Write like you talk. No academic language. No corporate jargon.
+2. One idea per sentence. Short sentences hit harder.
+3. Use power words: "revelei", "secreto", "erro fatal", "transformou", "desbloquear"
+4. Numbers are specific: "78%" not "a maioria", "23 minutos" not "pouco tempo"
+5. Every heading must be SCANNABLE — someone should get value from headings alone
+6. Body text uses conversational line breaks (one thought per line, max 3 lines)
+7. Avoid cliches: "game-changer", "nesse sentido", "atualmente", "e por isso que"
+8. Each slide's imageQuery should be specific enough to find a relevant, non-generic image
+
+# OUTPUT FORMAT
+Return ONLY valid JSON (no markdown, no code blocks):
+{
+  "variations": [
+    {
+      "title": "carousel title (compelling, max 60 chars)",
+      "style": "data" | "story" | "provocative",
+      "ctaType": "save" | "comment" | "share",
+      "slides": [
+        {
+          "heading": "max 10 words, bold, scannable",
+          "body": "2-3 short lines\\nwith line breaks\\nfor readability",
+          "imageQuery": "specific 2-3 word image search"
+        }
+      ]
+    }
+  ]
+}`;
 
     const userMessage = sourceContent
       ? `Create 3 carousel variations based on this content:\n\nTopic: ${topic}\n\nSource:\n${sourceContent}`
       : `Create 3 carousel variations about: ${topic}`;
 
     // 3. Call Claude API
+    // Model: Sonnet 4.6 = best cost/quality balance for this task.
+    // Opus 4.6 (claude-opus-4-6) is available if you want max quality; it's slower and pricier.
+    const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -104,7 +294,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown code blocks, no extra text.`;
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: CLAUDE_MODEL,
         max_tokens: 4096,
         system: systemPrompt,
         messages: [{ role: "user", content: userMessage }],
@@ -113,9 +303,25 @@ IMPORTANT: Return ONLY valid JSON, no markdown code blocks, no extra text.`;
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Claude API error:", errorText);
+      console.error("[generate] Claude API error:", {
+        status: response.status,
+        model: CLAUDE_MODEL,
+        body: errorText,
+      });
+      // Try to extract the real error message from Claude's JSON error shape
+      let detail = `Claude retornou ${response.status}`;
+      try {
+        const parsed = JSON.parse(errorText);
+        if (parsed?.error?.message) detail = parsed.error.message;
+      } catch {
+        // keep generic detail
+      }
       return Response.json(
-        { error: "AI generation failed. Please try again." },
+        {
+          error: process.env.NODE_ENV === "production"
+            ? "Geração com IA falhou. Tente novamente em alguns instantes."
+            : `Geração com IA falhou. ${detail}`,
+        },
         { status: 502 }
       );
     }
@@ -158,13 +364,102 @@ IMPORTANT: Return ONLY valid JSON, no markdown code blocks, no extra text.`;
       );
     }
 
+    // 6. Auto-fetch images for every slide IN PARALLEL.
+    // We hit Serper (Google Images) via our own /api/images route proxy using
+    // the imageQuery from each slide. Any slide that fails image fetch keeps
+    // its imageQuery but no imageUrl — the frontend will show a placeholder
+    // and the user can replace via upload/regenerate.
+    try {
+      const origin = new URL(request.url).origin;
+      const authHeader = request.headers.get("authorization") ?? "";
+
+      const allSlideQueries: Array<{ varIdx: number; slideIdx: number; query: string }> = [];
+      result.variations.forEach((variation, vi) => {
+        variation.slides.forEach((slide, si) => {
+          if (slide.imageQuery) {
+            allSlideQueries.push({ varIdx: vi, slideIdx: si, query: slide.imageQuery });
+          }
+        });
+      });
+
+      // De-duplicate queries to save API calls
+      const uniqueQueries = Array.from(new Set(allSlideQueries.map((q) => q.query)));
+      const queryToUrl = new Map<string, string>();
+
+      await Promise.allSettled(
+        uniqueQueries.map(async (q) => {
+          try {
+            const r = await fetch(`${origin}/api/images`, {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                ...(authHeader ? { authorization: authHeader } : {}),
+              },
+              body: JSON.stringify({ query: q, count: 1 }),
+            });
+            if (!r.ok) return;
+            const j = await r.json();
+            const first: string | undefined = j?.images?.[0]?.url || j?.results?.[0]?.url || j?.url;
+            if (first) queryToUrl.set(q, first);
+          } catch {
+            // swallow — slide keeps no imageUrl
+          }
+        })
+      );
+
+      // Stitch URLs back into slides
+      for (const { varIdx, slideIdx, query } of allSlideQueries) {
+        const url = queryToUrl.get(query);
+        if (url) {
+          const slide = result.variations[varIdx].slides[slideIdx] as Slide & {
+            imageUrl?: string;
+          };
+          slide.imageUrl = url;
+        }
+      }
+    } catch (imgErr) {
+      console.warn("[generate] auto-image fetch failed (non-fatal):", imgErr);
+    }
+
+    // Increment usage_count server-side and record generation
+    if (sb) {
+      const { error: incErr } = await sb.rpc("increment_usage_count", { uid: user.id });
+      if (incErr) {
+        // Fallback: manual increment if RPC doesn't exist yet
+        const { data: currentProfile } = await sb
+          .from("profiles")
+          .select("usage_count")
+          .eq("id", user.id)
+          .single();
+        if (currentProfile) {
+          await sb
+            .from("profiles")
+            .update({ usage_count: (currentProfile.usage_count ?? 0) + 1 })
+            .eq("id", user.id);
+        }
+      }
+
+      await sb.from("generations").insert({
+        user_id: user.id,
+        model: CLAUDE_MODEL,
+        provider: "anthropic",
+        input_tokens: data.usage?.input_tokens ?? 0,
+        output_tokens: data.usage?.output_tokens ?? 0,
+        cost_usd: ((data.usage?.input_tokens ?? 0) * 0.000003 + (data.usage?.output_tokens ?? 0) * 0.000015),
+        prompt_type: sourceType,
+      }).then(({ error: genErr }) => {
+        if (genErr) console.warn("[generate] Failed to log generation:", genErr);
+      });
+    }
+
     return Response.json(result);
   } catch (error) {
     console.error("Generate error:", error);
     return Response.json(
       {
-        error:
-          error instanceof Error ? error.message : "Internal server error",
+        error: process.env.NODE_ENV === "production"
+          ? "Erro interno ao gerar carrossel. Tente novamente."
+          : (error instanceof Error ? error.message : "Internal server error"),
       },
       { status: 500 }
     );

@@ -40,6 +40,7 @@ create table if not exists public.carousels (
   source_text text,
   status text default 'draft' check (status in ('draft', 'published', 'archived')),
   thumbnail_url text,
+  export_assets jsonb default '{}',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -85,6 +86,9 @@ create index if not exists idx_carousels_created_at on public.carousels(created_
 create index if not exists idx_generations_user_id on public.generations(user_id);
 create index if not exists idx_generations_created_at on public.generations(created_at desc);
 create index if not exists idx_payments_user_id on public.payments(user_id);
+create index if not exists idx_payments_status on public.payments(status);
+create index if not exists idx_profiles_plan on public.profiles(plan);
+create index if not exists idx_carousels_user_status on public.carousels(user_id, status);
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -194,3 +198,35 @@ drop trigger if exists carousels_updated_at on public.carousels;
 create trigger carousels_updated_at
   before update on public.carousels
   for each row execute function public.update_updated_at();
+
+-- ============================================================
+-- INCREMENT USAGE COUNT (atomic RPC for server-side calls)
+-- ============================================================
+create or replace function public.increment_usage_count(uid uuid)
+returns void
+language plpgsql
+security definer set search_path = ''
+as $$
+begin
+  update public.profiles
+    set usage_count = usage_count + 1,
+        updated_at = now()
+    where id = uid;
+end;
+$$;
+
+-- ============================================================
+-- MONTHLY USAGE RESET (run via pg_cron or Supabase cron)
+-- Schedule: SELECT cron.schedule('reset-monthly-usage', '0 0 1 * *', $$SELECT public.reset_monthly_usage()$$);
+-- ============================================================
+create or replace function public.reset_monthly_usage()
+returns void
+language plpgsql
+security definer set search_path = ''
+as $$
+begin
+  update public.profiles
+    set usage_count = 0,
+        updated_at = now();
+end;
+$$;

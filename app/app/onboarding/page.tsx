@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth-context";
+import { jsonWithAuth } from "@/lib/api-auth-headers";
 import {
   User,
   AtSign,
@@ -13,39 +14,48 @@ import {
   ChevronLeft,
   Check,
   Link as LinkIcon,
+  Loader2,
+  X,
+  Plus,
 } from "lucide-react";
-
-const NICHES = [
-  { value: "Marketing", emoji: "📢", color: "#f59e0b" },
-  { value: "Tech", emoji: "💻", color: "#3b82f6" },
-  { value: "Crypto", emoji: "🪙", color: "#f97316" },
-  { value: "Fitness", emoji: "💪", color: "#ef4444" },
-  { value: "Business", emoji: "📊", color: "#8b5cf6" },
-  { value: "Education", emoji: "📚", color: "#10b981" },
-  { value: "Design", emoji: "🎨", color: "#ec4899" },
-  { value: "Other", emoji: "✨", color: "#6b7280" },
-];
+import Loader from "@/components/kokonutui/loader";
+import AITextLoading from "@/components/kokonutui/ai-text-loading";
 
 const TONES = [
-  { value: "professional", label: "Professional", emoji: "👔", desc: "Clean, authoritative, polished" },
-  { value: "casual", label: "Casual", emoji: "😎", desc: "Friendly, conversational, approachable" },
-  { value: "provocative", label: "Provocative", emoji: "🔥", desc: "Bold, attention-grabbing, edgy" },
-  { value: "educational", label: "Educational", emoji: "🧠", desc: "Clear, informative, structured" },
+  { value: "professional", label: "Profissional", emoji: "👔", desc: "Limpo, autoritário, polido" },
+  { value: "casual", label: "Casual", emoji: "😎", desc: "Amigável, conversacional, próximo" },
+  { value: "provocative", label: "Provocativo", emoji: "🔥", desc: "Ousado, chama atenção, direto" },
+  { value: "educational", label: "Educacional", emoji: "🧠", desc: "Claro, estruturado, didático" },
 ];
 
 const LANGUAGES = [
-  { value: "pt-br", label: "Portugues (BR)", flag: "🇧🇷" },
+  { value: "pt-br", label: "Português (BR)", flag: "🇧🇷" },
   { value: "en", label: "English", flag: "🇺🇸" },
-  { value: "es", label: "Espanol", flag: "🇪🇸" },
+  { value: "es", label: "Español", flag: "🇪🇸" },
 ];
 
 const STYLES = [
-  { value: "white", label: "White", bg: "bg-white", border: "border-zinc-200" },
-  { value: "dark", label: "Dark", bg: "bg-zinc-900", border: "border-zinc-700" },
+  { value: "white", label: "Claro", preview: "bg-[#FFFDF9] border-[#0A0A0A]" },
+  { value: "dark", label: "Escuro", preview: "bg-[#0A0A0A] border-[#0A0A0A]" },
 ];
 
-const STEP_ICONS = [User, AtSign, Palette, Sparkles];
-const STEP_LABELS = ["Profile", "Social", "Preferences", "Create"];
+const NICHE_SUGGESTIONS = [
+  "Marketing",
+  "IA & Automação",
+  "Cripto",
+  "Finanças",
+  "Educação",
+  "Produtividade",
+  "Saúde",
+  "Fitness",
+  "Design",
+  "Tech",
+  "Negócios",
+  "Comportamento",
+];
+
+const STEP_ICONS = [AtSign, User, Palette, Sparkles];
+const STEP_LABELS = ["Redes", "Perfil", "Preferências", "Começar"];
 
 interface OnboardingData {
   name: string;
@@ -57,27 +67,10 @@ interface OnboardingData {
   tone: string;
   language: string;
   carousel_style: string;
+  bio?: string;
 }
 
-function loadSavedData(): OnboardingData {
-  if (typeof window === "undefined")
-    return {
-      name: "",
-      avatar_url: "",
-      twitter_handle: "",
-      instagram_handle: "",
-      linkedin_url: "",
-      niche: [],
-      tone: "professional",
-      language: "pt-br",
-      carousel_style: "white",
-    };
-  try {
-    const saved = localStorage.getItem("postflow_onboarding");
-    if (saved) return JSON.parse(saved);
-  } catch {
-    // ignore
-  }
+function initialData(): OnboardingData {
   return {
     name: "",
     avatar_url: "",
@@ -85,17 +78,30 @@ function loadSavedData(): OnboardingData {
     instagram_handle: "",
     linkedin_url: "",
     niche: [],
-    tone: "professional",
+    tone: "casual",
     language: "pt-br",
     carousel_style: "white",
   };
 }
 
+function loadSavedData(): OnboardingData {
+  if (typeof window === "undefined") return initialData();
+  try {
+    const saved = localStorage.getItem("sequencia-viral_onboarding");
+    if (saved) return { ...initialData(), ...JSON.parse(saved) };
+  } catch {
+    // ignore
+  }
+  return initialData();
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
-  const { profile, user, updateProfile } = useAuth();
+  const { profile, user, session, updateProfile } = useAuth();
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
+  const [scraping, setScraping] = useState(false);
+  const [scrapeError, setScrapeError] = useState<string | null>(null);
   const [data, setData] = useState<OnboardingData>(() => {
     const saved = loadSavedData();
     if (profile) {
@@ -110,16 +116,56 @@ export default function OnboardingPage() {
     return saved;
   });
 
-  const update = useCallback(
-    (partial: Partial<OnboardingData>) => {
-      setData((prev) => {
-        const next = { ...prev, ...partial };
-        localStorage.setItem("postflow_onboarding", JSON.stringify(next));
-        return next;
+  const update = useCallback((partial: Partial<OnboardingData>) => {
+    setData((prev) => {
+      const next = { ...prev, ...partial };
+      localStorage.setItem("sequencia-viral_onboarding", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  // Auto-pull profile from scraper
+  async function pullProfile(platform: "twitter" | "instagram", handle: string) {
+    if (!handle.trim()) {
+      setScrapeError("Digite um handle para buscar.");
+      return;
+    }
+    setScraping(true);
+    setScrapeError(null);
+    try {
+      const res = await fetch("/api/profile-scraper", {
+        method: "POST",
+        headers: jsonWithAuth(session),
+        body: JSON.stringify({ platform, handle: handle.replace(/^@/, "") }),
       });
-    },
-    []
-  );
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        throw new Error(
+          typeof errBody?.error === "string"
+            ? errBody.error
+            : "Não consegui buscar esse perfil agora."
+        );
+      }
+      const p = await res.json();
+      const niches: string[] = [];
+      if (p.niche && typeof p.niche === "string") niches.push(p.niche);
+      update({
+        name: p.name || data.name,
+        avatar_url: p.avatarUrl || data.avatar_url,
+        bio: p.bio || data.bio,
+        twitter_handle: platform === "twitter" ? handle.replace(/^@/, "") : data.twitter_handle,
+        instagram_handle: platform === "instagram" ? handle.replace(/^@/, "") : data.instagram_handle,
+        niche: niches.length ? Array.from(new Set([...data.niche, ...niches])) : data.niche,
+      });
+      // Jump to step 1 so user can confirm
+      setDirection(1);
+      setStep(1);
+    } catch (e) {
+      setScrapeError(e instanceof Error ? e.message : "Erro ao buscar perfil.");
+    } finally {
+      setScraping(false);
+    }
+  }
 
   function next() {
     if (step < 3) {
@@ -137,69 +183,103 @@ export default function OnboardingPage() {
 
   async function finish(mode: "ideas" | "link") {
     await updateProfile({
-      ...data,
+      name: data.name,
+      avatar_url: data.avatar_url,
+      twitter_handle: data.twitter_handle,
+      instagram_handle: data.instagram_handle,
+      linkedin_url: data.linkedin_url,
+      niche: data.niche,
+      tone: data.tone,
+      language: data.language,
+      carousel_style: data.carousel_style,
       onboarding_completed: true,
     });
-    localStorage.removeItem("postflow_onboarding");
-
-    if (mode === "link") {
-      router.push("/app?action=create&source=link");
-    } else {
-      router.push("/app?action=create&source=ideas");
-    }
+    localStorage.removeItem("sequencia-viral_onboarding");
+    router.push(`/app?action=create&source=${mode}`);
   }
 
   const variants = {
-    enter: (d: number) => ({ x: d > 0 ? 100 : -100, opacity: 0 }),
+    enter: (d: number) => ({ x: d > 0 ? 60 : -60, opacity: 0 }),
     center: { x: 0, opacity: 1 },
-    exit: (d: number) => ({ x: d > 0 ? -100 : 100, opacity: 0 }),
+    exit: (d: number) => ({ x: d > 0 ? -60 : 60, opacity: 0 }),
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 px-4 py-8">
+    <div className="flex min-h-screen flex-col items-center justify-center hero-kree8-bg grain px-4 py-12">
+      {/* Full-screen loader overlay during scraping */}
+      <AnimatePresence>
+        {scraping && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#FAFAF8]/95 backdrop-blur-md"
+          >
+            <Loader
+              size="lg"
+              title="Lendo seu perfil"
+              subtitle="Puxando nome, foto, bio e os temas que você costuma falar"
+            />
+            <div className="mt-4">
+              <AITextLoading
+                className="!text-xl"
+                texts={[
+                  "Buscando seu perfil…",
+                  "Lendo seus últimos posts…",
+                  "Entendendo seu nicho…",
+                  "Aprendendo seu tom de voz…",
+                  "Quase pronto…",
+                ]}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Logo */}
-      <div className="flex items-center gap-2 mb-8">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/postflow-icon.png" alt="PostFlow" className="w-8 h-8 rounded-lg" />
-        <span className="text-lg font-semibold text-zinc-900 tracking-tight">PostFlow</span>
+      <div className="flex items-center gap-3 mb-10">
+        <div
+          className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)] border border-[#0A0A0A]"
+          style={{ boxShadow: "3px 3px 0 0 #0A0A0A" }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+          </svg>
+        </div>
+        <span className="editorial-serif text-3xl text-[#0A0A0A]">
+          Sequência Viral<span className="text-[var(--accent)]">.</span>
+        </span>
       </div>
 
       {/* Progress bar */}
-      <div className="mb-8 w-full max-w-lg">
-        <div className="flex items-center justify-between mb-3">
+      <div className="mb-10 w-full max-w-xl">
+        <div className="flex items-center justify-between mb-4">
           {STEP_LABELS.map((label, i) => {
             const Icon = STEP_ICONS[i];
             const active = i <= step;
             return (
-              <div key={label} className="flex flex-col items-center gap-1.5">
+              <div key={label} className="flex flex-col items-center gap-2">
                 <motion.div
-                  animate={{
-                    scale: i === step ? 1.1 : 1,
-                  }}
+                  animate={{ scale: i === step ? 1.1 : 1 }}
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full transition-all duration-300 ${
+                  className={`flex h-12 w-12 items-center justify-center rounded-xl border transition-all duration-300 ${
                     i < step
-                      ? "bg-[#7C3AED] text-white shadow-md shadow-purple-500/20"
+                      ? "bg-[var(--accent)] text-white border-[#0A0A0A]"
                       : i === step
-                      ? "bg-[#7C3AED]/10 text-[#7C3AED] ring-2 ring-[#7C3AED] ring-offset-2"
-                      : "bg-zinc-100 text-zinc-400"
+                      ? "bg-[#FFFDF9] text-[var(--accent)] border-[#0A0A0A]"
+                      : "bg-[#FFFDF9] text-[var(--muted)] border-[#0A0A0A]/20"
                   }`}
+                  style={active ? { boxShadow: "3px 3px 0 0 #0A0A0A" } : {}}
                 >
                   {i < step ? (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    >
-                      <Check size={16} strokeWidth={3} />
-                    </motion.div>
+                    <Check size={18} strokeWidth={3} />
                   ) : (
-                    <Icon size={16} />
+                    <Icon size={18} />
                   )}
                 </motion.div>
                 <span
-                  className={`text-xs font-medium transition-colors ${
-                    active ? "text-zinc-700" : "text-zinc-400"
+                  className={`text-[10px] font-mono uppercase tracking-widest transition-colors ${
+                    active ? "text-[#0A0A0A]" : "text-[var(--muted)]"
                   }`}
                 >
                   {label}
@@ -208,18 +288,10 @@ export default function OnboardingPage() {
             );
           })}
         </div>
-        <div className="h-1.5 w-full rounded-full bg-zinc-200 overflow-hidden">
-          <motion.div
-            className="h-full rounded-full bg-gradient-to-r from-[#7C3AED] to-[#8B5CF6]"
-            initial={false}
-            animate={{ width: `${((step + 1) / 4) * 100}%` }}
-            transition={{ duration: 0.4, ease: "easeInOut" }}
-          />
-        </div>
       </div>
 
       {/* Step cards */}
-      <div className="w-full max-w-lg overflow-hidden">
+      <div className="w-full max-w-xl overflow-visible">
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
             key={step}
@@ -230,9 +302,16 @@ export default function OnboardingPage() {
             exit="exit"
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
           >
-            <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
-              {step === 0 && <StepProfile data={data} update={update} />}
-              {step === 1 && <StepSocial data={data} update={update} />}
+            <div className="card-offset p-8 md:p-10">
+              {step === 0 && (
+                <StepSocial
+                  data={data}
+                  pullProfile={pullProfile}
+                  scraping={scraping}
+                  scrapeError={scrapeError}
+                />
+              )}
+              {step === 1 && <StepProfile data={data} update={update} />}
               {step === 2 && <StepPreferences data={data} update={update} />}
               {step === 3 && <StepCreate onFinish={finish} />}
             </div>
@@ -241,31 +320,32 @@ export default function OnboardingPage() {
       </div>
 
       {/* Navigation */}
-      <div className="mt-6 flex w-full max-w-lg items-center justify-between">
+      <div className="mt-8 flex w-full max-w-xl items-center justify-between">
         <button
           onClick={prev}
           disabled={step === 0}
-          className="flex items-center gap-1 text-sm text-zinc-400 transition-colors hover:text-zinc-600 disabled:opacity-0 disabled:pointer-events-none"
+          className="flex items-center gap-1.5 text-sm font-semibold text-[var(--muted)] transition-colors hover:text-[#0A0A0A] disabled:opacity-0 disabled:pointer-events-none"
         >
           <ChevronLeft size={16} />
-          Back
+          Voltar
         </button>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-5">
           {step > 0 && step < 3 && (
             <button
               onClick={next}
-              className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors uppercase tracking-wider"
+              className="text-[11px] text-[var(--muted)] hover:text-[#0A0A0A] transition-colors uppercase tracking-widest font-semibold"
             >
-              Skip this step
+              Pular
             </button>
           )}
-          {step < 3 && (
+          {step < 3 && step > 0 && (
             <button
               onClick={next}
-              className="btn-scale flex items-center gap-1 rounded-xl bg-[#7C3AED] px-6 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#6D28D9] hover:shadow-md"
+              className="inline-flex items-center gap-2 bg-[var(--accent)] text-white px-6 py-3 rounded-xl text-sm font-bold border border-[#0A0A0A] hover:bg-[var(--accent-dark)] transition-colors"
+              style={{ boxShadow: "4px 4px 0 0 #0A0A0A" }}
             >
-              Continue
+              Continuar
               <ChevronRight size={16} />
             </button>
           )}
@@ -275,8 +355,103 @@ export default function OnboardingPage() {
   );
 }
 
-// ---- Step Components ----
+// ──────────────────────────────────────────────────────────────────
+// Step 0 — Conectar redes e puxar perfil
+// ──────────────────────────────────────────────────────────────────
+function StepSocial({
+  data,
+  pullProfile,
+  scraping,
+  scrapeError,
+}: {
+  data: OnboardingData;
+  pullProfile: (platform: "twitter" | "instagram", handle: string) => void;
+  scraping: boolean;
+  scrapeError: string | null;
+}) {
+  const [platform, setPlatform] = useState<"twitter" | "instagram">("instagram");
+  const [handle, setHandle] = useState(data.instagram_handle || data.twitter_handle || "");
 
+  return (
+    <div>
+      <span className="tag-pill mb-6">
+        <span className="font-mono">Nº 01</span> Começar
+      </span>
+      <h2 className="editorial-serif text-4xl md:text-5xl text-[#0A0A0A] leading-[0.95] mb-3">
+        Me conta onde você <span className="italic text-[var(--accent)]">posta.</span>
+      </h2>
+      <p className="text-[var(--muted)] mb-8 leading-relaxed">
+        Cole o @ do seu Instagram ou X — <strong className="text-[#0A0A0A] font-semibold">sem precisar logar</strong>.
+        A gente puxa nome, foto, bio e os temas que você costuma falar; você revisa no próximo passo.
+      </p>
+
+      {/* Platform picker */}
+      <div className="flex items-center gap-2 mb-4">
+        {(["instagram", "twitter"] as const).map((p) => (
+          <button
+            key={p}
+            onClick={() => setPlatform(p)}
+            className={`px-5 py-2.5 rounded-xl text-sm font-bold border transition-all ${
+              platform === p
+                ? "bg-[var(--accent)] text-white border-[#0A0A0A]"
+                : "bg-[#FFFDF9] text-[#0A0A0A] border-[#0A0A0A]/20 hover:border-[#0A0A0A]"
+            }`}
+            style={platform === p ? { boxShadow: "3px 3px 0 0 #0A0A0A" } : {}}
+          >
+            {p === "instagram" ? "Instagram" : "X / Twitter"}
+          </button>
+        ))}
+      </div>
+
+      {/* Handle input */}
+      <div className="relative mb-4">
+        <AtSign size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+        <input
+          type="text"
+          value={handle}
+          onChange={(e) => setHandle(e.target.value.replace(/^@/, ""))}
+          placeholder="seuhandle"
+          className="w-full rounded-xl border border-[#0A0A0A] bg-[#FFFDF9] pl-11 pr-4 py-4 text-base text-[#0A0A0A] outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/30 placeholder:text-[var(--muted)]"
+          style={{ boxShadow: "3px 3px 0 0 #0A0A0A" }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !scraping) pullProfile(platform, handle);
+          }}
+        />
+      </div>
+
+      {scrapeError && (
+        <p className="text-sm text-red-600 mb-4">{scrapeError}</p>
+      )}
+
+      <button
+        onClick={() => pullProfile(platform, handle)}
+        disabled={scraping || !handle.trim()}
+        className="w-full inline-flex items-center justify-center gap-2 bg-[var(--accent)] text-white px-6 py-4 rounded-xl text-sm font-bold border border-[#0A0A0A] hover:bg-[var(--accent-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        style={{ boxShadow: "4px 4px 0 0 #0A0A0A" }}
+      >
+        {scraping ? (
+          <>
+            <Loader2 size={16} className="animate-spin" />
+            Puxando seu perfil…
+          </>
+        ) : (
+          <>
+            <Sparkles size={16} />
+            Puxar meu perfil
+          </>
+        )}
+      </button>
+
+      <p className="text-[11px] font-mono uppercase tracking-widest text-[var(--muted)] text-center mt-6">
+        Ou clique em pular e preencha à mão
+      </p>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Step 1 — Perfil (pré-preenchido, editável)
+// ──────────────────────────────────────────────────────────────────
 function StepProfile({
   data,
   update,
@@ -286,154 +461,84 @@ function StepProfile({
 }) {
   return (
     <div>
-      <h2
-        className="text-2xl font-bold text-zinc-900 mb-1"
-        style={{ fontFamily: "'DM Serif Display', serif" }}
-      >
-        Your Profile
+      <span className="tag-pill mb-6">
+        <span className="font-mono">Nº 02</span> Confirme
+      </span>
+      <h2 className="editorial-serif text-4xl md:text-5xl text-[#0A0A0A] leading-[0.95] mb-3">
+        Dá uma <span className="italic text-[var(--accent)]">olhada.</span>
       </h2>
-      <p className="text-sm text-zinc-500 mb-6">
-        Tell us a bit about yourself.
+      <p className="text-[var(--muted)] mb-8 leading-relaxed">
+        Ajuste o que quiser — o que estiver errado a gente corrige agora.
       </p>
 
       {/* Avatar */}
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-center gap-5 mb-6">
         <div className="relative">
           {data.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={data.avatar_url}
               alt="Avatar"
-              className="h-16 w-16 rounded-full object-cover ring-2 ring-zinc-100"
+              className="h-20 w-20 rounded-2xl object-cover border border-[#0A0A0A]"
+              style={{ boxShadow: "3px 3px 0 0 #0A0A0A" }}
             />
           ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#7C3AED] to-[#8B5CF6] text-white">
-              <User size={24} />
+            <div
+              className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-light)] text-white border border-[#0A0A0A]"
+              style={{ boxShadow: "3px 3px 0 0 #0A0A0A" }}
+            >
+              <User size={28} />
             </div>
           )}
         </div>
         <div className="flex-1">
-          <label className="block text-xs font-medium text-zinc-500 mb-1">
-            Photo URL
+          <label className="block text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mb-2">
+            URL da foto
           </label>
           <input
             type="url"
             value={data.avatar_url}
             onChange={(e) => update({ avatar_url: e.target.value })}
-            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition-all focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/20"
-            placeholder="https://..."
+            className="w-full rounded-xl border border-[#0A0A0A]/20 bg-[#FFFDF9] px-4 py-3 text-sm text-[#0A0A0A] outline-none transition-all focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+            placeholder="https://…"
           />
         </div>
       </div>
 
       {/* Name */}
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 mb-1.5">
-          Name
+      <div className="mb-5">
+        <label className="block text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mb-2">
+          Seu nome
         </label>
         <input
           type="text"
           value={data.name}
           onChange={(e) => update({ name: e.target.value })}
-          className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3.5 text-sm text-zinc-900 outline-none transition-all focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/20"
-          placeholder="Your name"
+          className="w-full rounded-xl border border-[#0A0A0A]/20 bg-[#FFFDF9] px-4 py-3.5 text-base text-[#0A0A0A] outline-none transition-all focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+          placeholder="Seu nome completo"
+        />
+      </div>
+
+      {/* LinkedIn */}
+      <div>
+        <label className="block text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mb-2">
+          LinkedIn (opcional)
+        </label>
+        <input
+          type="url"
+          value={data.linkedin_url}
+          onChange={(e) => update({ linkedin_url: e.target.value })}
+          className="w-full rounded-xl border border-[#0A0A0A]/20 bg-[#FFFDF9] px-4 py-3.5 text-sm text-[#0A0A0A] outline-none transition-all focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+          placeholder="https://linkedin.com/in/…"
         />
       </div>
     </div>
   );
 }
 
-function StepSocial({
-  data,
-  update,
-}: {
-  data: OnboardingData;
-  update: (d: Partial<OnboardingData>) => void;
-}) {
-  return (
-    <div>
-      <h2
-        className="text-2xl font-bold text-zinc-900 mb-1"
-        style={{ fontFamily: "'DM Serif Display', serif" }}
-      >
-        Your Social Accounts
-      </h2>
-      <p className="text-sm text-zinc-500 mb-6">
-        We&apos;ll use these to build your carousel header.
-      </p>
-
-      <div className="space-y-4">
-        {/* Twitter */}
-        <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 mb-1.5">
-            Twitter / X
-          </label>
-          <div className="relative">
-            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-              </svg>
-            </div>
-            <input
-              type="text"
-              value={data.twitter_handle}
-              onChange={(e) =>
-                update({ twitter_handle: e.target.value.replace(/^@/, "") })
-              }
-              className="w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-4 py-3.5 text-sm text-zinc-900 outline-none transition-all focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/20"
-              placeholder="@yourhandle"
-            />
-          </div>
-        </div>
-
-        {/* Instagram */}
-        <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 mb-1.5">
-            Instagram
-          </label>
-          <div className="relative">
-            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
-              </svg>
-            </div>
-            <input
-              type="text"
-              value={data.instagram_handle}
-              onChange={(e) =>
-                update({ instagram_handle: e.target.value.replace(/^@/, "") })
-              }
-              className="w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-4 py-3.5 text-sm text-zinc-900 outline-none transition-all focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/20"
-              placeholder="@yourhandle"
-            />
-          </div>
-        </div>
-
-        {/* LinkedIn */}
-        <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 mb-1.5">
-            LinkedIn
-          </label>
-          <div className="relative">
-            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-              </svg>
-            </div>
-            <input
-              type="url"
-              value={data.linkedin_url}
-              onChange={(e) => update({ linkedin_url: e.target.value })}
-              className="w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-4 py-3.5 text-sm text-zinc-900 outline-none transition-all focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/20"
-              placeholder="https://linkedin.com/in/yourprofile"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+// ──────────────────────────────────────────────────────────────────
+// Step 2 — Preferências (nicho free-form + tom + estilo)
+// ──────────────────────────────────────────────────────────────────
 function StepPreferences({
   data,
   update,
@@ -441,97 +546,156 @@ function StepPreferences({
   data: OnboardingData;
   update: (d: Partial<OnboardingData>) => void;
 }) {
-  function toggleNiche(n: string) {
-    const current = data.niche;
-    if (current.includes(n)) {
-      update({ niche: current.filter((x) => x !== n) });
-    } else {
-      update({ niche: [...current, n] });
-    }
+  const [nicheInput, setNicheInput] = useState("");
+
+  function addNiche(value: string) {
+    const v = value.trim();
+    if (!v) return;
+    if (data.niche.includes(v)) return;
+    update({ niche: [...data.niche, v] });
+    setNicheInput("");
   }
+
+  function removeNiche(value: string) {
+    update({ niche: data.niche.filter((n) => n !== value) });
+  }
+
+  const suggestions = NICHE_SUGGESTIONS.filter((s) => !data.niche.includes(s));
 
   return (
     <div>
-      <h2
-        className="text-2xl font-bold text-zinc-900 mb-1"
-        style={{ fontFamily: "'DM Serif Display', serif" }}
-      >
-        Your Preferences
+      <span className="tag-pill mb-6">
+        <span className="font-mono">Nº 03</span> Preferências
+      </span>
+      <h2 className="editorial-serif text-4xl md:text-5xl text-[#0A0A0A] leading-[0.95] mb-3">
+        Sobre o que <span className="italic text-[var(--accent)]">você escreve?</span>
       </h2>
-      <p className="text-sm text-zinc-500 mb-6">
-        Help us personalize your experience.
+      <p className="text-[var(--muted)] mb-8 leading-relaxed">
+        Digite os temas que você trata — quanto mais específico, melhor o Sequência Viral
+        vai entender sua voz.
       </p>
 
-      {/* Niche — colorful pills */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-zinc-700 mb-2.5">
-          Niche
+      {/* Niche — free form */}
+      <div className="mb-8">
+        <label className="block text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mb-3">
+          Nichos e temas
         </label>
-        <div className="flex flex-wrap gap-2">
-          {NICHES.map((n) => {
-            const selected = data.niche.includes(n.value);
-            return (
-              <motion.button
-                key={n.value}
-                onClick={() => toggleNiche(n.value)}
-                whileTap={{ scale: 0.95 }}
-                className="rounded-full px-4 py-2 text-sm font-medium transition-all flex items-center gap-1.5"
-                style={{
-                  background: selected ? n.color : "#f4f4f5",
-                  color: selected ? "#fff" : "#52525b",
-                  boxShadow: selected ? `0 2px 8px ${n.color}40` : "none",
-                }}
+
+        {/* Chips */}
+        {data.niche.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {data.niche.map((n) => (
+              <motion.span
+                key={n}
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--accent)] text-white text-xs font-bold border border-[#0A0A0A]"
+                style={{ boxShadow: "2px 2px 0 0 #0A0A0A" }}
               >
-                <span>{n.emoji}</span>
-                {n.value}
-              </motion.button>
-            );
-          })}
+                {n}
+                <button
+                  onClick={() => removeNiche(n)}
+                  className="hover:bg-white/20 rounded-full p-0.5 transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              </motion.span>
+            ))}
+          </div>
+        )}
+
+        {/* Input */}
+        <div className="relative">
+          <input
+            type="text"
+            value={nicheInput}
+            onChange={(e) => setNicheInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                addNiche(nicheInput);
+              }
+              if (e.key === "Backspace" && !nicheInput && data.niche.length > 0) {
+                removeNiche(data.niche[data.niche.length - 1]);
+              }
+            }}
+            placeholder="Ex: IA aplicada a marketing, cripto educacional, automação no-code…"
+            className="w-full rounded-xl border border-[#0A0A0A]/20 bg-[#FFFDF9] px-4 py-3.5 pr-12 text-sm text-[#0A0A0A] outline-none transition-all focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+          />
+          <button
+            onClick={() => addNiche(nicheInput)}
+            disabled={!nicheInput.trim()}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-lg bg-[var(--accent)] text-white disabled:opacity-30 hover:bg-[var(--accent-dark)] transition-colors"
+          >
+            <Plus size={16} />
+          </button>
         </div>
+
+        {/* Suggestions */}
+        {suggestions.length > 0 && (
+          <div className="mt-3">
+            <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mb-2">
+              Sugestões rápidas
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {suggestions.slice(0, 8).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => addNiche(s)}
+                  className="px-3 py-1 rounded-full bg-[#FFFDF9] border border-[#0A0A0A]/20 text-[11px] font-semibold text-[#0A0A0A]/70 hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all"
+                >
+                  + {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Tone — cards with emoji */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-zinc-700 mb-2.5">
-          Tone
+      {/* Tone */}
+      <div className="mb-8">
+        <label className="block text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mb-3">
+          Tom de voz
         </label>
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-2 gap-3">
           {TONES.map((t) => (
             <motion.button
               key={t.value}
               onClick={() => update({ tone: t.value })}
               whileTap={{ scale: 0.97 }}
-              className={`rounded-xl border px-4 py-3.5 text-left transition-all ${
+              className={`rounded-xl border px-4 py-4 text-left transition-all ${
                 data.tone === t.value
-                  ? "border-[#7C3AED] bg-[#7C3AED]/5 ring-1 ring-[#7C3AED] shadow-sm shadow-purple-500/10"
-                  : "border-zinc-200 hover:border-zinc-300"
+                  ? "border-[#0A0A0A] bg-[#FFF6EC]"
+                  : "border-[#0A0A0A]/15 bg-[#FFFDF9] hover:border-[#0A0A0A]/40"
               }`}
+              style={data.tone === t.value ? { boxShadow: "3px 3px 0 0 #0A0A0A" } : {}}
             >
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-lg">{t.emoji}</span>
-                <p className="text-sm font-semibold text-zinc-900">{t.label}</p>
+                <span className="text-xl">{t.emoji}</span>
+                <p className="text-sm font-bold text-[#0A0A0A]">{t.label}</p>
               </div>
-              <p className="text-xs text-zinc-500 pl-7">{t.desc}</p>
+              <p className="text-[11px] text-[var(--muted)]">{t.desc}</p>
             </motion.button>
           ))}
         </div>
       </div>
 
       {/* Language */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-zinc-700 mb-2.5">
-          Language
+      <div className="mb-8">
+        <label className="block text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mb-3">
+          Idioma
         </label>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {LANGUAGES.map((l) => (
             <button
               key={l.value}
               onClick={() => update({ language: l.value })}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition-all flex items-center gap-1.5 ${
+              className={`rounded-full px-4 py-2 text-sm font-bold border transition-all flex items-center gap-1.5 ${
                 data.language === l.value
-                  ? "bg-[#7C3AED] text-white shadow-md shadow-purple-500/20"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  ? "bg-[var(--accent)] text-white border-[#0A0A0A]"
+                  : "bg-[#FFFDF9] text-[#0A0A0A]/70 border-[#0A0A0A]/15 hover:border-[#0A0A0A]"
               }`}
+              style={data.language === l.value ? { boxShadow: "2px 2px 0 0 #0A0A0A" } : {}}
             >
               <span>{l.flag}</span>
               {l.label}
@@ -542,8 +706,8 @@ function StepPreferences({
 
       {/* Carousel style */}
       <div>
-        <label className="block text-sm font-medium text-zinc-700 mb-2.5">
-          Carousel Style
+        <label className="block text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mb-3">
+          Estilo de carrossel
         </label>
         <div className="flex gap-3">
           {STYLES.map((s) => (
@@ -552,16 +716,13 @@ function StepPreferences({
               onClick={() => update({ carousel_style: s.value })}
               className={`flex items-center gap-3 rounded-xl border px-5 py-3.5 transition-all ${
                 data.carousel_style === s.value
-                  ? "border-[#7C3AED] ring-1 ring-[#7C3AED] shadow-sm"
-                  : "border-zinc-200 hover:border-zinc-300"
+                  ? "border-[#0A0A0A] bg-[#FFF6EC]"
+                  : "border-[#0A0A0A]/15 bg-[#FFFDF9] hover:border-[#0A0A0A]/40"
               }`}
+              style={data.carousel_style === s.value ? { boxShadow: "3px 3px 0 0 #0A0A0A" } : {}}
             >
-              <div
-                className={`h-8 w-8 rounded-lg ${s.bg} ${s.border} border`}
-              />
-              <span className="text-sm font-medium text-zinc-700">
-                {s.label}
-              </span>
+              <div className={`h-8 w-8 rounded-lg border ${s.preview}`} />
+              <span className="text-sm font-bold text-[#0A0A0A]">{s.label}</span>
             </button>
           ))}
         </div>
@@ -570,45 +731,48 @@ function StepPreferences({
   );
 }
 
-function StepCreate({
-  onFinish,
-}: {
-  onFinish: (mode: "ideas" | "link") => void;
-}) {
+// ──────────────────────────────────────────────────────────────────
+// Step 3 — Começar
+// ──────────────────────────────────────────────────────────────────
+function StepCreate({ onFinish }: { onFinish: (mode: "ideas" | "link") => void }) {
   return (
     <div className="text-center py-4">
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ type: "spring", stiffness: 400, damping: 20 }}
-        className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#7C3AED] to-[#8B5CF6] shadow-lg shadow-purple-500/25"
+        className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-[var(--accent)] border border-[#0A0A0A] text-white"
+        style={{ boxShadow: "5px 5px 0 0 #0A0A0A" }}
       >
-        <Sparkles size={28} className="text-white" />
+        <Sparkles size={36} />
       </motion.div>
-      <h2
-        className="text-2xl font-bold text-zinc-900 mb-2"
-        style={{ fontFamily: "'DM Serif Display', serif" }}
-      >
-        Create Your First Carousel
+      <span className="tag-pill mb-4">
+        <span className="font-mono">Nº 04</span> Pronto
+      </span>
+      <h2 className="editorial-serif text-4xl md:text-5xl text-[#0A0A0A] leading-[0.95] mb-4">
+        Tudo pronto.<br />
+        <span className="italic text-[var(--accent)]">Vamos criar?</span>
       </h2>
-      <p className="text-sm text-zinc-500 mb-8 max-w-xs mx-auto">
-        You&apos;re all set! Let&apos;s make something beautiful.
+      <p className="text-[var(--muted)] mb-8 max-w-sm mx-auto">
+        Seu primeiro carrossel sai em 30 segundos. Escolha por onde começar.
       </p>
 
       <div className="space-y-3">
         <button
           onClick={() => onFinish("ideas")}
-          className="btn-scale btn-glow flex w-full items-center justify-center gap-2 rounded-xl bg-[#7C3AED] px-6 py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#6D28D9] hover:shadow-md"
+          className="w-full inline-flex items-center justify-center gap-2 bg-[var(--accent)] text-white px-6 py-4 rounded-xl text-sm font-bold border border-[#0A0A0A] hover:bg-[var(--accent-dark)] transition-colors"
+          style={{ boxShadow: "4px 4px 0 0 #0A0A0A" }}
         >
           <Sparkles size={16} />
-          Give me ideas
+          Me dê ideias
         </button>
         <button
           onClick={() => onFinish("link")}
-          className="btn-scale flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-6 py-3.5 text-sm font-semibold text-zinc-700 transition-all hover:bg-zinc-50 hover:border-zinc-300"
+          className="w-full inline-flex items-center justify-center gap-2 bg-[#FFFDF9] text-[#0A0A0A] px-6 py-4 rounded-xl text-sm font-bold border border-[#0A0A0A] hover:bg-[#FFF6EC] transition-colors"
+          style={{ boxShadow: "4px 4px 0 0 #0A0A0A" }}
         >
           <LinkIcon size={16} />
-          I have a link
+          Eu tenho um link
         </button>
       </div>
     </div>

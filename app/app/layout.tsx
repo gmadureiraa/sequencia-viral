@@ -11,18 +11,34 @@ import {
   LogOut,
   Menu,
   X,
+  Map,
+  BarChart3,
+  Send,
+  BookOpen,
 } from "lucide-react";
 import Link from "next/link";
+import { Toaster } from "@/components/ui/sonner";
 
-const NAV_ITEMS = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  comingSoon?: boolean;
+};
+
+const NAV_ITEMS: NavItem[] = [
   { href: "/app", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/app/create", label: "Create", icon: PlusCircle },
-  { href: "/app/carousels", label: "My Carousels", icon: FolderOpen },
-  { href: "/app/settings", label: "Settings", icon: Settings },
+  { href: "/app/create", label: "Criar", icon: PlusCircle },
+  { href: "/app/help", label: "Guia", icon: BookOpen },
+  { href: "/app/carousels", label: "Meus carrosséis", icon: FolderOpen },
+  { href: "/app/metrics", label: "Métricas", icon: BarChart3, comingSoon: true },
+  { href: "/app/publish", label: "Publicar", icon: Send, comingSoon: true },
+  { href: "/app/roadmap", label: "Roadmap", icon: Map },
+  { href: "/app/settings", label: "Ajustes", icon: Settings },
 ];
 
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
-  const { profile, loading, user, isGuest } = useAuth();
+  const { profile, loading, user, isGuest, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -31,17 +47,23 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
 
     const isLoginPage = pathname === "/app/login";
     const isOnboardingPage = pathname === "/app/onboarding";
-    const isAuthenticated = !!user || isGuest;
 
-    // Not authenticated and not on login page -> go to login
-    if (!isAuthenticated && !isLoginPage) {
-      router.push("/app/login");
+    // STRICT: require a real authenticated Supabase user. Guest mode is no
+    // longer allowed inside /app — anyone landing here without a real session
+    // is bounced to /app/login. If they were in guest mode, clear it.
+    if (!user) {
+      if (isGuest) {
+        // Clean guest flag so the next arrival goes straight to login.
+        void signOut();
+      }
+      if (!isLoginPage) {
+        router.push("/app/login");
+      }
       return;
     }
 
     // Authenticated but onboarding not complete and not on onboarding page
     if (
-      isAuthenticated &&
       profile &&
       !profile.onboarding_completed &&
       !isOnboardingPage &&
@@ -50,7 +72,21 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
       router.push("/app/onboarding");
       return;
     }
-  }, [loading, user, isGuest, profile, pathname, router]);
+  }, [loading, user, isGuest, profile, pathname, router, signOut]);
+
+  // While we're resolving auth or redirecting, render nothing for protected
+  // pages to avoid leaking a flash of app UI.
+  if (
+    !loading &&
+    !user &&
+    pathname !== "/app/login"
+  ) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#FAFAF8]">
+        <p className="text-sm font-semibold text-zinc-500">Redirecionando pro login…</p>
+      </div>
+    );
+  }
 
   return <>{children}</>;
 }
@@ -69,64 +105,84 @@ function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-zinc-50">
+    <div className="flex min-h-screen hero-kree8-bg">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-zinc-200 bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r-2 border-[#0A0A0A] bg-[#FFFDF9] transition-transform duration-300 lg:static lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         {/* Logo */}
-        <div className="flex h-16 items-center justify-between border-b border-zinc-100 px-6">
-          <Link href="/app" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#7C3AED]">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
+        <div className="flex h-20 items-center justify-between border-b border-[#0A0A0A]/10 px-6">
+          <Link href="/app" className="flex items-center gap-3">
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent)] border border-[#0A0A0A]"
+              style={{ boxShadow: "3px 3px 0 0 #0A0A0A" }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
               </svg>
             </div>
-            <span className="text-lg font-semibold tracking-tight text-zinc-900">
-              PostFlow
+            <span className="editorial-serif text-2xl text-[#0A0A0A]">
+              Sequência Viral<span className="text-[var(--accent)]">.</span>
             </span>
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden text-zinc-400 hover:text-zinc-600"
+            aria-label="Fechar menu lateral"
           >
             <X size={20} />
           </button>
         </div>
 
+        {/* Kicker */}
+        <div className="px-6 pt-6 pb-2">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)]">
+            Menu principal
+          </span>
+        </div>
+
         {/* Nav */}
-        <nav className="flex-1 p-4 space-y-1">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        <nav className="flex-1 px-4 space-y-1.5">
+          {NAV_ITEMS.map(({ href, label, icon: Icon, comingSoon }) => {
             const active = pathname === href;
+            if (comingSoon) {
+              return (
+                <div
+                  key={href}
+                  role="link"
+                  aria-disabled="true"
+                  className="flex items-center gap-3 rounded-xl px-4 py-3 text-[14px] font-semibold border border-transparent text-[#0A0A0A]/40 cursor-not-allowed select-none"
+                  title={`${label} — Em breve`}
+                >
+                  <Icon size={18} />
+                  <span className="flex-1">{label}</span>
+                  <span className="text-[9px] font-black uppercase tracking-widest rounded-full bg-[#0A0A0A]/10 text-[#0A0A0A]/60 px-2 py-0.5">
+                    Em breve
+                  </span>
+                </div>
+              );
+            }
             return (
               <Link
                 key={href}
                 href={href}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
+                className={`flex items-center gap-3 rounded-xl px-4 py-3 text-[14px] font-semibold transition-all duration-200 border active:scale-[0.97] ${
                   active
-                    ? "bg-[#7C3AED]/10 text-[#7C3AED]"
-                    : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                    ? "bg-[var(--accent)] text-white border-[#0A0A0A]"
+                    : "text-[#0A0A0A]/70 border-transparent hover:bg-white hover:border-[#0A0A0A]/10 hover:text-[#0A0A0A]"
                 }`}
+                style={active ? { boxShadow: "3px 3px 0 0 #0A0A0A" } : {}}
               >
                 <Icon size={18} />
                 {label}
@@ -135,35 +191,51 @@ function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
+        {/* Plan card */}
+        <div className="mx-4 mb-4 p-5 card-offset-orange">
+          <p className="text-[10px] font-mono uppercase tracking-widest opacity-80 mb-2">
+            Plano {profile?.plan ?? "free"}
+          </p>
+          <p className="editorial-serif text-xl leading-tight mb-3">
+            Upgrade pra Pro
+          </p>
+          <Link
+            href="/app/settings"
+            className="inline-flex items-center gap-1.5 text-[12px] font-bold bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition"
+          >
+            Ver planos →
+          </Link>
+        </div>
+
         {/* User info */}
-        <div className="border-t border-zinc-100 p-4">
+        <div className="border-t border-[#0A0A0A]/10 p-4">
           <div className="flex items-center gap-3 mb-3">
             {profile?.avatar_url ? (
               <img
                 src={profile.avatar_url}
-                alt=""
-                className="h-9 w-9 rounded-full object-cover"
+                alt={`Foto de perfil de ${profile?.name || "usuário"}`}
+                className="h-10 w-10 rounded-full object-cover border border-[#0A0A0A]"
               />
             ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7C3AED]/10 text-[#7C3AED] text-sm font-semibold">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-white text-sm font-bold border border-[#0A0A0A]">
                 {profile?.name?.[0]?.toUpperCase() || "U"}
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-zinc-900 truncate">
-                {profile?.name || "User"}
+              <p className="text-sm font-bold text-[#0A0A0A] truncate">
+                {profile?.name || "Convidado"}
               </p>
-              <p className="text-xs text-zinc-500 truncate">
-                {profile?.plan === "free" ? "Free Plan" : profile?.plan === "pro" ? "Pro Plan" : "Business"}
+              <p className="text-[11px] font-mono uppercase tracking-wider text-[var(--muted)] truncate">
+                {profile?.plan === "free" ? "Plano Free" : profile?.plan === "pro" ? "Plano Pro" : "Business"}
               </p>
             </div>
           </div>
           <button
             onClick={signOut}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-[var(--muted)] transition-colors hover:bg-white hover:text-[#0A0A0A]"
           >
-            <LogOut size={16} />
-            Sign out
+            <LogOut size={15} />
+            Sair
           </button>
         </div>
       </aside>
@@ -171,35 +243,19 @@ function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex flex-1 flex-col min-w-0">
         {/* Mobile header */}
-        <header className="flex h-16 items-center justify-between border-b border-zinc-200 bg-white px-4 lg:hidden">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="text-zinc-600 hover:text-zinc-900"
-          >
+        <header className="flex h-16 items-center justify-between border-b-2 border-[#0A0A0A] bg-[#FFFDF9] px-4 lg:hidden">
+          <button onClick={() => setSidebarOpen(true)} className="text-[#0A0A0A]" aria-label="Abrir menu lateral">
             <Menu size={24} />
           </button>
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#7C3AED]">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <span className="text-sm font-semibold text-zinc-900">PostFlow</span>
-          </div>
+          <span className="editorial-serif text-xl">
+            Sequência Viral<span className="text-[var(--accent)]">.</span>
+          </span>
           <div className="w-6" />
         </header>
 
-        <main className="flex-1 p-6 lg:p-8">{children}</main>
+        <main className="flex-1 p-6 lg:p-10 xl:p-14">{children}</main>
       </div>
+      <Toaster />
     </div>
   );
 }

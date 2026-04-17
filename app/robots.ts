@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: ["/app/", "/api/"],
     },
-    sitemap: "https://postflow.app/sitemap.xml",
+    sitemap: "https://sequencia-viral.app/sitemap.xml",
   };
 }

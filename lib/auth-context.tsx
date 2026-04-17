@@ -36,8 +36,12 @@ interface AuthContextValue {
   loading: boolean;
   isGuest: boolean;
   signInWithGoogle: () => Promise<void>;
+  signInWithTwitter: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUpWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUpWithEmail: (
+    email: string,
+    password: string
+  ) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
   continueAsGuest: () => void;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
@@ -48,7 +52,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 function getGuestProfile(): UserProfile {
   if (typeof window === "undefined") return createEmptyProfile("guest");
-  const stored = localStorage.getItem("postflow_guest_profile");
+  const stored = localStorage.getItem("sequencia-viral_guest_profile");
   if (stored) {
     try {
       return JSON.parse(stored);
@@ -111,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!supabase) {
       // Check if guest mode was previously active
-      const wasGuest = typeof window !== "undefined" && localStorage.getItem("postflow_guest") === "true";
+      const wasGuest = typeof window !== "undefined" && localStorage.getItem("sequencia-viral_guest") === "true";
       if (wasGuest) {
         setIsGuest(true);
         setProfile(getGuestProfile());
@@ -130,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
         });
       } else {
-        const wasGuest = localStorage.getItem("postflow_guest") === "true";
+        const wasGuest = localStorage.getItem("sequencia-viral_guest") === "true";
         if (wasGuest) {
           setIsGuest(true);
           setProfile(getGuestProfile());
@@ -147,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(s?.user ?? null);
       if (s?.user) {
         setIsGuest(false);
-        localStorage.removeItem("postflow_guest");
+        localStorage.removeItem("sequencia-viral_guest");
         const p = await fetchProfile(s.user.id);
         if (p) setProfile(p);
       } else {
@@ -169,9 +173,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const signInWithTwitter = useCallback(async () => {
+    if (!supabase) {
+      console.warn("Supabase not configured");
+      return;
+    }
+    await supabase.auth.signInWithOAuth({
+      provider: "twitter",
+      options: { redirectTo: `${window.location.origin}/app` },
+    });
+  }, []);
+
   const signInWithEmail = useCallback(
     async (email: string, password: string) => {
-      if (!supabase) return { error: "Supabase not configured" };
+      if (!supabase) return { error: "Supabase não está configurado." };
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       return { error: error?.message ?? null };
     },
@@ -180,13 +195,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUpWithEmail = useCallback(
     async (email: string, password: string) => {
-      if (!supabase) return { error: "Supabase not configured" };
-      const { error } = await supabase.auth.signUp({
+      if (!supabase)
+        return { error: "Supabase não está configurado.", needsEmailConfirmation: false };
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: { emailRedirectTo: `${window.location.origin}/app` },
       });
-      return { error: error?.message ?? null };
+      if (error) {
+        return { error: error.message, needsEmailConfirmation: false };
+      }
+      // If Supabase already returned a session, user is signed in (no email confirmation required).
+      // Otherwise, user created but must confirm via email link.
+      const needsEmailConfirmation = !data.session;
+      return { error: null, needsEmailConfirmation };
     },
     []
   );
@@ -195,9 +217,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isGuest) {
       setIsGuest(false);
       setProfile(null);
-      localStorage.removeItem("postflow_guest");
-      localStorage.removeItem("postflow_guest_profile");
-      localStorage.removeItem("postflow_onboarding");
+      localStorage.removeItem("sequencia-viral_guest");
+      localStorage.removeItem("sequencia-viral_guest_profile");
+      localStorage.removeItem("sequencia-viral_onboarding");
       return;
     }
     if (supabase) {
@@ -212,7 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsGuest(true);
     const gp = getGuestProfile();
     setProfile(gp);
-    localStorage.setItem("postflow_guest", "true");
+    localStorage.setItem("sequencia-viral_guest", "true");
     setLoading(false);
   }, []);
 
@@ -221,16 +243,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isGuest) {
         const updated = { ...getGuestProfile(), ...data };
         setProfile(updated as UserProfile);
-        localStorage.setItem("postflow_guest_profile", JSON.stringify(updated));
+        localStorage.setItem("sequencia-viral_guest_profile", JSON.stringify(updated));
         return;
       }
-      if (!supabase || !user) return;
-      const { data: updated } = await supabase
+      if (!supabase || !user) {
+        throw new Error("Supabase não está configurado ou usuário não autenticado.");
+      }
+      // Upsert handles both "profile exists" (update) and "profile doesn't exist yet"
+      // (insert) in one call. The previous implementation used update().single() which
+      // threw when no row matched, leaving the save button stuck in "Salvando…".
+      const payload = {
+        id: user.id,
+        email: user.email,
+        ...data,
+      };
+      const { data: updated, error } = await supabase
         .from("profiles")
-        .update(data)
-        .eq("id", user.id)
+        .upsert(payload, { onConflict: "id" })
         .select()
-        .single();
+        .maybeSingle();
+      if (error) {
+        console.error("[updateProfile] upsert error:", error);
+        throw new Error(error.message || "Erro ao salvar perfil.");
+      }
       if (updated) setProfile(updated as UserProfile);
     },
     [user, isGuest]
@@ -244,6 +279,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       isGuest,
       signInWithGoogle,
+      signInWithTwitter,
       signInWithEmail,
       signUpWithEmail,
       signOut,
@@ -258,6 +294,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       isGuest,
       signInWithGoogle,
+      signInWithTwitter,
       signInWithEmail,
       signUpWithEmail,
       signOut,

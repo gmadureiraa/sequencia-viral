@@ -682,12 +682,12 @@ function CreatePageContent() {
             toast.success("Carrossel salvo automaticamente.");
           } catch (supaErr) {
             // Supabase failed — fall back to localStorage
-            console.error("[auto-save] Supabase falhou, salvando localmente:", supaErr);
+            console.error("[auto-save] Supabase erro:", supaErr);
             const id = carouselRecordId ?? `carousel-${Date.now()}`;
             setCarouselRecordId(id);
             upsertGuestCarousel({ id, title, slides, style: slideStyle, variation: variationMeta, savedAt: new Date().toISOString(), status: "draft" });
             lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle });
-            toast.info("Salvo localmente (falha na nuvem).");
+            toast.warning("Salvo localmente — nuvem indisponível.");
           }
         } else {
           const id = carouselRecordId ?? `carousel-${Date.now()}`;
@@ -735,12 +735,12 @@ function CreatePageContent() {
           console.log("[auto-save] Variacao salva no Supabase, id:", row.id);
           toast.success("Carrossel salvo automaticamente.");
         } catch (supaErr) {
-          console.error("[auto-save] Supabase falhou, salvando localmente:", supaErr);
+          console.error("[auto-save] Supabase erro:", supaErr);
           const id = carouselRecordId ?? `carousel-${Date.now()}`;
           setCarouselRecordId(id);
           upsertGuestCarousel({ id, title, slides, style: slideStyle, variation: variationMeta, savedAt: new Date().toISOString(), status: "draft" });
           lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle });
-          toast.info("Salvo localmente (falha na nuvem).");
+          toast.warning("Salvo localmente — nuvem indisponível.");
         }
       } else {
         const id = carouselRecordId ?? `carousel-${Date.now()}`;
@@ -1136,7 +1136,7 @@ function CreatePageContent() {
           return row.id;
         } catch (supaErr) {
           // Supabase failed — fall back to localStorage
-          console.error("[save] Supabase falhou, salvando localmente:", supaErr);
+          console.error("[save] Supabase erro:", supaErr);
           const id = carouselRecordId ?? `carousel-${Date.now()}`;
           setCarouselRecordId(id);
           upsertGuestCarousel({
@@ -1148,7 +1148,7 @@ function CreatePageContent() {
             savedAt: new Date().toISOString(),
             status: "draft",
           });
-          toast.info("Salvo localmente (falha na nuvem).");
+          toast.warning("Salvo localmente — nuvem indisponível.");
           return id;
         }
       }

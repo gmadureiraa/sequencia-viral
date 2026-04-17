@@ -339,6 +339,39 @@ export async function POST(request: Request) {
       }
     }
 
+    // Increment usage_count after successful render (final step)
+    if (step === "render" && sb) {
+      void (async () => {
+        try {
+          const { error: incErr } = await sb.rpc("increment_usage_count", { uid: user.id });
+          if (incErr) {
+            const { data: currentProfile } = await sb
+              .from("profiles")
+              .select("usage_count")
+              .eq("id", user.id)
+              .single();
+            if (currentProfile) {
+              await sb
+                .from("profiles")
+                .update({ usage_count: (currentProfile.usage_count ?? 0) + 1 })
+                .eq("id", user.id);
+            }
+          }
+          await sb.from("generations").insert({
+            user_id: user.id,
+            model: "gemini-2.5-flash",
+            provider: "google",
+            input_tokens: 0,
+            output_tokens: 0,
+            cost_usd: 0,
+            prompt_type: "v2-render",
+          });
+        } catch (e) {
+          console.warn("[generate-v2] Failed to track usage:", e);
+        }
+      })();
+    }
+
     return Response.json({ step, data: result });
   } catch (err) {
     console.error("[generate-v2] Unexpected error:", err);

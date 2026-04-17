@@ -256,6 +256,7 @@ export default function CarouselsPage() {
                 carousel={carousel}
                 index={i}
                 deleteConfirm={deleteConfirm === carousel.id}
+                isLocal={!isCarouselUuid(carousel.id)}
                 onDelete={() => handleDelete(carousel.id)}
                 onDuplicate={() => handleDuplicate(carousel)}
               />
@@ -290,12 +291,14 @@ function CarouselCard({
   carousel,
   index,
   deleteConfirm,
+  isLocal,
   onDelete,
   onDuplicate,
 }: {
   carousel: SavedCarousel;
   index: number;
   deleteConfirm: boolean;
+  isLocal: boolean;
   onDelete: () => void;
   onDuplicate: () => void;
 }) {
@@ -347,14 +350,21 @@ function CarouselCard({
         </div>
 
         {/* Status badge */}
-        <div
-          className={`absolute top-4 right-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-[#0A0A0A] ${
-            status === "published"
-              ? "bg-[var(--accent)] text-white"
-              : "bg-[#FFFDF9] text-[#0A0A0A]"
-          }`}
-        >
-          {status === "published" ? "Publicado" : "Rascunho"}
+        <div className="absolute top-4 right-4 flex items-center gap-1.5">
+          {isLocal && (
+            <div className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-amber-400 bg-amber-50 text-amber-700">
+              Local
+            </div>
+          )}
+          <div
+            className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-[#0A0A0A] ${
+              status === "published"
+                ? "bg-[var(--accent)] text-white"
+                : "bg-[#FFFDF9] text-[#0A0A0A]"
+            }`}
+          >
+            {status === "published" ? "Publicado" : "Rascunho"}
+          </div>
         </div>
       </div>
 

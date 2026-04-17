@@ -4,6 +4,12 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
 import { useAuth } from "@/lib/auth-context";
+import { supabase } from "@/lib/supabase";
+import {
+  upsertUserCarousel,
+  upsertGuestCarousel,
+  bumpCarouselUsage,
+} from "@/lib/carousel-storage";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import {
@@ -15,6 +21,7 @@ import {
   Download,
   Loader2,
   RefreshCw,
+  Save,
   Sparkles,
 } from "lucide-react";
 
@@ -130,6 +137,10 @@ export default function CreateV2Page() {
 
   // Context accumulator
   const [accumulatedContext, setAccumulatedContext] = useState("");
+
+  // Save state
+  const [carouselRecordId, setCarouselRecordId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -287,6 +298,66 @@ export default function CreateV2Page() {
     navigator.clipboard.writeText(text);
     toast.success("Texto copiado!");
   };
+
+  // ─── Save carousel ─────────────────────────────────────────────
+  const handleSaveCarousel = useCallback(async () => {
+    if (editedBlocks.length === 0) return;
+    setIsSaving(true);
+    const title =
+      headlines?.headlines[selectedHeadline ?? 0]?.line1 ||
+      editedBlocks[0]?.replace(/^texto\s+\d+\s*[-–—]\s*/i, "") ||
+      "Carrossel v2";
+    const slides = editedBlocks.map((block, i) => {
+      const content = block.replace(/^texto\s+\d+\s*[-–—]\s*/i, "");
+      return { heading: i === 0 ? title : `Slide ${i + 1}`, body: content, imageQuery: "" };
+    });
+    const variationMeta = { title, style: template };
+
+    try {
+      const { user } = session ?? {};
+      if (user && supabase) {
+        try {
+          const { row, inserted } = await upsertUserCarousel(supabase, user.id, {
+            id: carouselRecordId,
+            title,
+            slides,
+            slideStyle: "dark",
+            variation: variationMeta,
+            status: "draft",
+          });
+          setCarouselRecordId(row.id);
+          if (inserted) {
+            await bumpCarouselUsage(supabase, user.id);
+          }
+          toast.success("Carrossel salvo na nuvem!");
+        } catch (supaErr) {
+          console.error("[create-v2] Supabase erro:", supaErr);
+          const id = carouselRecordId ?? `carousel-v2-${Date.now()}`;
+          setCarouselRecordId(id);
+          upsertGuestCarousel({ id, title, slides, style: "dark", variation: variationMeta, savedAt: new Date().toISOString(), status: "draft" });
+          toast.warning("Salvo localmente — nuvem indisponível.");
+        }
+      } else {
+        const id = carouselRecordId ?? `carousel-v2-${Date.now()}`;
+        setCarouselRecordId(id);
+        upsertGuestCarousel({ id, title, slides, style: "dark", variation: variationMeta, savedAt: new Date().toISOString(), status: "draft" });
+        toast.success("Carrossel salvo localmente!");
+      }
+    } catch (e) {
+      console.error("[create-v2] Erro ao salvar:", e);
+      toast.error("Erro ao salvar carrossel.");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [editedBlocks, headlines, selectedHeadline, template, session, carouselRecordId]);
+
+  // Auto-save when blocks are first generated (step 5 starts)
+  useEffect(() => {
+    if (currentStep === "render" && blocks.length > 0 && !carouselRecordId) {
+      void handleSaveCarousel();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, blocks.length]);
 
   // ─── Progress Bar ───────────────────────────────────────────────
 
@@ -726,6 +797,14 @@ export default function CreateV2Page() {
                   >
                     <Copy size={14} />
                     Copiar
+                  </button>
+                  <button
+                    onClick={handleSaveCarousel}
+                    disabled={isSaving}
+                    className="flex items-center gap-2 rounded-xl border-2 border-[#0A0A0A]/20 bg-white px-4 py-2 text-sm font-semibold text-[#0A0A0A]/60 hover:border-[#0A0A0A]/40 transition disabled:opacity-40"
+                  >
+                    {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    Salvar
                   </button>
                   <button
                     onClick={handleExportPng}

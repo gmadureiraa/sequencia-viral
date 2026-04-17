@@ -93,7 +93,7 @@ export function FooterSection() {
         {/* Bottom Bar */}
         <div className="py-6 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            2026 PostFlow. Todos os direitos reservados.
+            2026 Sequência Viral. Todos os direitos reservados.
           </p>
 
           <div className="flex items-center gap-4 text-sm text-muted-foreground">

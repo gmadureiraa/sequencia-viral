@@ -22,6 +22,7 @@ import {
   X,
   Loader2,
   Sparkles,
+  Check,
 } from "lucide-react";
 
 function isPaidPlanParam(id: string): id is PlanId {
@@ -526,7 +527,7 @@ function SettingsPageContent() {
             disabled={saving}
             className="btn-scale w-full rounded-xl bg-[var(--accent)] py-3.5 text-sm font-semibold text-white transition-all hover:bg-[var(--accent-dark)] hover:shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            <Save size={16} />
+            {saving ? <Loader2 size={16} className="animate-spin" /> : saved ? <Check size={16} /> : <Save size={16} />}
             {saving ? "Salvando…" : saved ? "Salvo!" : "Salvar alterações"}
           </button>
         </motion.div>

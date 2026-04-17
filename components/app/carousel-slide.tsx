@@ -25,7 +25,7 @@ export interface SlideProps {
   profile: { name: string; handle: string; photoUrl: string };
   style: "white" | "dark";
   isLastSlide?: boolean;
-  /** Exibe o rodapé POSTFLOW (wordmark + seta) só no primeiro slide, e só se true. */
+  /** Exibe o rodapé Sequência Viral (wordmark + seta) só no primeiro slide, e só se true. */
   showFooter?: boolean;
   /** Tamanho da escala visual. 1 = full 1080×1350. 0.5 = 540×675. Default: 0.34 ≈ 367×459. */
   scale?: number;

@@ -1,5 +1,5 @@
 /**
- * Gera PNGs 3D isométricos para a hero animation do PostFlow.
+ * Gera PNGs 3D isométricos para a hero animation do Sequência Viral.
  * Estilo: clay/isometric, cantos arredondados, sombra suave, fundo transparente.
  *
  * Uso: `bun scripts/generate-hero-assets.ts`

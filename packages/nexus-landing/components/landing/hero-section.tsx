@@ -53,7 +53,7 @@ export function HeroSection() {
               isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
             }`}
           >
-            Pare de quebrar fluxo entre ferramentas. Com o PostFlow, voce transforma
+            Pare de quebrar fluxo entre ferramentas. Com o Sequência Viral, voce transforma
             uma ideia em carrossel pronto para Instagram, LinkedIn e X em minutos.
           </p>
         </div>

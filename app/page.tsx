@@ -303,8 +303,8 @@ function Hero() {
           transition={{ duration: 0.5 }}
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#E8E8E5] bg-white/90 px-4 py-2 shadow-sm backdrop-blur-sm"
         >
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-black text-white">
-            P
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-white">
+            <Sparkles size={12} />
           </span>
           <span className="text-[13px] font-semibold text-[#0A0A0A]/70">
             Criador de conteúdo com IA
@@ -861,7 +861,7 @@ function FinalCta() {
             Começar grátis
             <ArrowRight size={18} />
           </Link>
-          <Link href="/roadmap" className={`${BTN_OUTLINE_DARK} px-6 py-3.5`}>
+          <Link href="/app/roadmap" className={`${BTN_OUTLINE_DARK} px-6 py-3.5`}>
             Ver roadmap
           </Link>
         </div>

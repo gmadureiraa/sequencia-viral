@@ -16,7 +16,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Optimus — Build & ship with PostFlow',
+  title: 'Optimus — Build & ship with Sequência Viral',
   description: 'Plataforma para gerar, editar e publicar carrosséis com IA — inspirado no template Optimus (v0).',
   generator: 'v0.app',
   icons: {

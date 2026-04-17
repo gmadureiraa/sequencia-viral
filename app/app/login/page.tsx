@@ -359,11 +359,11 @@ export default function LoginPage() {
       {/* Legal footer */}
       <p className="mt-6 text-center text-[12px] text-zinc-500">
         Ao continuar você concorda com os{" "}
-        <Link href="#" className="underline underline-offset-2 hover:text-zinc-900">
+        <Link href="/terms" className="underline underline-offset-2 hover:text-zinc-900">
           Termos de Serviço
         </Link>{" "}
         e a{" "}
-        <Link href="#" className="underline underline-offset-2 hover:text-zinc-900">
+        <Link href="/privacy" className="underline underline-offset-2 hover:text-zinc-900">
           Política de Privacidade
         </Link>
         .

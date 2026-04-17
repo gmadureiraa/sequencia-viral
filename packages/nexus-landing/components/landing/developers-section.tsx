@@ -7,9 +7,9 @@ import { Copy, Check } from "lucide-react";
 const codeExamples = [
   {
     label: "Initialize",
-    code: `import { PostFlow } from '@postflow/sdk'
+    code: `import { Sequência Viral } from '@postflow/sdk'
 
-const postflow = new PostFlow({
+const postflow = new Sequência Viral({
   apiKey: process.env.POSTFLOW_API_KEY
 })`,
   },
@@ -79,7 +79,7 @@ export function DevelopersSection() {
             </h2>
             <p className="text-lg text-muted-foreground mb-10 leading-relaxed">
               API pensada para integracao rapida de copy, design e distribuicao.
-              Conecte o PostFlow ao seu produto sem friccao.
+              Conecte o Sequência Viral ao seu produto sem friccao.
             </p>
             
             {/* Features list */}

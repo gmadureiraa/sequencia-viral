@@ -1,4 +1,4 @@
-# Guia completo — Carrosséis no PostFlow
+# Guia completo — Carrosséis no Sequência Viral
 
 Este guia explica **como tirar o máximo do produto**: o que configurar no perfil, como escolher tema (claro/escuro), cada fonte de conteúdo (ideia, link, vídeo, Instagram), como usar **link só como inspiração**, edição, imagens, export e boas práticas de publicação.
 
@@ -12,7 +12,7 @@ Este guia explica **como tirar o máximo do produto**: o que configurar no perfi
 4. **Editar** — ajusta títulos, corpo, ordem dos slides, imagens e branding.
 5. **Exportar** — baixa PNG (e PDF experimental, se disponível) e publica no Instagram / LinkedIn / X.
 
-O PostFlow foi pensado para **um fluxo só**: menos cópia em um lugar, design em outro e legenda em outro.
+O Sequência Viral foi pensado para **um fluxo só**: menos cópia em um lugar, design em outro e legenda em outro.
 
 ---
 
@@ -66,7 +66,7 @@ Exemplo de briefing forte:
 
 ### 3.2 Link (artigo, blog, PDF)
 
-O PostFlow tenta **extrair texto** da URL. Funciona melhor com:
+O Sequência Viral tenta **extrair texto** da URL. Funciona melhor com:
 
 - Artigos com HTML legível  
 - Blogs sem paywall duro  
@@ -100,7 +100,7 @@ Se o Instagram retornar erro, use o fallback sugerido pelo próprio app: **cole 
 
 ## 4. Usar um link “só como inspiração”
 
-Você não precisa que o PostFlow leia a página inteira. Modos de uso:
+Você não precisa que o Sequência Viral leia a página inteira. Modos de uso:
 
 1. **Inspiração de estrutura** — você gosta da progressão de slides (gancho → lista → CTA). Coloque no campo “Tema / foco”: “Replicar a estrutura: problema → 3 erros → framework → CTA salvar”.
 2. **Inspiração de tom** — “Mesmo nível de provocação que esse artigo, mas com exemplos do meu nicho”.
@@ -170,7 +170,7 @@ Escolha pela **intenção do post**:
 
 ### 7.3 Legenda e primeiro comentário
 
-O PostFlow foca no **visual**; ainda assim recomenda-se:
+O Sequência Viral foca no **visual**; ainda assim recomenda-se:
 
 - **Legenda** com gancho + 1 linha de contexto + CTA + hashtags moderadas (se fizer sentido na plataforma).  
 - **Primeiro comentário** com link ou detalhe (algoritmo e UX).
@@ -208,4 +208,4 @@ O PostFlow foca no **visual**; ainda assim recomenda-se:
 
 ---
 
-*Última revisão: alinhado ao fluxo atual de criação, geração e export do PostFlow.*
+*Última revisão: alinhado ao fluxo atual de criação, geração e export do Sequência Viral.*

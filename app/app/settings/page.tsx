@@ -477,7 +477,7 @@ function SettingsPageContent() {
               <p className="text-xs text-[var(--muted)] mt-2 font-medium">{usageLabel}</p>
               <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mt-2">
                 Novidades:{" "}
-                <Link href="/roadmap" className="underline hover:text-[var(--foreground)]">
+                <Link href="/app/roadmap" className="underline hover:text-[var(--foreground)]">
                   roadmap
                 </Link>
               </p>

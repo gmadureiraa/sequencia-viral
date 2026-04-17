@@ -13,6 +13,7 @@ import {
   Filter,
   FileText,
   ImageIcon,
+  ArrowUpDown,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -37,6 +38,7 @@ export default function CarouselsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "drafts" | "published">("all");
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<"recent" | "oldest">("recent");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -66,16 +68,22 @@ export default function CarouselsPage() {
     return () => window.clearTimeout(t);
   }, [loadCarousels]);
 
-  const filtered = carousels.filter((c) => {
-    if (filter === "drafts" && c.status !== "draft") return false;
-    if (filter === "published" && c.status !== "published") return false;
-    if (search) {
-      const q = search.toLowerCase();
-      const title = (c.title || c.slides[0]?.heading || "").toLowerCase();
-      if (!title.includes(q)) return false;
-    }
-    return true;
-  });
+  const filtered = carousels
+    .filter((c) => {
+      if (filter === "drafts" && c.status !== "draft") return false;
+      if (filter === "published" && c.status !== "published") return false;
+      if (search) {
+        const q = search.toLowerCase();
+        const title = (c.title || c.slides[0]?.heading || "").toLowerCase();
+        if (!title.includes(q)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.savedAt).getTime();
+      const dateB = new Date(b.savedAt).getTime();
+      return sort === "recent" ? dateB - dateA : dateA - dateB;
+    });
 
   async function handleDelete(id: string) {
     if (deleteConfirm !== id) {
@@ -201,6 +209,16 @@ export default function CarouselsPage() {
               </button>
             ))}
           </div>
+
+          {/* Sort toggle */}
+          <button
+            onClick={() => setSort(sort === "recent" ? "oldest" : "recent")}
+            className="flex items-center gap-1.5 bg-[#FFFDF9] border border-[#0A0A0A] rounded-xl px-4 py-2.5 text-xs font-bold text-[#0A0A0A]/70 hover:text-[#0A0A0A] transition-all"
+            style={{ boxShadow: "3px 3px 0 0 #0A0A0A" }}
+          >
+            <ArrowUpDown size={14} />
+            {sort === "recent" ? "Recentes" : "Antigos"}
+          </button>
         </motion.div>
       )}
 

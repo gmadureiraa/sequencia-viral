@@ -268,7 +268,7 @@ Return valid JSON with this structure:
     let textResponse: string;
     try {
       const genResult = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         contents: `${userMessage}\n\n[variation-seed: ${Date.now()}-${Math.random().toString(36).slice(2, 8)}]`,
         config: {
           systemInstruction: systemPrompt,
@@ -343,7 +343,7 @@ Return valid JSON with this structure:
           }
           await sb.from("generations").insert({
             user_id: user.id,
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             provider: "google",
             input_tokens: 0,
             output_tokens: 0,

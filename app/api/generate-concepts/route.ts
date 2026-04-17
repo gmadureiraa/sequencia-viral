@@ -62,7 +62,7 @@ Return valid JSON: { "concepts": [ { "title", "hook", "style", "angle" } ] }`;
 
     const ai = new GoogleGenAI({ apiKey: geminiKey });
     const result = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         temperature: 0.95,

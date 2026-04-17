@@ -26,6 +26,34 @@ import {
 // ─── Types ──────────────────────────────────────────────────────────
 type SourceType = "ai" | "link" | "video" | "instagram" | "idea";
 type Step = "input" | "generating" | "pick" | "edit";
+type TemplatePick = "twitter" | "principal" | "futurista" | "autoral";
+
+// V2 flow types (Content Machine)
+interface V2TriagemData {
+  transformacao: string;
+  friccao: string;
+  angulo: string;
+  evidencias: string;
+}
+interface V2Headline {
+  line1: string;
+  line2: string;
+}
+interface V2HeadlinesData {
+  angulo_dominante: string;
+  headlines: V2Headline[];
+}
+interface V2BackboneData {
+  headline_escolhida: string;
+  hook: string;
+  mecanismo: string;
+  prova: string;
+  aplicacao: string;
+  direcao: string;
+}
+
+// V2 sub-steps shown inside the pick/edit phases
+type V2SubStep = "none" | "triagem" | "headlines" | "backbone" | "rendering";
 
 interface Slide {
   heading: string;
@@ -91,6 +119,31 @@ const STYLE_BADGES: Record<string, { label: string; color: string; emoji: string
   data: { label: "Baseado em dados", color: "#2563eb", emoji: "📊" },
   story: { label: "Narrativa", color: "#16a34a", emoji: "📖" },
   provocative: { label: "Provocativo", color: "#dc2626", emoji: "🔥" },
+};
+
+const TEMPLATE_OPTIONS: {
+  id: TemplatePick;
+  emoji: string;
+  name: string;
+  desc: string;
+  color: string;
+}[] = [
+  { id: "twitter", emoji: "\uD83D\uDC26", name: "Twitter", desc: "Estilo tweet screenshot \u2022 6-8 slides", color: "#0ea5e9" },
+  { id: "principal", emoji: "\uD83D\uDCF0", name: "Principal", desc: "Imagem hero + texto bold \u2022 18 blocos", color: "#EC6000" },
+  { id: "futurista", emoji: "\uD83D\uDD2E", name: "Futurista", desc: "Editorial limpo \u2022 14 textos", color: "#2563eb" },
+  { id: "autoral", emoji: "\u270D\uFE0F", name: "Autoral", desc: "Narrativa continua \u2022 18 blocos", color: "#16a34a" },
+];
+
+const V2_TEMPLATE_BLOCKS: Record<Exclude<TemplatePick, "twitter">, number> = {
+  principal: 18,
+  futurista: 14,
+  autoral: 18,
+};
+
+const V2_TEMPLATE_COLORS: Record<Exclude<TemplatePick, "twitter">, { bg: string; accent: string }> = {
+  principal: { bg: "#0A0A0A", accent: "#EC6000" },
+  futurista: { bg: "#F8FAFC", accent: "#2563eb" },
+  autoral: { bg: "#0A0A0A", accent: "#16a34a" },
 };
 
 const DEFAULT_PROFILE = {
@@ -357,6 +410,18 @@ function CreatePageContent() {
   const [niche, setNiche] = useState("marketing");
   const [tone, setTone] = useState("casual");
   const [language, setLanguage] = useState("pt-br");
+  const [templatePick, setTemplatePick] = useState<TemplatePick>("twitter");
+
+  // V2 Content Machine state (used when template !== "twitter")
+  const [v2SubStep, setV2SubStep] = useState<V2SubStep>("none");
+  const [v2Triagem, setV2Triagem] = useState<V2TriagemData | null>(null);
+  const [v2Headlines, setV2Headlines] = useState<V2HeadlinesData | null>(null);
+  const [v2SelectedHeadline, setV2SelectedHeadline] = useState<number | null>(null);
+  const [v2Backbone, setV2Backbone] = useState<V2BackboneData | null>(null);
+  const [v2Blocks, setV2Blocks] = useState<string[]>([]);
+  const [v2EditedBlocks, setV2EditedBlocks] = useState<string[]>([]);
+  const [v2Context, setV2Context] = useState("");
+  const [v2Loading, setV2Loading] = useState(false);
   const [variations, setVariations] = useState<Variation[]>([]);
   const [concepts, setConcepts] = useState<Array<{ title: string; hook: string; style: string; angle: string }>>([]);
   const [selectedVariation, setSelectedVariation] = useState<number>(0);
@@ -537,11 +602,149 @@ function CreatePageContent() {
   }, [step, editSlides.length, session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Handlers ───────────────────────────────────────────────────
+  // ─── V2 Content Machine helpers ─────────────────────────────────
+  const callV2API = useCallback(
+    async (
+      apiStep: string,
+      extra: Record<string, unknown> = {}
+    ): Promise<Record<string, unknown> | null> => {
+      setV2Loading(true);
+      try {
+        const res = await fetch("/api/generate-v2", {
+          method: "POST",
+          headers: jsonWithAuth(session),
+          body: JSON.stringify({
+            step: apiStep,
+            topic,
+            template: templatePick,
+            niche: niche || "geral",
+            tone: tone || "informal",
+            language,
+            context: v2Context,
+            ...extra,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "Erro desconhecido" }));
+          toast.error(err.error || `Erro ${res.status}`);
+          return null;
+        }
+        const json = await res.json();
+        return json.data as Record<string, unknown>;
+      } catch (err) {
+        toast.error("Erro de conexao. Tente novamente.");
+        console.error(err);
+        return null;
+      } finally {
+        setV2Loading(false);
+      }
+    },
+    [session, topic, templatePick, niche, tone, language, v2Context]
+  );
+
+  const handleV2StartTriagem = useCallback(async () => {
+    const data = await callV2API("triagem");
+    if (data) {
+      const t = data as unknown as V2TriagemData;
+      setV2Triagem(t);
+      setV2Context(JSON.stringify(t));
+      setV2SubStep("triagem");
+    }
+  }, [callV2API]);
+
+  const handleV2GenerateHeadlines = useCallback(async () => {
+    const data = await callV2API("headlines");
+    if (data) {
+      const h = data as unknown as V2HeadlinesData;
+      setV2Headlines(h);
+      setV2SelectedHeadline(null);
+      setV2SubStep("headlines");
+    }
+  }, [callV2API]);
+
+  const handleV2RefreshHeadlines = useCallback(async () => {
+    const data = await callV2API("headlines");
+    if (data) {
+      const h = data as unknown as V2HeadlinesData;
+      setV2Headlines(h);
+      setV2SelectedHeadline(null);
+    }
+  }, [callV2API]);
+
+  const handleV2GenerateBackbone = useCallback(async () => {
+    if (v2SelectedHeadline === null || !v2Headlines) {
+      toast.error("Escolha uma headline primeiro.");
+      return;
+    }
+    const ctx =
+      v2Context +
+      "\n\nHEADLINE ESCOLHIDA (#" +
+      (v2SelectedHeadline + 1) +
+      "): " +
+      v2Headlines.headlines[v2SelectedHeadline].line1 +
+      " | " +
+      v2Headlines.headlines[v2SelectedHeadline].line2;
+    setV2Context(ctx);
+    const data = await callV2API("backbone", {
+      choice: v2SelectedHeadline + 1,
+      context: ctx,
+    });
+    if (data) {
+      const b = data as unknown as V2BackboneData;
+      setV2Backbone(b);
+      setV2Context(ctx + "\n\nESPINHA DORSAL: " + JSON.stringify(b));
+      setV2SubStep("backbone");
+    }
+  }, [callV2API, v2Context, v2SelectedHeadline, v2Headlines]);
+
+  const handleV2GenerateCarousel = useCallback(async () => {
+    setV2SubStep("rendering");
+    const data = await callV2API("render", { context: v2Context });
+    if (data) {
+      const r = data as unknown as { blocks: string[] };
+      setV2Blocks(r.blocks);
+      setV2EditedBlocks([...r.blocks]);
+      setStep("edit");
+    } else {
+      setV2SubStep("backbone");
+    }
+  }, [callV2API, v2Context]);
+
+  // Reset v2 state when going back to input
+  const resetV2State = useCallback(() => {
+    setV2SubStep("none");
+    setV2Triagem(null);
+    setV2Headlines(null);
+    setV2SelectedHeadline(null);
+    setV2Backbone(null);
+    setV2Blocks([]);
+    setV2EditedBlocks([]);
+    setV2Context("");
+  }, []);
+
   // STEP 1: Generate 5 concepts (cheap, fast ~1-2s)
   const handleGenerate = useCallback(async () => {
     setError("");
     if (isGuest || !session?.access_token) {
       setError("Para gerar carrosséis com IA, entre na sua conta.");
+      return;
+    }
+
+    // V2 templates go through Content Machine flow (triagem -> headlines -> backbone -> render)
+    if (templatePick !== "twitter") {
+      resetV2State();
+      setStep("generating");
+      // Use topic directly (for V2, we pass the raw topic to the triagem step)
+      const data = await callV2API("triagem");
+      if (data) {
+        const t = data as unknown as V2TriagemData;
+        setV2Triagem(t);
+        setV2Context(JSON.stringify(t));
+        setV2SubStep("triagem");
+        setStep("pick"); // We reuse "pick" step to show v2 sub-steps
+      } else {
+        setStep("input");
+      }
       return;
     }
 
@@ -611,7 +814,7 @@ function CreatePageContent() {
       setError(err instanceof Error ? err.message : "Algo deu errado. Tente de novo.");
       setStep("input");
     }
-  }, [sourceType, sourceUrl, topic, niche, tone, language, isGuest, session]);
+  }, [sourceType, sourceUrl, topic, niche, tone, language, isGuest, session, templatePick, callV2API, resetV2State]);
 
   // STEP 2: Generate full carousel from chosen concept (~5-8s)
   const handlePickConcept = useCallback(async (conceptIndex: number) => {
@@ -1263,8 +1466,18 @@ function CreatePageContent() {
               <button
                 onClick={() => {
                   if (step === "generating") return;
-                  if (step === "pick") setStep("input");
-                  if (step === "edit") setStep("input");
+                  if (step === "pick") {
+                    setStep("input");
+                    resetV2State();
+                  }
+                  if (step === "edit") {
+                    if (templatePick !== "twitter") {
+                      setStep("pick");
+                      setV2SubStep("backbone");
+                    } else {
+                      setStep("input");
+                    }
+                  }
                 }}
                 className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
               >
@@ -1661,6 +1874,43 @@ function CreatePageContent() {
                 </div>
               </div>
 
+              {/* Template picker */}
+              <div>
+                <label className="block text-xs font-medium mb-2 text-[var(--muted)]">
+                  Escolha o template
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {TEMPLATE_OPTIONS.map((t) => {
+                    const selected = templatePick === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setTemplatePick(t.id)}
+                        className={`relative rounded-xl border-2 p-4 text-left transition-all duration-200 active:scale-[0.97] ${
+                          selected
+                            ? "border-[var(--accent)] bg-[var(--accent)]/[0.04] shadow-md shadow-orange-500/5"
+                            : "border-[var(--border)] bg-[var(--card)] hover:border-zinc-300"
+                        }`}
+                      >
+                        {selected && (
+                          <div className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px]" style={{ background: "var(--accent)" }}>
+                            <Icon name="check" size={10} />
+                          </div>
+                        )}
+                        <div className="text-xl mb-2">{t.emoji}</div>
+                        <p className="text-sm font-bold" style={{ color: selected ? "var(--accent)" : "var(--foreground)" }}>
+                          {t.name}
+                        </p>
+                        <p className="text-[11px] text-[var(--muted)] mt-0.5 leading-relaxed">
+                          {t.desc}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Generate button */}
               <button
                 onClick={handleGenerate}
@@ -1708,8 +1958,8 @@ function CreatePageContent() {
           </div>
         )}
 
-        {/* ─── STEP 3: PICK CONCEPT ─────────────────────────────── */}
-        {step === "pick" && (
+        {/* ─── STEP 3: PICK CONCEPT / V2 FLOW ───────────────────── */}
+        {step === "pick" && templatePick === "twitter" && (
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1720,7 +1970,7 @@ function CreatePageContent() {
                 className="text-3xl font-bold mb-3"
                 style={{ fontFamily: "var(--font-serif), 'DM Serif Display', Georgia, serif" }}
               >
-                Escolha o ângulo
+                Escolha o angulo
               </h2>
               <p className="text-[var(--muted)]">
                 5 abordagens diferentes. Escolha uma e geramos o carrossel completo.
@@ -1762,9 +2012,222 @@ function CreatePageContent() {
                 onClick={() => { setStep("input"); setConcepts([]); }}
                 className="text-sm text-[var(--muted)] hover:text-[var(--accent)] transition-colors"
               >
-                ← Voltar e tentar outro tópico
+                &larr; Voltar e tentar outro topico
               </button>
             </div>
+          </motion.div>
+        )}
+
+        {/* ─── V2 Content Machine sub-steps (non-twitter templates) ── */}
+        {step === "pick" && templatePick !== "twitter" && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="max-w-3xl mx-auto"
+          >
+            {/* V2 Progress bar */}
+            <div className="mb-8 flex items-center gap-1">
+              {(["triagem", "headlines", "backbone", "render"] as const).map((s, i) => {
+                const labels = ["Triagem", "Headlines", "Espinha", "Carrossel"];
+                const stepOrder = ["triagem", "headlines", "backbone", "rendering"];
+                const currentIdx = stepOrder.indexOf(v2SubStep);
+                const isActive = i === currentIdx;
+                const isDone = i < currentIdx;
+                return (
+                  <div key={s} className="flex items-center gap-1 flex-1">
+                    <div
+                      className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold transition-all border ${
+                        isActive
+                          ? "bg-[var(--accent)] text-white border-[var(--accent)] scale-110"
+                          : isDone
+                            ? "bg-zinc-800 text-white border-zinc-800"
+                            : "bg-white text-zinc-300 border-zinc-200"
+                      }`}
+                    >
+                      {isDone ? <Icon name="check" size={12} /> : i + 1}
+                    </div>
+                    <span className={`text-[11px] font-semibold hidden sm:block ${isActive ? "text-[var(--foreground)]" : isDone ? "text-zinc-500" : "text-zinc-300"}`}>
+                      {labels[i]}
+                    </span>
+                    {i < 3 && <div className={`flex-1 h-0.5 mx-1 rounded ${isDone ? "bg-zinc-800" : "bg-zinc-100"}`} />}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* TRIAGEM */}
+            {v2SubStep === "triagem" && v2Triagem && (
+              <div className="space-y-6">
+                <div className="rounded-xl border border-[var(--border)] bg-white overflow-hidden">
+                  <div className="bg-zinc-900 text-white px-6 py-3">
+                    <span className="text-[10px] font-mono uppercase tracking-widest opacity-70">Etapa 1 -- Triagem</span>
+                  </div>
+                  <div className="divide-y divide-zinc-100">
+                    {[
+                      { label: "Transformacao", value: v2Triagem.transformacao },
+                      { label: "Friccao central", value: v2Triagem.friccao },
+                      { label: "Angulo narrativo", value: v2Triagem.angulo },
+                      { label: "Evidencias", value: v2Triagem.evidencias },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="px-6 py-4">
+                        <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--accent)] mb-1">{label}</p>
+                        <p className="text-[14px] text-[var(--foreground)] leading-relaxed">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setStep("input"); resetV2State(); }}
+                    className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-5 py-3 text-sm font-semibold text-[var(--muted)] hover:border-zinc-400 transition"
+                  >
+                    <Icon name="arrow-left" size={16} />
+                    Voltar
+                  </button>
+                  <button
+                    onClick={handleV2GenerateHeadlines}
+                    disabled={v2Loading}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl text-white py-3 text-[15px] font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+                    style={{ background: "var(--accent)" }}
+                  >
+                    {v2Loading ? (
+                      <><Icon name="loader" size={18} /> Gerando headlines...</>
+                    ) : (
+                      <>Gerar Headlines <Icon name="arrow-left" size={16} /></>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* HEADLINES */}
+            {v2SubStep === "headlines" && v2Headlines && (
+              <div className="space-y-6">
+                <div className="rounded-xl border border-[var(--border)] bg-white px-6 py-4">
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mb-1">Angulo dominante</p>
+                  <p className="text-sm text-[var(--foreground)] leading-relaxed">{v2Headlines.angulo_dominante}</p>
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)]">Escolha 1 headline (capa do carrossel)</label>
+                  <div className="grid gap-3">
+                    {v2Headlines.headlines.map((h, i) => {
+                      const isSelected = v2SelectedHeadline === i;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => setV2SelectedHeadline(i)}
+                          className={`relative rounded-xl border-2 p-5 text-left transition-all duration-200 active:scale-[0.99] ${
+                            isSelected
+                              ? "border-[var(--accent)] bg-[var(--accent)]/[0.03] shadow-md"
+                              : "border-[var(--border)] bg-white hover:border-zinc-300"
+                          }`}
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold border transition ${
+                              isSelected ? "bg-[var(--accent)] text-white border-[var(--accent)]" : "bg-zinc-50 text-zinc-400 border-zinc-200"
+                            }`}>
+                              {isSelected ? <Icon name="check" size={14} /> : i + 1}
+                            </div>
+                            <div>
+                              <p className="text-[15px] font-bold text-[var(--foreground)] leading-snug">{h.line1}</p>
+                              <p className="text-[14px] text-[var(--muted)] mt-1 leading-snug">{h.line2}</p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setV2SubStep("triagem")}
+                    className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-5 py-3 text-sm font-semibold text-[var(--muted)] hover:border-zinc-400 transition"
+                  >
+                    <Icon name="arrow-left" size={16} /> Voltar
+                  </button>
+                  <button
+                    onClick={handleV2RefreshHeadlines}
+                    disabled={v2Loading}
+                    className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-5 py-3 text-sm font-semibold text-[var(--muted)] hover:border-zinc-400 transition disabled:opacity-40"
+                  >
+                    <Icon name="loader" size={14} /> Refazer
+                  </button>
+                  <button
+                    onClick={handleV2GenerateBackbone}
+                    disabled={v2Loading || v2SelectedHeadline === null}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl text-white py-3 text-[15px] font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+                    style={{ background: "var(--accent)" }}
+                  >
+                    {v2Loading ? (
+                      <><Icon name="loader" size={18} /> Construindo espinha...</>
+                    ) : (
+                      <>Construir Espinha Dorsal</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* BACKBONE */}
+            {v2SubStep === "backbone" && v2Backbone && (
+              <div className="space-y-6">
+                <div className="rounded-xl border border-[var(--border)] bg-white overflow-hidden">
+                  <div className="bg-zinc-900 text-white px-6 py-3">
+                    <span className="text-[10px] font-mono uppercase tracking-widest opacity-70">Etapa 3 -- Espinha Dorsal</span>
+                  </div>
+                  <div className="divide-y divide-zinc-100">
+                    {[
+                      { label: "Headline escolhida", value: v2Backbone.headline_escolhida },
+                      { label: "Hook", value: v2Backbone.hook },
+                      { label: "Mecanismo", value: v2Backbone.mecanismo },
+                      { label: "Prova", value: v2Backbone.prova },
+                      { label: "Aplicacao", value: v2Backbone.aplicacao },
+                      { label: "Direcao", value: v2Backbone.direcao },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="px-6 py-4">
+                        <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--accent)] mb-1">{label}</p>
+                        <p className="text-[14px] text-[var(--foreground)] leading-relaxed">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setV2SubStep("headlines")}
+                    className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-5 py-3 text-sm font-semibold text-[var(--muted)] hover:border-zinc-400 transition"
+                  >
+                    <Icon name="arrow-left" size={16} /> Voltar
+                  </button>
+                  <button
+                    onClick={handleV2GenerateCarousel}
+                    disabled={v2Loading}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl text-white py-3 text-[15px] font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+                    style={{ background: "var(--accent)" }}
+                  >
+                    {v2Loading ? (
+                      <><Icon name="loader" size={18} /> Renderizando carrossel...</>
+                    ) : (
+                      <><Icon name="sparkles" size={18} /> Gerar Carrossel</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* RENDERING loading */}
+            {v2SubStep === "rendering" && (
+              <div className="flex flex-col items-center justify-center py-20">
+                <Loader size="lg" title="Renderizando..." subtitle="Gerando os blocos do carrossel" />
+              </div>
+            )}
+
+            {/* Back to input when no sub-step data is loaded yet */}
+            {v2SubStep === "none" && (
+              <div className="text-center py-10">
+                <p className="text-sm text-[var(--muted)]">Carregando...</p>
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -1775,6 +2238,108 @@ function CreatePageContent() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
           >
+            {/* ── V2 Block Editor (non-twitter templates) ── */}
+            {templatePick !== "twitter" && v2EditedBlocks.length > 0 && (
+              <div className="max-w-3xl mx-auto">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold" style={{ fontFamily: "var(--font-serif), 'DM Serif Display', Georgia, serif" }}>
+                      Editar blocos
+                    </h2>
+                    <p className="text-sm text-[var(--muted)] mt-1">
+                      Template {templatePick} &middot; {v2EditedBlocks.length} blocos
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(v2EditedBlocks.join("\n\n"));
+                        toast.success("Texto copiado!");
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-[var(--border)] hover:bg-zinc-50 transition-all"
+                    >
+                      <Icon name="file-text" size={13} />
+                      Copiar
+                    </button>
+                    <button
+                      onClick={async () => {
+                        // Save v2 blocks as carousel
+                        const title = v2Headlines?.headlines[v2SelectedHeadline ?? 0]?.line1 || v2EditedBlocks[0]?.replace(/^texto\s+\d+\s*[-\u2013\u2014]\s*/i, "") || "Carrossel v2";
+                        const slides = v2EditedBlocks.map((block, i) => {
+                          const content = block.replace(/^texto\s+\d+\s*[-\u2013\u2014]\s*/i, "");
+                          return { heading: i === 0 ? title : `Slide ${i + 1}`, body: content, imageQuery: "" };
+                        });
+                        const variationMeta = { title, style: templatePick };
+                        try {
+                          if (user && !isGuest && supabase) {
+                            const { row, inserted } = await upsertUserCarousel(supabase, user.id, {
+                              id: carouselRecordId,
+                              title,
+                              slides,
+                              slideStyle: "dark",
+                              variation: variationMeta,
+                              status: "draft",
+                            });
+                            setCarouselRecordId(row.id);
+                            if (inserted) {
+                              await bumpCarouselUsage(supabase, user.id);
+                              await refreshProfile();
+                            }
+                            toast.success("Carrossel salvo na nuvem!");
+                          } else {
+                            const id = carouselRecordId ?? `carousel-v2-${Date.now()}`;
+                            setCarouselRecordId(id);
+                            upsertGuestCarousel({ id, title, slides, style: "dark", variation: variationMeta, savedAt: new Date().toISOString(), status: "draft" });
+                            toast.success("Carrossel salvo localmente!");
+                          }
+                        } catch (e) {
+                          console.error("[v2-save] Erro:", e);
+                          toast.error("Erro ao salvar carrossel.");
+                        }
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90"
+                      style={{ background: "var(--accent)" }}
+                    >
+                      <Icon name="check" size={13} />
+                      Salvar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Block cards */}
+                <div className="space-y-3">
+                  {v2EditedBlocks.map((block, i) => (
+                    <V2BlockCard
+                      key={i}
+                      index={i}
+                      text={block}
+                      templateColor={V2_TEMPLATE_COLORS[templatePick as Exclude<TemplatePick, "twitter">]?.accent || "#EC6000"}
+                      onChange={(val) => {
+                        const next = [...v2EditedBlocks];
+                        next[i] = val;
+                        setV2EditedBlocks(next);
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Back */}
+                <button
+                  onClick={() => {
+                    setStep("pick");
+                    setV2SubStep("backbone");
+                  }}
+                  className="mt-6 flex items-center gap-2 text-sm text-[var(--muted)] hover:text-[var(--accent)] transition-colors"
+                >
+                  &larr; Voltar para espinha dorsal
+                </button>
+              </div>
+            )}
+
+            {/* ── Twitter Slide Editor (existing) ── */}
+            {templatePick === "twitter" && (
+            <>
             {/* Editor header */}
             <div className="flex items-center justify-between mb-6">
               <div>
@@ -2178,6 +2743,8 @@ function CreatePageContent() {
                 </div>
               </div>
             </div>
+            </>
+            )}
           </motion.div>
         )}
       </div>
@@ -2217,6 +2784,73 @@ function CreatePageContent() {
           {exportProgress}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── V2 Block Card Component ────────────────────────────────────────
+function V2BlockCard({
+  index,
+  text,
+  templateColor,
+  onChange,
+}: {
+  index: number;
+  text: string;
+  templateColor: string;
+  onChange: (val: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(text);
+
+  const match = text.match(/^texto\s+\d+\s*[-\u2013\u2014]\s*/i);
+  const content = match ? text.slice(match[0].length) : text;
+  const label = `texto ${index + 1}`;
+  const isFirst = index === 0;
+
+  return (
+    <div
+      className="rounded-xl border overflow-hidden transition-all"
+      style={{ borderColor: templateColor + "30" }}
+    >
+      <div
+        className="flex items-center justify-between px-5 py-2"
+        style={{ backgroundColor: isFirst ? templateColor + "10" : "transparent" }}
+      >
+        <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: templateColor }}>
+          {label} {isFirst && "-- CAPA"}
+        </span>
+        <button
+          onClick={() => {
+            if (editing) {
+              onChange(editValue);
+              setEditing(false);
+            } else {
+              setEditValue(text);
+              setEditing(true);
+            }
+          }}
+          className="text-[10px] font-mono uppercase tracking-widest px-2 py-0.5 rounded transition-colors"
+          style={{ color: templateColor, backgroundColor: templateColor + "15" }}
+        >
+          {editing ? "salvar" : "editar"}
+        </button>
+      </div>
+      <div className="p-5">
+        {editing ? (
+          <textarea
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            rows={4}
+            className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[14px] text-zinc-900 focus:border-[var(--accent)] focus:outline-none transition"
+            autoFocus
+          />
+        ) : (
+          <p className={`text-[15px] leading-relaxed ${isFirst ? "font-bold text-lg" : ""}`} style={{ color: "#0A0A0A" }}>
+            {content}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

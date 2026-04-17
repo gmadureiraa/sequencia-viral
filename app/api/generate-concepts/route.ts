@@ -38,25 +38,50 @@ export async function POST(request: Request) {
       ? "Responda em português brasileiro coloquial."
       : language === "en" ? "Respond in English." : `Respond in ${language}.`;
 
-    const prompt = `Generate 5 carousel concepts. ${langNote} Niche: ${niche || "general"}. Tone: ${tone || "casual"}.
+    const prompt = `You are a senior content strategist pitching 5 radically different carousel stories to an editorial board. ${langNote}
 
-Each concept must have a DIFFERENT narrative angle — like a journalist pitching 5 completely different stories from the same fact.
+NICHE: ${niche || "general"}
+TONE: ${tone || "casual"}
 
-For each concept:
-- hook: 2 lines. Line 1 = scroll-stopping question or statement (max 8 words). Line 2 = anchoring context (max 12 words). Separate with "|".
-- angle: 1 sentence explaining the narrative tension and why this matters (max 25 words).
-- style: data | story | provocative | howto | mythbust
+TOPIC/INPUT: ${topic}
 
-5 angles to cover:
-1. Data/reenquadramento: reframe the topic with surprising numbers
-2. Story/conflito oculto: personal narrative revealing hidden tension
-3. Provocative/contradição: challenge what everyone assumes is true
-4. Howto/mecanismo: explain the hidden mechanism behind the phenomenon
-5. Mythbust/inversão: debunk a common belief about this topic
+# YOUR JOB
+Generate 5 carousel concepts. Each must feel like a COMPLETELY DIFFERENT STORY — different tension, different audience emotion, different narrative structure. A reader should want to read ALL 5, not feel like they're the same idea reworded.
 
-Topic: ${topic}
+# INPUT TYPE ADAPTATION
+Analyze the input and adapt your approach:
+- If it contains a YouTube URL or video transcript → reference specific moments, quotes, or claims from the video. Build concepts that EXTEND what was said, not just summarize it.
+- If it contains a link or article text → build on the article's central thesis. Challenge it, extend it, or flip it. Never just repackage.
+- If it describes an Instagram post → extend the conversation. What's the natural NEXT debate this post opens?
+- If it's a raw idea or topic → surprise with unexpected angles. Find the tension that isn't obvious.
+- If it feels like an AI suggestion or trending topic → make it timely. Tie to a specific recent shift, not a generic take.
 
-JSON: {"concepts":[{"title":"max 45 chars","hook":"line1 | line2","style":"data|story|provocative|howto|mythbust","angle":"narrative tension explanation"}]}`;
+# HOOK RULES
+Each hook has 2 parts separated by "|":
+- Part 1 (INTERRUPTION): Max 8 words. This stops the scroll. It must create a gap — something unexpected, counterintuitive, or emotionally charged. Use a question mark, colon, or period.
+- Part 2 (ANCHOR): Max 12 words. This gives context and stakes. It tells the reader WHY they should care. Ends with "." or "!"
+
+The hook must work in 0.7 seconds. No filler words. No generic openings like "Descubra como" or "O guia definitivo".
+
+# 5 MANDATORY HEADLINE NATURES (one per concept, in order):
+1. REENQUADRAMENTO — Take what everyone thinks they know and show them a completely different frame. The reader should think "I never saw it that way."
+2. CONFLITO OCULTO — Reveal a hidden tension or war beneath the surface. Who's losing? What's really at stake?
+3. CONTRADIÇÃO — Find where the conventional wisdom is provably wrong. Use a specific number or example to break the assumption.
+4. MECANISMO — Expose the hidden system, loop, or engine that actually drives the phenomenon. Not "what" but "how it really works."
+5. INVERSÃO — Flip the expected conclusion. What if the opposite of the common advice is actually true?
+
+# QUALITY GATES (each concept MUST pass ALL):
+- Would a content creator stop scrolling to read this? If not, kill it.
+- Is this hook SPECIFIC to this exact topic? If you could swap in another topic and it still works, it's too generic. Kill it.
+- Does the angle reveal a TENSION (not just information)? No tension = no swipe.
+- BANNED phrases: "muitas pessoas", "resultados incríveis", "game-changer", "descubra como", "o segredo de", "o guia definitivo", "você precisa saber"
+- Every number must be specific: "78%", "3 em cada 10", never "a maioria" or "muitos"
+
+# OUTPUT FORMAT
+Return ONLY valid JSON:
+{"concepts":[{"title":"max 45 chars — the carousel title","hook":"interruption line | anchor line","style":"data|story|provocative|howto|mythbust","angle":"1 sentence: the narrative TENSION and WHY this matters (max 25 words)"}]}
+
+Generate exactly 5 concepts. Make each one so compelling that the reader can't pick just one.`;
 
     const ai = new GoogleGenAI({ apiKey: geminiKey });
     const result = await ai.models.generateContent({

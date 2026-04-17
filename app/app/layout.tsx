@@ -15,7 +15,6 @@ import {
   BarChart3,
   Send,
   BookOpen,
-  Layers,
 } from "lucide-react";
 import Link from "next/link";
 import { Toaster } from "@/components/ui/sonner";

@@ -134,12 +134,6 @@ const TEMPLATE_OPTIONS: {
   { id: "autoral", emoji: "\u270D\uFE0F", name: "Autoral", desc: "Narrativa continua \u2022 18 blocos", color: "#16a34a" },
 ];
 
-const V2_TEMPLATE_BLOCKS: Record<Exclude<TemplatePick, "twitter">, number> = {
-  principal: 18,
-  futurista: 14,
-  autoral: 18,
-};
-
 const V2_TEMPLATE_COLORS: Record<Exclude<TemplatePick, "twitter">, { bg: string; accent: string }> = {
   principal: { bg: "#0A0A0A", accent: "#EC6000" },
   futurista: { bg: "#F8FAFC", accent: "#2563eb" },
@@ -1530,7 +1524,7 @@ function CreatePageContent() {
           </div>
 
           {/* Edit-step toolbar actions (inline) */}
-          {step === "edit" && (
+          {step === "edit" && templatePick === "twitter" && (
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1 bg-[var(--card)] rounded-lg p-0.5 border border-[var(--border)]">
                 <button

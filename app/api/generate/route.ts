@@ -2,6 +2,7 @@ import { extractContentFromUrl } from "@/lib/url-extractor";
 import { getYouTubeTranscript } from "@/lib/youtube-transcript";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { GoogleGenAI } from "@google/genai";
 
 export const maxDuration = 60;
 
@@ -24,8 +25,6 @@ interface Variation {
   title: string;
   style: "data" | "story" | "provocative";
   ctaType?: "save" | "comment" | "share";
-  qualityScore?: number;
-  qualityReasoning?: string;
   slides: Slide[];
 }
 
@@ -115,16 +114,13 @@ USER BRAND CONTEXT (use this to make content sound authentically like this creat
       return Response.json({ error: "URL is too long (max 2000 chars)" }, { status: 400 });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      if (process.env.NODE_ENV === "production") {
-        console.error("[generate] ANTHROPIC_API_KEY missing in production");
-        return Response.json(
-          { error: "Geração com IA não está configurada no servidor." },
-          { status: 503 }
-        );
-      }
-      return Response.json(getMockResponse(topic || "Sample Topic"));
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) {
+      console.error("[generate] GEMINI_API_KEY missing");
+      return Response.json(
+        { error: "Geração com IA não está configurada no servidor." },
+        { status: 503 }
+      );
     }
 
     // 1. Gather source content
@@ -195,21 +191,18 @@ Create 3 radically different carousel variations from the given topic/content. E
 
 ## SLIDE 1 — THE HOOK (most critical slide)
 The hook MUST stop the scroll in under 0.7 seconds. Max 10 words in the heading.
-The hook must answer: "Is this for me?" and "What do I gain by swiping?"
 
-Use one of these 12 proven hook patterns (choose the BEST one for each variation):
-- **Number + Consequence**: "7 ferramentas de IA que substituem uma equipe de 5" (not just "7 ferramentas de IA")
-- **Contrarian/Pattern Interrupt**: "Pare de fazer conteudo educativo." (challenges belief, forces read)
-- **Story/Transformation**: "Em 2024 perdi R$50k em um mes." (vulnerability + curiosity about outcome)
+CRITICAL VARIATION RULES:
+- Variation A MUST open with a NUMBER/DATA hook (e.g., "78% dos creators...")
+- Variation B MUST open with a PERSONAL STORY hook (e.g., "Em 2024 eu perdi...")
+- Variation C MUST open with a CONTRARIAN/BOLD hook (e.g., "Pare de fazer conteudo educativo.")
+Each variation must feel like a COMPLETELY DIFFERENT carousel, not just a rewrite.
+
+4 proven hook patterns to use:
+- **Number + Consequence**: "7 ferramentas de IA que substituem uma equipe de 5"
+- **Contrarian/Pattern Interrupt**: "Pare de fazer conteudo educativo." (challenges belief)
+- **Story/Transformation**: "Em 2024 perdi R$50k em um mes." (vulnerability + curiosity)
 - **Question + Data**: "Sabia que 90% dos carrosseis falham no slide 1?" (stat + reflexao)
-- **Curiosity Gap**: "A estrategia que ninguem fala..." (incomplete info the brain needs to complete)
-- **Bold Claim/Result**: "Este metodo gera 3x mais saves. Leva 10 min." (specific promise + low effort)
-- **Reveal/Exclusivity**: "O framework que uso pra gerar R$100k/mes" (insider access feeling)
-- **This vs That**: "Creator 2023 vs Creator 2026" (comparison + self-identification)
-- **Fear/Urgency**: "Se nao fizer isso em 2026, vai ficar pra tras" (loss aversion)
-- **Authority Proof**: "Analisei 1.000 carrosseis virais. Aqui o padrao." (credibility + data)
-- **Audience Targeting**: "Se voce e creator com menos de 1.000 seguidores..." (personal call-out)
-- **"I Was Wrong"**: "Passei 2 anos fazendo conteudo errado." (vulnerability + credibility)
 
 Rules for hooks:
 - Max 10 words in the heading — shorter hits harder
@@ -224,53 +217,16 @@ Each slide must:
 - Build toward a climax or revelation
 - Body text: max 3 short lines. Use line breaks for readability.
 
-Slide progression patterns:
-- **List**: Each slide = one item (numbered). Build from good to BEST.
-- **Story arc**: Setup → Conflict → Turning point → Lesson
-- **Framework**: Problem → Why it matters → Step 1 → Step 2 → Step 3 → Result
-- **Myth-busting**: Myth → Truth → Evidence → Action
-
 ## LAST SLIDE — THE CTA (strategic, not generic)
-The CTA MUST match the content type. Never be generic "follow me".
-
-CHOOSE THE RIGHT CTA based on content. ALGORITHM CONTEXT (Instagram 2026):
-- DM Shares weight 3-5x more than likes
-- Saves are the 2nd strongest signal
-- Comments that generate replies boost reach
-- Likes have the lowest algorithmic weight
-
-CTA MATRIX:
-- **Educational/how-to** → "Salve pra consultar depois" (SAVES = strongest signal after DM shares)
-- **Controversial/opinion** → "Concorda? Discorda? Comenta sua visao" (COMMENTS that spark debate)
-- **Relatable/personal story** → "Envia pros DMs de alguem que precisa ler isso" (DM SHARES = highest weight)
-- **Actionable tips/tools** → "Salve e aplique esta semana. Depois volta e me conta" (SAVES + delayed COMMENTS)
-- **Data/comparison** → "Qual desses voce ja usa? Comenta o numero" (low-friction COMMENTS)
-- **Case study/results** → "Compartilha com alguem que precisa + siga pra mais" (SHARES + FOLLOW)
-
-The CTA slide must also include: user's @handle + "siga para mais [niche topic]". Never just "follow me" — specify WHAT they'll get.
+The CTA MUST match the content type and REFERENCE something from slide 1 (callback loop).
+Example: if slide 1 says "7 erros que matam engajamento", CTA says "Agora que voce conhece os 7 erros, salva pra revisar antes de cada post".
+Never be generic "follow me". Include user's @handle + "siga para mais [niche topic]".
 
 # VARIATION STYLES
 
-**Variation A — DADOS & PROOF**
-- Lead with statistics, percentages, comparisons
-- Use "antes vs depois" framing
-- Include specific tools, frameworks, or methods with names
-- Credibility-driven: cite sources, reference studies, show numbers
-- Best CTA: Save-focused (educational value)
-
-**Variation B — STORYTELLING & NARRATIVE**
-- Personal or relatable story arc
-- Start vulnerable, end with insight
-- Use "eu" perspective or hypothetical "imagine que..."
-- Emotional connection before intellectual takeaway
-- Best CTA: Share/tag-focused (emotional resonance)
-
-**Variation C — PROVOCATIVA & CONTRARIAN**
-- Challenge conventional wisdom directly
-- Bold opening that creates strong reaction
-- "A maioria faz X. Os melhores fazem Y."
-- Back up bold claims with evidence in subsequent slides
-- Best CTA: Comment-focused (debate/discussion)
+**Variation A — DADOS & PROOF**: Lead with statistics, comparisons, specific tools/frameworks. Best CTA: Save-focused.
+**Variation B — STORYTELLING & NARRATIVE**: Personal/relatable story arc. "eu" perspective. Best CTA: Share/tag-focused.
+**Variation C — PROVOCATIVA & CONTRARIAN**: Challenge conventional wisdom. Bold opening. Best CTA: Comment-focused.
 
 # COPYWRITING RULES
 1. Write like you talk. No academic language. No corporate jargon.
@@ -280,119 +236,78 @@ The CTA slide must also include: user's @handle + "siga para mais [niche topic]"
 5. Every heading must be SCANNABLE — someone should get value from headings alone
 6. Body text uses conversational line breaks (one thought per line, max 3 lines)
 7. Avoid cliches: "game-changer", "nesse sentido", "atualmente", "e por isso que"
-8. Each slide's imageQuery should be specific enough to find a relevant, non-generic image
+8. Each slide's imageQuery should be specific enough to find a relevant, non-generic image (in English)
 
-# ADVANCED COPYWRITING PATTERNS
-9. **Open loops**: End paragraphs/slides with incomplete thoughts that FORCE the reader to swipe. Example: "Mas o terceiro passo e o que muda tudo..." (reader MUST swipe)
-10. **Pattern interrupt every 2-3 slides**: Change the format — if slides 2-3 are tips, make slide 4 a provocative question or a surprising stat. Break the rhythm to re-capture attention.
-11. **Radical specificity**: NEVER write "muitas pessoas" — write "78% dos creators". NEVER write "resultados incriveis" — write "3.2x mais saves em 14 dias". Every claim must have a number, name, or concrete example.
-12. **Emotional triggers per slide**: Each slide must trigger ONE of: curiosity ("voce nao vai acreditar..."), FOMO ("enquanto voce ignora isso..."), or "aha moment" ("e por isso que seus carrosseis nao passam de 200 impressoes").
-13. **Callback loop**: The LAST slide CTA must reference something from slide 1. If slide 1 says "7 erros que matam seu engajamento", the CTA should say "Agora que voce conhece os 7 erros, salva pra revisar antes de cada post".
-14. **Micro-cliffhangers**: The last line of each slide body should tease what comes next without revealing it. This is the single most important retention mechanic.
+NEVER use generic phrases like "muitas pessoas", "resultados incriveis", "game-changer". Every claim needs a specific number or example.
 
 # OUTPUT FORMAT
-Return ONLY valid JSON (no markdown, no code blocks):
+Return valid JSON with this structure:
 {
   "variations": [
     {
       "title": "carousel title (compelling, max 60 chars)",
       "style": "data" | "story" | "provocative",
       "ctaType": "save" | "comment" | "share",
-      "qualityScore": 0-100,
-      "qualityReasoning": "1-2 sentence explanation of score: what makes this variation strong or weak",
       "slides": [
         {
           "heading": "max 10 words, bold, scannable",
           "body": "2-3 short lines\\nwith line breaks\\nfor readability",
-          "imageQuery": "specific 2-3 word image search"
+          "imageQuery": "specific 2-3 word image search in English"
         }
       ]
     }
   ]
-}
-
-# QUALITY SCORING CRITERIA (apply to each variation):
-- Hook strength (0-25): Does slide 1 stop the scroll? Is it under 10 words? Does it create irresistible tension?
-- Content depth (0-25): Are claims specific? Are there real numbers, tools, examples? Or vague platitudes?
-- Flow & retention (0-25): Do open loops work? Is there a pattern interrupt? Does each slide earn the next swipe?
-- CTA effectiveness (0-25): Does the CTA match the content type? Does it callback to slide 1? Is it algorithm-optimized?
-Be honest and critical. Most carousels should score 60-80. Only truly exceptional ones hit 90+.`;
+}`;
 
     const userMessage = sourceContent
       ? `Create 3 carousel variations based on this content:\n\nTopic: ${topic}\n\nSource:\n${sourceContent}`
       : `Create 3 carousel variations about: ${topic}`;
 
-    // 3. Call Claude API
-    // Model: Sonnet 4.6 = best cost/quality balance for this task.
-    // Opus 4.6 (claude-opus-4-6) is available if you want max quality; it's slower and pricier.
-    // Haiku 4.5 is fast enough for Vercel Hobby (10s limit).
-    // Switch to sonnet-4-6 or opus-4-6 on Vercel Pro for higher quality.
-    const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
-
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: 4096,
-        temperature: 0.95,
-        system: systemPrompt,
-        messages: [{ role: "user", content: `${userMessage}\n\n[variation-seed: ${Date.now()}-${Math.random().toString(36).slice(2, 8)}]` }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[generate] Claude API error:", {
-        status: response.status,
-        model: CLAUDE_MODEL,
-        body: errorText,
+    // 3. Call Gemini 2.0 Flash (fast enough for Vercel Hobby 10s limit)
+    const ai = new GoogleGenAI({ apiKey: geminiKey });
+    let textResponse: string;
+    try {
+      const genResult = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: `${userMessage}\n\n[variation-seed: ${Date.now()}-${Math.random().toString(36).slice(2, 8)}]`,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: 0.95,
+          maxOutputTokens: 4096,
+          responseMimeType: "application/json",
+        },
       });
-      // Try to extract the real error message from Claude's JSON error shape
-      let detail = `Claude retornou ${response.status}`;
-      try {
-        const parsed = JSON.parse(errorText);
-        if (parsed?.error?.message) detail = parsed.error.message;
-      } catch {
-        // keep generic detail
-      }
+      textResponse = genResult.text || "";
+    } catch (err) {
+      console.error("[generate] Gemini API error:", err);
       return Response.json(
         {
           error: process.env.NODE_ENV === "production"
             ? "Geração com IA falhou. Tente novamente em alguns instantes."
-            : `Geração com IA falhou. ${detail}`,
+            : `Geração com IA falhou. ${err instanceof Error ? err.message : "Unknown error"}`,
         },
         { status: 502 }
       );
     }
 
-    const data = await response.json();
-    const textBlock = data.content?.find(
-      (block: { type: string }) => block.type === "text"
-    );
-
-    if (!textBlock?.text) {
+    if (!textResponse) {
       return Response.json(
         { error: "No response from AI" },
         { status: 502 }
       );
     }
 
-    // 4. Parse the JSON response
+    // 4. Parse the JSON response (Gemini with responseMimeType=json should return clean JSON)
     let result: GenerateResponse;
     try {
-      // Try direct parse first
-      result = JSON.parse(textBlock.text);
+      result = JSON.parse(textResponse);
     } catch {
-      // Try extracting JSON from potential markdown code block
-      const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
+      // Try extracting JSON from potential wrapper
+      const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         result = JSON.parse(jsonMatch[0]);
       } else {
+        console.error("[generate] Failed to parse Gemini response:", textResponse.slice(0, 500));
         return Response.json(
           { error: "Failed to parse AI response" },
           { status: 502 }
@@ -408,39 +323,37 @@ Be honest and critical. Most carousels should score 60-80. Only truly exceptiona
       );
     }
 
-    // NOTE: Image fetching moved to frontend (client-side) to avoid
-    // Vercel Hobby 10s function timeout. The frontend will fetch images
-    // after receiving the variations, using the imageQuery from each slide.
-
-    // Increment usage_count server-side and record generation
+    // Increment usage_count server-side and record generation (fire-and-forget)
     if (sb) {
-      const { error: incErr } = await sb.rpc("increment_usage_count", { uid: user.id });
-      if (incErr) {
-        // Fallback: manual increment if RPC doesn't exist yet
-        const { data: currentProfile } = await sb
-          .from("profiles")
-          .select("usage_count")
-          .eq("id", user.id)
-          .single();
-        if (currentProfile) {
-          await sb
-            .from("profiles")
-            .update({ usage_count: (currentProfile.usage_count ?? 0) + 1 })
-            .eq("id", user.id);
+      void (async () => {
+        try {
+          const { error: incErr } = await sb.rpc("increment_usage_count", { uid: user.id });
+          if (incErr) {
+            const { data: currentProfile } = await sb
+              .from("profiles")
+              .select("usage_count")
+              .eq("id", user.id)
+              .single();
+            if (currentProfile) {
+              await sb
+                .from("profiles")
+                .update({ usage_count: (currentProfile.usage_count ?? 0) + 1 })
+                .eq("id", user.id);
+            }
+          }
+          await sb.from("generations").insert({
+            user_id: user.id,
+            model: "gemini-2.0-flash",
+            provider: "google",
+            input_tokens: 0,
+            output_tokens: 0,
+            cost_usd: 0,
+            prompt_type: sourceType,
+          });
+        } catch (e) {
+          console.warn("[generate] Failed to track usage:", e);
         }
-      }
-
-      await sb.from("generations").insert({
-        user_id: user.id,
-        model: CLAUDE_MODEL,
-        provider: "anthropic",
-        input_tokens: data.usage?.input_tokens ?? 0,
-        output_tokens: data.usage?.output_tokens ?? 0,
-        cost_usd: ((data.usage?.input_tokens ?? 0) * 0.000003 + (data.usage?.output_tokens ?? 0) * 0.000015),
-        prompt_type: sourceType,
-      }).then(({ error: genErr }) => {
-        if (genErr) console.warn("[generate] Failed to log generation:", genErr);
-      });
+      })();
     }
 
     return Response.json(result);
@@ -457,83 +370,3 @@ Be honest and critical. Most carousels should score 60-80. Only truly exceptiona
   }
 }
 
-function getMockResponse(topic: string): GenerateResponse {
-  const makeSlides = (style: string): Slide[] => [
-    {
-      heading: `${style === "data" ? "The Numbers Don't Lie" : style === "story" ? "I Was Wrong About This" : "Stop Doing This Now"}`,
-      body: `Everything you thought about ${topic} is about to change.\nHere's what the top 1% know.\nSwipe to find out.`,
-      imageQuery: `${topic} concept`,
-    },
-    {
-      heading:
-        style === "data"
-          ? "78% Miss This Key Point"
-          : style === "story"
-            ? "It Started With a Problem"
-            : "The Uncomfortable Truth",
-      body: `Most people approach ${topic} the wrong way.\nThey focus on the surface level.\nBut the real impact is deeper.`,
-      imageQuery: `${topic} insight`,
-    },
-    {
-      heading:
-        style === "data"
-          ? "3x More Results With This"
-          : style === "story"
-            ? "Then Everything Changed"
-            : "Nobody Talks About This",
-      body: `Here's the strategy that changes everything.\nIt's simpler than you think.\nBut requires a shift in mindset.`,
-      imageQuery: `${topic} strategy`,
-    },
-    {
-      heading:
-        style === "data"
-          ? "The Framework That Works"
-          : style === "story"
-            ? "The Lesson I Learned"
-            : "The Real Problem Is You",
-      body: `Step 1: Understand the fundamentals.\nStep 2: Apply consistently.\nStep 3: Measure and iterate.`,
-      imageQuery: `${topic} framework`,
-    },
-    {
-      heading:
-        style === "data"
-          ? "Results: Before vs After"
-          : style === "story"
-            ? "What I Do Differently Now"
-            : "Here's What Actually Works",
-      body: `The difference is night and day.\nSmall changes compound over time.\nConsistency beats intensity.`,
-      imageQuery: `${topic} results`,
-    },
-    {
-      heading: "Follow For More",
-      body: `If this was valuable, follow for more.\nSave this for later.\nShare with someone who needs this.`,
-      imageQuery: `social media follow`,
-    },
-  ];
-
-  return {
-    variations: [
-      {
-        title: `${topic}: By The Numbers`,
-        style: "data",
-        qualityScore: 72,
-        qualityReasoning: "Solid data-driven approach with specific numbers. Hook could be more provocative.",
-        slides: makeSlides("data"),
-      },
-      {
-        title: `My ${topic} Journey`,
-        style: "story",
-        qualityScore: 68,
-        qualityReasoning: "Good narrative arc but needs more concrete turning points and specific details.",
-        slides: makeSlides("story"),
-      },
-      {
-        title: `${topic}: The Hard Truth`,
-        style: "provocative",
-        qualityScore: 75,
-        qualityReasoning: "Strong pattern interrupt hook. CTA callback to slide 1 is effective.",
-        slides: makeSlides("provocative"),
-      },
-    ],
-  };
-}

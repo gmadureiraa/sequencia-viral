@@ -6,6 +6,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
 import CarouselPreview from "@/components/app/carousel-preview";
+import CarouselSlide from "@/components/app/carousel-slide";
 import Loader from "@/components/kokonutui/loader";
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
 import { toPng } from "html-to-image";
@@ -844,6 +845,8 @@ function CreatePageContent() {
       height: 1350,
       pixelRatio: 1,
       cacheBust: true,
+      skipFonts: true,
+      fetchRequestInit: { mode: "cors" } as RequestInit,
     });
   };
 
@@ -941,31 +944,34 @@ function CreatePageContent() {
   const handleExportPdf = async () => {
     setIsExporting(true);
     setError("");
-    toast.success(null);
+    setExportProgress("Preparando PDF...");
     try {
-      const built = await buildCarouselPdfBlob();
-      if (!built) {
-        setError("Nenhum slide pra exportar.");
-      } else {
-        const title = (variations[selectedVariation]?.title || "sequencia-viral-carrossel")
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .slice(0, 50);
-        const url = URL.createObjectURL(built.blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `${title}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        toast.success(`PDF com ${built.count} slides baixado.`);
-      }
+      await withExportRender(editSlides, async () => {
+        const built = await buildCarouselPdfBlob();
+        if (!built) {
+          setError("Nenhum slide pra exportar.");
+        } else {
+          const title = (variations[selectedVariation]?.title || "sequencia-viral-carrossel")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .slice(0, 50);
+          const url = URL.createObjectURL(built.blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${title}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          toast.success(`PDF com ${built.count} slides baixado.`);
+        }
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err);
       console.error("Export PDF error:", msg, err);
       setError(`Nao foi possivel gerar PDF. ${msg}`.trim());
     }
+    setExportProgress("");
     setIsExporting(false);
   };
 
@@ -1044,42 +1050,45 @@ function CreatePageContent() {
         return;
       }
 
-      const form = new FormData();
-      form.set("carouselId", cloudId);
-      let pngCount = 0;
-      for (let i = 0; i < editSlides.length; i++) {
-        const el = slideRefs.current[i];
-        if (!el) continue;
-        const dataUrl = await captureExportSlideAsPng(i);
-        const blob = await (await fetch(dataUrl)).blob();
-        form.append("png", blob, `slide-${i + 1}.png`);
-        pngCount++;
-      }
-      if (pngCount === 0) {
-        setError("Nenhum slide para enviar.");
-        setIsExporting(false);
-        return;
-      }
+      await withExportRender(editSlides, async () => {
+        const form = new FormData();
+        form.set("carouselId", cloudId);
+        let pngCount = 0;
+        for (let i = 0; i < editSlides.length; i++) {
+          try {
+            const dataUrl = await captureExportSlideAsPng(i);
+            const blob = await (await fetch(dataUrl)).blob();
+            form.append("png", blob, `slide-${i + 1}.png`);
+            pngCount++;
+          } catch (slideErr) {
+            console.warn(`[cloud-export] Failed slide ${i + 1}:`, slideErr);
+          }
+        }
+        if (pngCount === 0) {
+          setError("Nenhum slide para enviar.");
+          return;
+        }
 
-      const pdfBuilt = await buildCarouselPdfBlob();
-      if (pdfBuilt) {
-        form.append("pdf", pdfBuilt.blob, "carrossel.pdf");
-      }
+        const pdfBuilt = await buildCarouselPdfBlob();
+        if (pdfBuilt) {
+          form.append("pdf", pdfBuilt.blob, "carrossel.pdf");
+        }
 
-      const res = await fetch("/api/carousel/exports", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        body: form,
+        const res = await fetch("/api/carousel/exports", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          body: form,
+        });
+        const data = (await res.json()) as { error?: string };
+        if (!res.ok) {
+          throw new Error(data.error || "Falha ao enviar exports");
+        }
+        toast.success(
+          pdfBuilt
+            ? `Nuvem: ${pngCount} PNG + PDF atualizados. Links na biblioteca.`
+            : `Nuvem: ${pngCount} PNG atualizados.`
+        );
       });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        throw new Error(data.error || "Falha ao enviar exports");
-      }
-      toast.success(
-        pdfBuilt
-          ? `Nuvem: ${pngCount} PNG + PDF atualizados. Links na biblioteca.`
-          : `Nuvem: ${pngCount} PNG atualizados.`
-      );
     } catch (err) {
       console.error("Save exports cloud:", err);
       setError(
@@ -1726,27 +1735,32 @@ function CreatePageContent() {
                     {STYLE_BADGES[variations[selectedVariation]?.style]?.label ||
                       "Personalizado"}
                   </span>
-                  {autosaveState !== "idle" && (
-                    <span
-                      className={`inline-flex items-center gap-1 text-[11px] font-semibold ${
-                        autosaveState === "saving"
-                          ? "text-zinc-500"
-                          : "text-emerald-600"
-                      }`}
-                    >
-                      {autosaveState === "saving" ? (
-                        <>
-                          <Icon name="loader" size={11} />
-                          Salvando...
-                        </>
-                      ) : (
-                        <>
-                          <Icon name="check" size={11} />
-                          Salvo
-                        </>
-                      )}
-                    </span>
-                  )}
+                  <span
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold ${
+                      autosaveState === "saving"
+                        ? "text-zinc-400"
+                        : autosaveState === "saved"
+                          ? "text-emerald-600"
+                          : "text-amber-500"
+                    }`}
+                  >
+                    {autosaveState === "saving" ? (
+                      <>
+                        <Icon name="loader" size={11} />
+                        Salvando...
+                      </>
+                    ) : autosaveState === "saved" ? (
+                      <>
+                        <Icon name="check" size={11} />
+                        Salvo
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                        Nao salvo
+                      </>
+                    )}
+                  </span>
                   <span className="text-[11px] text-zinc-400 hidden sm:inline">
                     Setas do teclado navegam entre slides
                   </span>
@@ -1890,7 +1904,7 @@ function CreatePageContent() {
                                         (e.target as HTMLImageElement).style.display = "none";
                                       }}
                                     />
-                                    {imageLoadingIndex === index && (
+                                    {(imageLoadingIndex === index || imageGeneratingSlides.has(index)) && (
                                       <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm">
                                         <Icon name="loader" size={14} />
                                       </div>
@@ -1898,7 +1912,7 @@ function CreatePageContent() {
                                   </>
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center text-zinc-300">
-                                    {imageLoadingIndex === index ? (
+                                    {(imageLoadingIndex === index || imageGeneratingSlides.has(index)) ? (
                                       <Icon name="loader" size={14} />
                                     ) : (
                                       <Icon name="image" size={16} />
@@ -1928,12 +1942,21 @@ function CreatePageContent() {
                                   />
                                   <button
                                     type="button"
-                                    onClick={(e) => { e.stopPropagation(); void handleRefetchImage(index); }}
-                                    disabled={imageLoadingIndex === index}
+                                    onClick={(e) => { e.stopPropagation(); void handleRefetchImage(index, "search"); }}
+                                    disabled={imageLoadingIndex === index || imageGeneratingSlides.has(index)}
                                     className="shrink-0 text-[10px] font-bold px-2 py-1.5 rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-dark)] disabled:opacity-50 transition-colors"
                                     title="Buscar outra imagem"
                                   >
                                     Buscar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); void handleRefetchImage(index, "generate"); }}
+                                    disabled={imageLoadingIndex === index || imageGeneratingSlides.has(index)}
+                                    className="shrink-0 text-[10px] font-bold px-2 py-1.5 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                                    title="Gerar imagem com IA"
+                                  >
+                                    Gerar IA
                                   </button>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-1">
@@ -2100,6 +2123,42 @@ function CreatePageContent() {
           </motion.div>
         )}
       </div>
+
+      {/* Hidden export container — renders at full 1080x1350 for PNG/PDF capture */}
+      {exportRenderSlides && (
+        <div
+          ref={exportContainerRef}
+          style={{ position: "fixed", left: "-9999px", top: 0, opacity: 0, pointerEvents: "none" }}
+          aria-hidden="true"
+        >
+          {exportRenderSlides.map((slide, i) => (
+            <div
+              key={i}
+              ref={(el) => { exportSlideRefs.current[i] = el; }}
+            >
+              <CarouselSlide
+                heading={slide.heading}
+                body={slide.body}
+                imageUrl={slide.imageUrl}
+                slideNumber={i + 1}
+                totalSlides={exportRenderSlides.length}
+                profile={previewProfile}
+                style={slideStyle}
+                isLastSlide={i === exportRenderSlides.length - 1}
+                showFooter={i === 0}
+                scale={1}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Export progress indicator */}
+      {exportProgress && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-black/80 text-white text-sm font-medium px-5 py-2.5 rounded-full backdrop-blur-sm">
+          {exportProgress}
+        </div>
+      )}
     </div>
   );
 }

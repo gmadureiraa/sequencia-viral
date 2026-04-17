@@ -50,18 +50,38 @@ export async function requireAuthenticatedUser(
 ): Promise<
   { ok: true; user: User } | { ok: false; response: Response }
 > {
-  const user = await getAuthenticatedUser(request);
-  if (!user) {
+  const token = getBearerToken(request);
+  if (!token) {
     return {
       ok: false,
       response: Response.json(
-        {
-          error:
-            "Não autorizado. Envie o header Authorization: Bearer <access_token> da sua sessão.",
-        },
+        { error: "Sessão expirada. Faça login novamente." },
         { status: 401 }
       ),
     };
   }
-  return { ok: true, user };
+
+  const supabase = createServerSupabaseClient();
+  if (!supabase) {
+    return {
+      ok: false,
+      response: Response.json(
+        { error: "Configuração do servidor incompleta. Contate o suporte." },
+        { status: 503 }
+      ),
+    };
+  }
+
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) {
+    return {
+      ok: false,
+      response: Response.json(
+        { error: "Sessão inválida ou expirada. Faça logout e login novamente." },
+        { status: 401 }
+      ),
+    };
+  }
+
+  return { ok: true, user: data.user };
 }

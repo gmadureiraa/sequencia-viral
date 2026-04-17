@@ -24,6 +24,8 @@ interface Variation {
   title: string;
   style: "data" | "story" | "provocative";
   ctaType?: "save" | "comment" | "share";
+  qualityScore?: number;
+  qualityReasoning?: string;
   slides: Slide[];
 }
 
@@ -74,6 +76,34 @@ export async function POST(request: Request) {
             },
             { status: 403 }
           );
+        }
+      }
+    }
+
+    // Fetch user profile for brand_analysis context
+    let brandContext = "";
+    if (sb) {
+      const { data: profileData } = await sb
+        .from("profiles")
+        .select("brand_analysis")
+        .eq("id", user.id)
+        .single();
+      const ba = profileData?.brand_analysis;
+      if (ba && typeof ba === "object") {
+        const pillars = Array.isArray(ba.content_pillars) ? ba.content_pillars.join(", ") : "";
+        const topics = Array.isArray(ba.top_topics) ? ba.top_topics.join(", ") : "";
+        const tone_detected = ba.tone_detected || "";
+        const audience = ba.audience_description || "";
+        const voice = ba.voice_preference || "";
+        if (pillars || topics || tone_detected || audience || voice) {
+          brandContext = `
+USER BRAND CONTEXT (use this to make content sound authentically like this creator, not generic AI):
+- Content pillars: ${pillars || "not specified"}
+- Typical topics: ${topics || "not specified"}
+- Detected writing tone: ${tone_detected || "not specified"}
+- Target audience: ${audience || "not specified"}
+- Voice preference: ${voice || "not specified"}
+`;
         }
       }
     }
@@ -163,6 +193,7 @@ export async function POST(request: Request) {
 ${languageInstruction}
 TONE: ${tone || "professional"}
 NICHE: ${niche || "general"}
+${brandContext}
 
 # YOUR MISSION
 Create 3 radically different carousel variations from the given topic/content. Each must be independently excellent — not just tone variations of the same text.
@@ -258,6 +289,14 @@ The CTA slide must also include: user's @handle + "siga para mais [niche topic]"
 7. Avoid cliches: "game-changer", "nesse sentido", "atualmente", "e por isso que"
 8. Each slide's imageQuery should be specific enough to find a relevant, non-generic image
 
+# ADVANCED COPYWRITING PATTERNS
+9. **Open loops**: End paragraphs/slides with incomplete thoughts that FORCE the reader to swipe. Example: "Mas o terceiro passo e o que muda tudo..." (reader MUST swipe)
+10. **Pattern interrupt every 2-3 slides**: Change the format — if slides 2-3 are tips, make slide 4 a provocative question or a surprising stat. Break the rhythm to re-capture attention.
+11. **Radical specificity**: NEVER write "muitas pessoas" — write "78% dos creators". NEVER write "resultados incriveis" — write "3.2x mais saves em 14 dias". Every claim must have a number, name, or concrete example.
+12. **Emotional triggers per slide**: Each slide must trigger ONE of: curiosity ("voce nao vai acreditar..."), FOMO ("enquanto voce ignora isso..."), or "aha moment" ("e por isso que seus carrosseis nao passam de 200 impressoes").
+13. **Callback loop**: The LAST slide CTA must reference something from slide 1. If slide 1 says "7 erros que matam seu engajamento", the CTA should say "Agora que voce conhece os 7 erros, salva pra revisar antes de cada post".
+14. **Micro-cliffhangers**: The last line of each slide body should tease what comes next without revealing it. This is the single most important retention mechanic.
+
 # OUTPUT FORMAT
 Return ONLY valid JSON (no markdown, no code blocks):
 {
@@ -266,6 +305,8 @@ Return ONLY valid JSON (no markdown, no code blocks):
       "title": "carousel title (compelling, max 60 chars)",
       "style": "data" | "story" | "provocative",
       "ctaType": "save" | "comment" | "share",
+      "qualityScore": 0-100,
+      "qualityReasoning": "1-2 sentence explanation of score: what makes this variation strong or weak",
       "slides": [
         {
           "heading": "max 10 words, bold, scannable",
@@ -275,7 +316,14 @@ Return ONLY valid JSON (no markdown, no code blocks):
       ]
     }
   ]
-}`;
+}
+
+# QUALITY SCORING CRITERIA (apply to each variation):
+- Hook strength (0-25): Does slide 1 stop the scroll? Is it under 10 words? Does it create irresistible tension?
+- Content depth (0-25): Are claims specific? Are there real numbers, tools, examples? Or vague platitudes?
+- Flow & retention (0-25): Do open loops work? Is there a pattern interrupt? Does each slide earn the next swipe?
+- CTA effectiveness (0-25): Does the CTA match the content type? Does it callback to slide 1? Is it algorithm-optimized?
+Be honest and critical. Most carousels should score 60-80. Only truly exceptional ones hit 90+.`;
 
     const userMessage = sourceContent
       ? `Create 3 carousel variations based on this content:\n\nTopic: ${topic}\n\nSource:\n${sourceContent}`
@@ -295,7 +343,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
       },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        max_tokens: 4096,
+        max_tokens: 6000,
         system: systemPrompt,
         messages: [{ role: "user", content: userMessage }],
       }),
@@ -525,16 +573,22 @@ function getMockResponse(topic: string): GenerateResponse {
       {
         title: `${topic}: By The Numbers`,
         style: "data",
+        qualityScore: 72,
+        qualityReasoning: "Solid data-driven approach with specific numbers. Hook could be more provocative.",
         slides: makeSlides("data"),
       },
       {
         title: `My ${topic} Journey`,
         style: "story",
+        qualityScore: 68,
+        qualityReasoning: "Good narrative arc but needs more concrete turning points and specific details.",
         slides: makeSlides("story"),
       },
       {
         title: `${topic}: The Hard Truth`,
         style: "provocative",
+        qualityScore: 75,
+        qualityReasoning: "Strong pattern interrupt hook. CTA callback to slide 1 is effective.",
         slides: makeSlides("provocative"),
       },
     ],

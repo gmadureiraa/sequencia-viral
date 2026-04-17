@@ -11,6 +11,18 @@ import {
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
+export interface BrandAnalysis {
+  detected_niche: string[];
+  tone_detected: string;
+  top_topics: string[];
+  posting_frequency: string;
+  avg_engagement: { likes: number; comments: number };
+  content_pillars: string[];
+  audience_description: string;
+  inspirations: string[];
+  voice_preference: string;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -27,6 +39,7 @@ export interface UserProfile {
   usage_count: number;
   usage_limit: number;
   onboarding_completed: boolean;
+  brand_analysis?: BrandAnalysis;
 }
 
 interface AuthContextValue {

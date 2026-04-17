@@ -1,4 +1,4 @@
-import { requireAuthenticatedUser } from "@/lib/server/auth";
+import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 
 export async function POST(request: Request) {
@@ -26,7 +26,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const { query } = await request.json();
+    const body = await request.json();
+    const { query, mode } = body as { query?: string; mode?: "search" | "generate" };
 
     if (!query || typeof query !== "string") {
       return Response.json(
@@ -40,6 +41,78 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // ── MODE: GENERATE (Gemini Imagen) ──────────────────────────────
+    if (mode === "generate") {
+      const geminiKey = process.env.GEMINI_API_KEY;
+      if (geminiKey) {
+        try {
+          const { GoogleGenAI } = await import("@google/genai");
+          const ai = new GoogleGenAI({ apiKey: geminiKey });
+          const imagePrompt = `Professional editorial photograph for social media carousel about: ${query}. Clean, modern, high quality, no text overlay.`;
+
+          const res = await ai.models.generateImages({
+            model: "imagen-4.0-generate-001",
+            prompt: imagePrompt,
+            config: { numberOfImages: 1, aspectRatio: "1:1" },
+          });
+
+          const imageBytes = res.generatedImages?.[0]?.image?.imageBytes;
+          if (imageBytes) {
+            // Try to upload to Supabase Storage
+            const supabase = createServiceRoleSupabaseClient();
+            if (supabase) {
+              const buffer = Buffer.from(imageBytes, "base64");
+              const path = `generated/${user.id}/${Date.now()}.png`;
+              const { error: uploadError } = await supabase.storage
+                .from("carousel-images")
+                .upload(path, buffer, {
+                  contentType: "image/png",
+                  upsert: false,
+                  cacheControl: "31536000",
+                });
+
+              if (!uploadError) {
+                const { data: pub } = supabase.storage
+                  .from("carousel-images")
+                  .getPublicUrl(path);
+
+                return Response.json({
+                  images: [
+                    {
+                      url: pub.publicUrl,
+                      title: query,
+                      source: "Gemini Imagen",
+                      generated: true,
+                    },
+                  ],
+                });
+              }
+              console.warn("[images] Supabase upload failed, returning data URL:", uploadError.message);
+            }
+
+            // Fallback: return as data URL if storage upload fails
+            return Response.json({
+              images: [
+                {
+                  url: `data:image/png;base64,${imageBytes}`,
+                  title: query,
+                  source: "Gemini Imagen",
+                  generated: true,
+                },
+              ],
+            });
+          }
+        } catch (err) {
+          console.error("[images] Gemini Imagen error:", err);
+          // Fall through to search mode as fallback
+        }
+      }
+
+      // If Gemini failed, fall through to Serper search as fallback
+    }
+
+    // ── MODE: SEARCH (Serper / Unsplash) ────────────────────────────
 
     // Strategy 1: Serper.dev Google Image Search
     const serperKey = process.env.SERPER_API_KEY;
@@ -68,6 +141,7 @@ export async function POST(request: Request) {
                 url: img.imageUrl || "",
                 title: img.title || "",
                 source: img.source || "",
+                generated: false,
               })
             );
 
@@ -84,6 +158,7 @@ export async function POST(request: Request) {
       url: `https://source.unsplash.com/800x600/?${encodedQuery}&sig=${i}`,
       title: `${query} - Image ${i + 1}`,
       source: "Unsplash",
+      generated: false,
     }));
 
     return Response.json({ images: fallbackImages });

@@ -36,6 +36,8 @@ interface Slide {
 interface Variation {
   title: string;
   style: "data" | "story" | "provocative";
+  qualityScore?: number;
+  qualityReasoning?: string;
   slides: Slide[];
 }
 
@@ -370,8 +372,14 @@ function CreatePageContent() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [showExportPanel, setShowExportPanel] = useState(false);
+  const [imageMode, setImageMode] = useState<"search" | "generate">("search");
+  const [imageGeneratingSlides, setImageGeneratingSlides] = useState<Set<number>>(new Set());
+  const [exportProgress, setExportProgress] = useState("");
+  const [exportRenderSlides, setExportRenderSlides] = useState<Slide[] | null>(null);
 
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const exportContainerRef = useRef<HTMLDivElement | null>(null);
+  const exportSlideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const editorCardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const profileSyncedRef = useRef(false);
 
@@ -483,6 +491,49 @@ function CreatePageContent() {
     }
   }, [activeSlideIndex, step]);
 
+  // Auto-generate images for slides that don't have one yet when entering edit
+  const autoImageFiredRef = useRef(false);
+  useEffect(() => {
+    if (step !== "edit" || autoImageFiredRef.current || !session?.access_token) return;
+    if (editSlides.length === 0) return;
+    const slidesWithoutImages = editSlides
+      .map((s, i) => ({ slide: s, index: i }))
+      .filter((x) => !x.slide.imageUrl && x.slide.imageQuery?.trim());
+    if (slidesWithoutImages.length === 0) return;
+    autoImageFiredRef.current = true;
+
+    // Fetch images in parallel for slides missing them
+    for (const { slide, index } of slidesWithoutImages) {
+      setImageGeneratingSlides((prev) => new Set(prev).add(index));
+      fetch("/api/images", {
+        method: "POST",
+        headers: jsonWithAuth(session),
+        body: JSON.stringify({ query: slide.imageQuery, mode: "search" }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          const url: string | undefined = data?.images?.[0]?.url;
+          if (url) {
+            setEditSlides((prev) => {
+              const updated = [...prev];
+              if (updated[index] && !updated[index].imageUrl) {
+                updated[index] = { ...updated[index], imageUrl: url };
+              }
+              return updated;
+            });
+          }
+        })
+        .catch(() => { /* swallow */ })
+        .finally(() => {
+          setImageGeneratingSlides((prev) => {
+            const next = new Set(prev);
+            next.delete(index);
+            return next;
+          });
+        });
+    }
+  }, [step, editSlides.length, session]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Handlers ───────────────────────────────────────────────────
   const handleGenerate = useCallback(async () => {
     setError("");
@@ -524,11 +575,51 @@ function CreatePageContent() {
     }
   }, [sourceType, topic, sourceUrl, niche, tone, language, isGuest, session]);
 
-  const handleSelectVariation = (index: number) => {
+  const handleSelectVariation = async (index: number) => {
     setSelectedVariation(index);
-    setEditSlides([...variations[index].slides]);
+    const slides = [...variations[index].slides];
+    setEditSlides(slides);
     setActiveSlideIndex(0);
     setStep("edit");
+
+    // ISSUE 1: Auto-save immediately when variation is picked
+    const title = variations[index]?.title || slides[0]?.heading || "Sem titulo";
+    const variationMeta = { title: variations[index].title, style: variations[index].style };
+    try {
+      if (user && !isGuest && supabase) {
+        const { row, inserted } = await upsertUserCarousel(supabase, user.id, {
+          id: carouselRecordId,
+          title,
+          slides,
+          slideStyle: slideStyle,
+          variation: variationMeta,
+          status: "draft",
+        });
+        setCarouselRecordId(row.id);
+        if (inserted) {
+          await bumpCarouselUsage(supabase, user.id);
+          await refreshProfile();
+        }
+        lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle });
+        toast.success("Carrossel salvo automaticamente.");
+      } else {
+        const id = carouselRecordId ?? `carousel-${Date.now()}`;
+        setCarouselRecordId(id);
+        upsertGuestCarousel({
+          id,
+          title,
+          slides,
+          style: slideStyle,
+          variation: variationMeta,
+          savedAt: new Date().toISOString(),
+          status: "draft",
+        });
+        lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle });
+        toast.success("Carrossel salvo localmente.");
+      }
+    } catch (e) {
+      console.error("[auto-save] Erro:", e);
+    }
   };
 
   const handleUpdateSlide = (
@@ -617,30 +708,40 @@ function CreatePageContent() {
     });
   };
 
-  const handleRefetchImage = async (index: number) => {
+  const handleRefetchImage = async (index: number, overrideMode?: "search" | "generate") => {
     const slide = editSlides[index];
     const query = slide?.imageQuery?.trim();
     if (!query) {
       setError("Defina um termo de busca antes de trocar a imagem.");
       return;
     }
+    const currentMode = overrideMode || imageMode;
     setImageLoadingIndex(index);
     setError("");
     try {
       const res = await fetch("/api/images", {
         method: "POST",
         headers: jsonWithAuth(session),
-        body: JSON.stringify({ query, count: 8 }),
+        body: JSON.stringify({ query, count: 8, mode: currentMode }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Falha na busca de imagem");
-      const images: Array<{ url: string }> = data.images || [];
+      const images: Array<{ url: string; generated?: boolean }> = data.images || [];
       if (images.length === 0) {
         throw new Error("Nenhuma imagem encontrada. Tente outro termo.");
       }
-      const urls = images.map((img) => img.url).filter(Boolean);
-      setImagePickerOptions(urls);
-      setImagePickerIndex(index);
+      // For generate mode with single result, apply directly
+      if (currentMode === "generate" && images.length === 1) {
+        setEditSlides((prev) => {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], imageUrl: images[0].url };
+          return updated;
+        });
+      } else {
+        const urls = images.map((img) => img.url).filter(Boolean);
+        setImagePickerOptions(urls);
+        setImagePickerIndex(index);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao trocar imagem");
     } finally {
@@ -722,22 +823,41 @@ function CreatePageContent() {
   }, [editSlides, slideStyle, step]);
 
   /**
-   * Captura cada slide como PNG 1080x1350.
+   * Captura um slide do container de export (scale=1) como PNG 1080x1350.
    */
-  const captureSlideAsPng = async (el: HTMLDivElement): Promise<string> => {
+  const captureExportSlideAsPng = async (index: number): Promise<string> => {
+    const el = exportSlideRefs.current[index];
+    if (!el) throw new Error(`Export slide ref ${index} not found`);
     return toPng(el, {
       width: 1080,
       height: 1350,
       pixelRatio: 1,
       cacheBust: true,
-      style: {
-        transform: "scale(1)",
-        transformOrigin: "top left",
-      },
     });
   };
 
-  /** PDF em memoria */
+  /**
+   * Monta o container de export oculto, aguarda render, executa callback, e limpa.
+   */
+  const withExportRender = async <T,>(
+    slides: Slide[],
+    fn: () => Promise<T>
+  ): Promise<T> => {
+    exportSlideRefs.current = [];
+    setExportRenderSlides(slides);
+    // Wait for React to render the hidden export container
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    // Extra delay for images to load
+    await new Promise((r) => setTimeout(r, 500));
+    try {
+      return await fn();
+    } finally {
+      setExportRenderSlides(null);
+      exportSlideRefs.current = [];
+    }
+  };
+
+  /** PDF em memoria — usa export refs (scale=1) */
   const buildCarouselPdfBlob = async (): Promise<{ blob: Blob; count: number } | null> => {
     const { jsPDF } = await import("jspdf");
     const pdf = new jsPDF({
@@ -748,10 +868,9 @@ function CreatePageContent() {
     });
     let added = 0;
     for (let i = 0; i < editSlides.length; i++) {
-      const el = slideRefs.current[i];
-      if (!el) continue;
       try {
-        const dataUrl = await captureSlideAsPng(el);
+        setExportProgress(`Gerando PDF: slide ${i + 1} de ${editSlides.length}...`);
+        const dataUrl = await captureExportSlideAsPng(i);
         if (added > 0) pdf.addPage([1080, 1350], "portrait");
         pdf.addImage(dataUrl, "PNG", 0, 0, 1080, 1350, undefined, "FAST");
         added++;
@@ -767,39 +886,44 @@ function CreatePageContent() {
   const handleExportPng = async () => {
     setIsExporting(true);
     setError("");
-    toast.success(null);
+    setExportProgress("Preparando export...");
     try {
-      let exported = 0;
-      for (let i = 0; i < editSlides.length; i++) {
-        const el = slideRefs.current[i];
-        if (!el) continue;
-        const dataUrl = await captureSlideAsPng(el);
-        const link = document.createElement("a");
-        link.download = `sequencia-viral-slide-${i + 1}.png`;
-        link.href = dataUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        exported++;
-        await new Promise((r) => setTimeout(r, 400));
-      }
-      if (exported === 0) {
-        setError("Nenhum slide capturado. Tente de novo.");
-      } else {
-        toast.success(
-          exported === 1
-            ? "1 slide exportado com sucesso."
-            : `${exported} slides exportados com sucesso.`
-        );
-      }
+      await withExportRender(editSlides, async () => {
+        let exported = 0;
+        for (let i = 0; i < editSlides.length; i++) {
+          setExportProgress(`Exportando slide ${i + 1} de ${editSlides.length}...`);
+          try {
+            const dataUrl = await captureExportSlideAsPng(i);
+            const link = document.createElement("a");
+            link.download = `slide-${i + 1}.png`;
+            link.href = dataUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            exported++;
+            // Small delay between downloads so the browser doesn't block them
+            await new Promise((r) => setTimeout(r, 400));
+          } catch (slideErr) {
+            console.warn(`[PNG] Falha ao capturar slide ${i + 1}:`, slideErr);
+          }
+        }
+        if (exported === 0) {
+          setError("Nenhum slide capturado. Tente de novo.");
+        } else {
+          toast.success(
+            exported === 1
+              ? "1 slide exportado com sucesso."
+              : `${exported} slides exportados com sucesso.`
+          );
+        }
+      });
     } catch (err) {
       console.error("Export PNG error:", err);
       setError(
-        `Nao foi possivel exportar. ${
-          err instanceof Error ? err.message : ""
-        }`.trim()
+        `Nao foi possivel exportar. ${err instanceof Error ? err.message : ""}`.trim()
       );
     }
+    setExportProgress("");
     setIsExporting(false);
   };
 
@@ -915,7 +1039,7 @@ function CreatePageContent() {
       for (let i = 0; i < editSlides.length; i++) {
         const el = slideRefs.current[i];
         if (!el) continue;
-        const dataUrl = await captureSlideAsPng(el);
+        const dataUrl = await captureExportSlideAsPng(i);
         const blob = await (await fetch(dataUrl)).blob();
         form.append("png", blob, `slide-${i + 1}.png`);
         pngCount++;
@@ -1470,6 +1594,49 @@ function CreatePageContent() {
                       <span>{badge.emoji}</span>
                       {badge.label}
                     </span>
+
+                    {/* Quality Score */}
+                    {typeof variation.qualityScore === "number" && (
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                            Qualidade
+                          </span>
+                          <span
+                            className="text-sm font-bold"
+                            style={{
+                              color:
+                                variation.qualityScore >= 80
+                                  ? "#16a34a"
+                                  : variation.qualityScore >= 60
+                                    ? "#ca8a04"
+                                    : "#dc2626",
+                            }}
+                          >
+                            {variation.qualityScore}/100
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${variation.qualityScore}%`,
+                              background:
+                                variation.qualityScore >= 80
+                                  ? "#16a34a"
+                                  : variation.qualityScore >= 60
+                                    ? "#ca8a04"
+                                    : "#dc2626",
+                            }}
+                          />
+                        </div>
+                        {variation.qualityReasoning && (
+                          <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed">
+                            {variation.qualityReasoning}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     {/* Title */}
                     <h3

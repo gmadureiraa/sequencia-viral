@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Sparkles, Heart, MessageCircle, Send, Bookmark } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import { Iphone } from "@/components/magicui/iphone";
-import CarouselSlide from "@/components/app/carousel-slide";
+import EditorialSlide from "@/components/app/editorial-slide";
 
 const DEMO_PROFILE = {
   name: "Sequência Viral",
@@ -14,27 +14,27 @@ const DEMO_PROFILE = {
 
 const DEMO_SLIDES = [
   {
-    heading: "1. Cole uma ideia",
+    heading: "1. Cinco conceitos no modo rápido",
     body:
-      "Link, PDF, texto livre, thread do X, vídeo do YouTube.\n\nA gente lê, entende e transforma em carrossel — mantendo a sua voz.",
+      "Cole link, ideia, YouTube ou Instagram.\n\nA IA devolve cinco ângulos — você escolhe qual história contar antes de gerar o carrossel completo.",
     imageUrl: "",
   },
   {
-    heading: "2. Escolha 1 de 3 variações",
+    heading: "2. Três variações + layout visual",
     body:
-      "Dados, história, provocação.\n\nCada input vira 3 ângulos diferentes — você escolhe o que mais soa com sua marca.",
+      "Dados, narrativa, provocação.\n\nDepois você define Editorial (revista) ou Spotlight (hero no topo). O texto é o mesmo pipeline; muda só o desenho e o tipo de imagem.",
     imageUrl: "",
   },
   {
-    heading: "3. Edite tudo inline",
+    heading: "3. Modo avançado (opcional)",
     body:
-      "Título, corpo, imagens, ordem.\n\nSe a IA errou, você corrige em 2 cliques. Sem sair do produto.",
+      "Quer mais controle na copy? Use o Content Machine: triagem, headlines e espinha dorsal — sem misturar isso com o tipo de layout.",
     imageUrl: "",
   },
   {
-    heading: "4. Exporte e publique",
+    heading: "4. Edite e exporte em PNG 4:5",
     body:
-      "PNG em alta resolução, proporção 4:5, brand kit aplicado.\n\nPronto pra Instagram, LinkedIn e X.",
+      "Ajuste texto, fontes, imagens e ordem.\n\nExport em alta para Instagram, LinkedIn ou X — tudo no mesmo fluxo.",
     imageUrl: "",
   },
 ];
@@ -71,7 +71,7 @@ export default function LandingHeroCarousel() {
         <div className="rounded-full border-2 border-[#0A0A0A] bg-[#FFFDF9] px-3 py-1.5 shadow-[3px_3px_0_0_#0A0A0A]">
           <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#0A0A0A]">
             <Sparkles size={11} className="text-[var(--accent)]" />
-            Gerado em 28s
+            Conceitos + variações
           </div>
         </div>
       </motion.div>
@@ -129,7 +129,7 @@ export default function LandingHeroCarousel() {
                   className="flex h-full w-full shrink-0 snap-center items-center justify-center p-2"
                 >
                   <div style={{ transform: "scale(0.68)", transformOrigin: "center" }}>
-                    <CarouselSlide
+                    <EditorialSlide
                       heading={slide.heading}
                       body={slide.body}
                       imageUrl={slide.imageUrl || undefined}
@@ -138,6 +138,8 @@ export default function LandingHeroCarousel() {
                       profile={DEMO_PROFILE}
                       style="white"
                       isLastSlide={i === DEMO_SLIDES.length - 1}
+                      showFooter={i === 0}
+                      designTemplate="editorial"
                     />
                   </div>
                 </div>
@@ -169,8 +171,8 @@ export default function LandingHeroCarousel() {
                 2.847 curtidas
               </div>
               <div className="text-[8px] text-zinc-500 line-clamp-1">
-                <span className="font-semibold text-zinc-900">sequencia-viral</span> Criado em
-                30s com IA · #marketing #criadores
+                <span className="font-semibold text-zinc-900">sequencia-viral</span> Editorial + Spotlight
+                · modo rápido e avançado
               </div>
               <div className="mt-1 text-[8px] text-zinc-400">há 12 minutos</div>
             </div>

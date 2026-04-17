@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import type { ImagePeopleMode } from "./carousel-templates";
 
 export interface BrandAnalysis {
   detected_niche: string[];
@@ -40,6 +41,8 @@ export interface UserProfile {
   usage_limit: number;
   onboarding_completed: boolean;
   brand_analysis?: BrandAnalysis;
+  /** Preferência "pessoas na foto" para o template Spotlight (hero futurista). */
+  spotlight_image_people_mode?: ImagePeopleMode | null;
 }
 
 interface AuthContextValue {
@@ -47,7 +50,6 @@ interface AuthContextValue {
   profile: UserProfile | null;
   session: Session | null;
   loading: boolean;
-  isGuest: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithTwitter: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -56,44 +58,23 @@ interface AuthContextValue {
     password: string
   ) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
-  continueAsGuest: () => void;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function getGuestProfile(): UserProfile {
-  if (typeof window === "undefined") return createEmptyProfile("guest");
-  const stored = localStorage.getItem("sequencia-viral_guest_profile");
-  if (stored) {
+const GUEST_KEYS = ["sequencia-viral_guest", "sequencia-viral_guest_profile"] as const;
+
+function clearLegacyGuestStorage() {
+  if (typeof window === "undefined") return;
+  for (const k of GUEST_KEYS) {
     try {
-      return JSON.parse(stored);
+      localStorage.removeItem(k);
     } catch {
-      // ignore
+      /* ignore */
     }
   }
-  return createEmptyProfile("guest");
-}
-
-function createEmptyProfile(id: string): UserProfile {
-  return {
-    id,
-    name: "",
-    email: "",
-    avatar_url: "",
-    twitter_handle: "",
-    instagram_handle: "",
-    linkedin_url: "",
-    niche: [],
-    tone: "professional",
-    language: "pt-br",
-    carousel_style: "white",
-    plan: "free",
-    usage_count: 0,
-    usage_limit: 5,
-    onboarding_completed: false,
-  };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -101,7 +82,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isGuest, setIsGuest] = useState(false);
 
   const fetchProfile = useCallback(async (userId: string) => {
     if (!supabase) return null;
@@ -114,31 +94,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    if (isGuest) {
-      setProfile(getGuestProfile());
-      return;
-    }
-    if (user) {
-      const p = await fetchProfile(user.id);
-      if (p) setProfile(p);
-    }
-  }, [user, isGuest, fetchProfile]);
+    if (!user) return;
+    const p = await fetchProfile(user.id);
+    if (p) setProfile(p);
+  }, [user, fetchProfile]);
 
-  // Initialize auth
+  // Initialize auth — somente sessão Supabase; sem modo convidado
   useEffect(() => {
+    clearLegacyGuestStorage();
+
     if (!supabase) {
-      console.warn("[auth] Supabase client is null — env vars may not be configured. Guest mode only.");
-      // Only enter guest if explicitly set (not auto-silent)
-      const wasGuest = typeof window !== "undefined" && localStorage.getItem("sequencia-viral_guest") === "true";
-      if (wasGuest) {
-        setIsGuest(true);
-        setProfile(getGuestProfile());
-      }
+      console.warn(
+        "[auth] Supabase client is null — configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY."
+      );
       setLoading(false);
       return;
     }
 
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
@@ -148,28 +120,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
         });
       } else {
-        const wasGuest = localStorage.getItem("sequencia-viral_guest") === "true";
-        if (wasGuest) {
-          setIsGuest(true);
-          setProfile(getGuestProfile());
-        }
+        setProfile(null);
         setLoading(false);
       }
     });
 
-    // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, s) => {
+    } = supabase.auth.onAuthStateChange(async (event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        setIsGuest(false);
-        localStorage.removeItem("sequencia-viral_guest");
+        clearLegacyGuestStorage();
         const p = await fetchProfile(s.user.id);
         if (p) setProfile(p);
       } else {
         setProfile(null);
+        if (event === "SIGNED_OUT") {
+          clearLegacyGuestStorage();
+        }
       }
     });
 
@@ -219,8 +188,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         return { error: error.message, needsEmailConfirmation: false };
       }
-      // If Supabase already returned a session, user is signed in (no email confirmation required).
-      // Otherwise, user created but must confirm via email link.
       const needsEmailConfirmation = !data.session;
       return { error: null, needsEmailConfirmation };
     },
@@ -228,13 +195,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    if (isGuest) {
-      setIsGuest(false);
-      setProfile(null);
-      localStorage.removeItem("sequencia-viral_guest");
-      localStorage.removeItem("sequencia-viral_guest_profile");
+    clearLegacyGuestStorage();
+    try {
       localStorage.removeItem("sequencia-viral_onboarding");
-      return;
+    } catch {
+      /* ignore */
     }
     if (supabase) {
       await supabase.auth.signOut();
@@ -242,56 +207,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setSession(null);
     setProfile(null);
-  }, [isGuest]);
-
-  const continueAsGuest = useCallback(() => {
-    setIsGuest(true);
-    const gp = getGuestProfile();
-    setProfile(gp);
-    localStorage.setItem("sequencia-viral_guest", "true");
-    setLoading(false);
   }, []);
 
   const updateProfile = useCallback(
     async (data: Partial<UserProfile>) => {
-      if (isGuest) {
-        const updated = { ...getGuestProfile(), ...data };
-        setProfile(updated as UserProfile);
-        localStorage.setItem("sequencia-viral_guest_profile", JSON.stringify(updated));
-        return;
-      }
       if (!supabase) {
-        console.error("[updateProfile] Supabase client is null — NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY missing");
+        console.error(
+          "[updateProfile] Supabase client is null — NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY missing"
+        );
         throw new Error("Supabase não está configurado. Verifique as variáveis de ambiente.");
       }
       if (!user) {
         console.error("[updateProfile] No authenticated user in context");
         throw new Error("Usuário não autenticado. Faça login novamente.");
       }
-      // Upsert handles both "profile exists" (update) and "profile doesn't exist yet"
-      // (insert) in one call. The previous implementation used update().single() which
-      // threw when no row matched, leaving the save button stuck in "Salvando…".
       const payload = {
         id: user.id,
         email: user.email,
         ...data,
       };
-      console.log("[updateProfile] Upserting profile for user:", user.id);
       const { data: updated, error } = await supabase
         .from("profiles")
         .upsert(payload, { onConflict: "id" })
         .select()
         .maybeSingle();
       if (error) {
-        console.error("[updateProfile] upsert failed:", error.message, error.details, error.hint, error.code);
+        console.error(
+          "[updateProfile] upsert failed:",
+          error.message,
+          error.details,
+          error.hint,
+          error.code
+        );
         throw new Error(error.message || "Erro ao salvar perfil.");
       }
       if (!updated) {
-        console.warn("[updateProfile] Upsert returned no data (possible RLS block). Payload:", JSON.stringify(payload));
+        console.warn(
+          "[updateProfile] Upsert returned no data (possible RLS block). Payload:",
+          JSON.stringify(payload)
+        );
       }
       if (updated) setProfile(updated as UserProfile);
     },
-    [user, isGuest]
+    [user]
   );
 
   const value = useMemo(
@@ -300,13 +258,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profile,
       session,
       loading,
-      isGuest,
       signInWithGoogle,
       signInWithTwitter,
       signInWithEmail,
       signUpWithEmail,
       signOut,
-      continueAsGuest,
       updateProfile,
       refreshProfile,
     }),
@@ -315,13 +271,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profile,
       session,
       loading,
-      isGuest,
       signInWithGoogle,
       signInWithTwitter,
       signInWithEmail,
       signUpWithEmail,
       signOut,
-      continueAsGuest,
       updateProfile,
       refreshProfile,
     ]

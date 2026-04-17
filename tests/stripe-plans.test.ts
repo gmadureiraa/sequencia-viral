@@ -5,7 +5,7 @@ import {
   PLANS,
   stripePaymentAmountUsd,
   usageLimitForPaidPlan,
-} from "@/lib/stripe";
+} from "@/lib/pricing";
 
 describe("stripe plans", () => {
   it("mantém ids e preços esperados", () => {

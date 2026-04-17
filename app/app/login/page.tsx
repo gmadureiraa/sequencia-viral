@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import CarouselSlide from "@/components/app/carousel-slide";
+import EditorialSlide from "@/components/app/editorial-slide";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -313,7 +313,7 @@ export default function LoginPage() {
                     "drop-shadow(0 24px 48px rgba(10, 10, 10, 0.12)) drop-shadow(0 6px 12px rgba(236, 96, 0, 0.15))",
                 }}
               >
-                <CarouselSlide
+                <EditorialSlide
                   heading="1. Cole uma ideia"
                   body={
                     "Link, PDF, texto ou vídeo.\n\nO Sequência Viral transforma em carrossel com a voz da sua marca, em 30 segundos."

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   PlusCircle,
@@ -18,22 +18,48 @@ import {
 import Link from "next/link";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import type { UserProfile } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { CarouselListSkeleton } from "@/components/app/carousel-skeleton";
+import EditorialSlide from "@/components/app/editorial-slide";
+import CarouselFeedbackPanel from "@/components/app/carousel-feedback";
 import {
   bumpCarouselUsage,
   deleteUserCarousel,
-  duplicateGuestCarousel,
   fetchUserCarousels,
   isCarouselUuid,
-  readGuestCarousels,
   type SavedCarousel,
   upsertUserCarousel,
-  writeGuestCarousels,
 } from "@/lib/carousel-storage";
+import { normalizeBodyFontId, normalizeTitleFontId } from "@/lib/editorial-fonts";
+import { normalizeDesignTemplate } from "@/lib/carousel-templates";
+
+const LIBRARY_SLIDE_PREVIEW_SCALE = 0.14;
+
+function buildLibraryPreviewProfile(profile: UserProfile | null): {
+  name: string;
+  handle: string;
+  photoUrl: string;
+} {
+  if (!profile) {
+    return { name: "Seu nome", handle: "@seuhandle", photoUrl: "" };
+  }
+  const handle = profile.twitter_handle
+    ? `@${profile.twitter_handle}`
+    : profile.instagram_handle
+      ? `@${profile.instagram_handle}`
+      : "@seuhandle";
+  return {
+    name: profile.name || "Seu nome",
+    handle,
+    photoUrl: profile.avatar_url || "",
+  };
+}
 
 export default function CarouselsPage() {
-  const { user, isGuest, refreshProfile } = useAuth();
+  const { user, refreshProfile, profile } = useAuth();
+  const previewProfile = useMemo(() => buildLibraryPreviewProfile(profile), [profile]);
   const [carousels, setCarousels] = useState<SavedCarousel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "drafts" | "published">("all");
@@ -45,30 +71,22 @@ export default function CarouselsPage() {
   const loadCarousels = useCallback(async () => {
     setLoadError(null);
     setIsLoading(true);
-    if (user && !isGuest && supabase) {
-      try {
-        const cloudList = await fetchUserCarousels(supabase);
-        // Merge with any locally saved carousels (from fallback saves)
-        const localList = readGuestCarousels();
-        if (localList.length > 0) {
-          const cloudIds = new Set(cloudList.map((c) => c.id));
-          const localOnly = localList.filter((c) => !cloudIds.has(c.id));
-          setCarousels([...cloudList, ...localOnly]);
-        } else {
-          setCarousels(cloudList);
-        }
-      } catch (err) {
-        console.error("[carousels] Supabase failed, falling back to local:", err);
-        setLoadError("Não foi possível carregar da nuvem. Mostrando salvos localmente.");
-        // Fall back to local carousels instead of empty
-        setCarousels(readGuestCarousels());
-      }
+    if (!user || !supabase) {
+      setCarousels([]);
       setIsLoading(false);
       return;
     }
-    setCarousels(readGuestCarousels());
-    setIsLoading(false);
-  }, [user, isGuest]);
+    try {
+      const cloudList = await fetchUserCarousels(supabase);
+      setCarousels(cloudList);
+    } catch (err) {
+      console.error("[carousels] Supabase failed:", err);
+      setLoadError("Não foi possível carregar seus carrosséis. Tente novamente.");
+      setCarousels([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -101,15 +119,13 @@ export default function CarouselsPage() {
       return;
     }
     try {
-      if (user && !isGuest && supabase && isCarouselUuid(id)) {
+      if (user && supabase && isCarouselUuid(id)) {
         await deleteUserCarousel(supabase, user.id, id);
         await loadCarousels();
+        toast.success("Carrossel removido.");
       } else {
-        const updated = carousels.filter((c) => c.id !== id);
-        setCarousels(updated);
-        writeGuestCarousels(updated);
+        toast.error("Não foi possível remover este item.");
       }
-      toast.success("Carrossel removido.");
     } catch {
       toast.error("Não foi possível remover. Tente de novo.");
     }
@@ -118,26 +134,27 @@ export default function CarouselsPage() {
 
   async function handleDuplicate(carousel: SavedCarousel) {
     try {
-      if (user && !isGuest && supabase) {
-        const { inserted } = await upsertUserCarousel(supabase, user.id, {
-          title: `${carousel.title || "Sem título"} (cópia)`,
-          slides: carousel.slides,
-          slideStyle: carousel.style === "dark" ? "dark" : "white",
-          variation: carousel.variation ?? null,
-          status: "draft",
-        });
-        if (inserted) {
-          await bumpCarouselUsage(supabase, user.id);
-          await refreshProfile();
-        }
-        await loadCarousels();
-        toast.success("Carrossel duplicado.");
+      if (!user || !supabase) {
+        toast.error("Sessão inválida. Entre novamente.");
         return;
       }
-      const copy = duplicateGuestCarousel(carousel);
-      const updated = [copy, ...carousels];
-      setCarousels(updated);
-      writeGuestCarousels(updated);
+      const { inserted } = await upsertUserCarousel(supabase, user.id, {
+        title: `${carousel.title || "Sem título"} (cópia)`,
+        slides: carousel.slides,
+        slideStyle: carousel.style === "dark" ? "dark" : "white",
+        variation: carousel.variation ?? null,
+        status: "draft",
+        designTemplate: carousel.designTemplate ?? "editorial",
+        creationMode: carousel.creationMode ?? "quick",
+        titleFontId: normalizeTitleFontId(carousel.titleFontId),
+        bodyFontId: normalizeBodyFontId(carousel.bodyFontId),
+        imagePeopleMode: carousel.imagePeopleMode,
+      });
+      if (inserted) {
+        await bumpCarouselUsage(supabase, user.id);
+        await refreshProfile();
+      }
+      await loadCarousels();
       toast.success("Carrossel duplicado.");
     } catch {
       toast.error("Não foi possível duplicar. Tente de novo.");
@@ -151,9 +168,7 @@ export default function CarouselsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <span className="tag-pill mb-6">
-          <span className="font-mono">§</span> Biblioteca
-        </span>
+        <span className="tag-pill mb-6">Biblioteca</span>
         {loadError && (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">
             <strong>Erro:</strong> {loadError}
@@ -256,7 +271,10 @@ export default function CarouselsPage() {
                 carousel={carousel}
                 index={i}
                 deleteConfirm={deleteConfirm === carousel.id}
-                isLocal={!isCarouselUuid(carousel.id)}
+                previewProfile={previewProfile}
+                userId={user?.id}
+                supabase={supabase}
+                onFeedbackSaved={() => void loadCarousels()}
                 onDelete={() => handleDelete(carousel.id)}
                 onDuplicate={() => handleDuplicate(carousel)}
               />
@@ -291,14 +309,20 @@ function CarouselCard({
   carousel,
   index,
   deleteConfirm,
-  isLocal,
+  previewProfile,
+  userId,
+  supabase: sb,
+  onFeedbackSaved,
   onDelete,
   onDuplicate,
 }: {
   carousel: SavedCarousel;
   index: number;
   deleteConfirm: boolean;
-  isLocal: boolean;
+  previewProfile: { name: string; handle: string; photoUrl: string };
+  userId: string | undefined;
+  supabase: SupabaseClient | null;
+  onFeedbackSaved: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
 }) {
@@ -312,6 +336,8 @@ function CarouselCard({
   const title = carousel.title || carousel.slides[0]?.heading || "Sem título";
   const slideCount = carousel.slides.length;
   const status = carousel.status || "draft";
+  const first = carousel.slides[0];
+  const slideStyle = carousel.style === "dark" ? "dark" : "white";
 
   return (
     <motion.div
@@ -321,41 +347,36 @@ function CarouselCard({
       whileHover={{ y: -4 }}
       className="card-offset overflow-hidden group"
     >
-      {/* Thumbnail preview area */}
+      {/* Preview: slide real (template Twitter) ou capa com imagem + texto */}
       <div
-        className={`relative h-44 flex items-center justify-center border-b border-[#0A0A0A]/10 ${
-          carousel.style === "dark" ? "bg-[#0A0A0A]" : "bg-[#FFF6EC]"
+        className={`relative min-h-[200px] max-h-[240px] flex items-center justify-center border-b border-[#0A0A0A]/10 overflow-hidden ${
+          carousel.style === "dark" ? "bg-[#0A0A0A]" : "bg-[#f4f4f5]"
         }`}
       >
-        {/* Mini slide previews */}
-        <div className="flex gap-2 px-4">
-          {carousel.slides.slice(0, 3).map((slide, i) => (
-            <div
-              key={i}
-              className={`rounded-lg p-3 text-[8px] leading-tight w-20 ${
-                carousel.style === "dark"
-                  ? "bg-zinc-800 text-zinc-300 border border-zinc-700"
-                  : "bg-white text-zinc-600 border border-zinc-200"
-              }`}
-              style={{ height: 80 }}
-            >
-              <div className="font-bold truncate text-[9px] mb-1">
-                {slide.heading}
-              </div>
-              <div className="line-clamp-3 opacity-60">
-                {slide.body}
-              </div>
-            </div>
-          ))}
-        </div>
+        {first ? (
+          <div className="w-full flex items-center justify-center py-3 px-2 pointer-events-none select-none">
+            <EditorialSlide
+              heading={first.heading || " "}
+              body={first.body || " "}
+              imageUrl={first.imageUrl}
+              slideNumber={1}
+              totalSlides={Math.max(slideCount, 1)}
+              profile={previewProfile}
+              style={slideStyle}
+              isLastSlide={slideCount <= 1}
+              showFooter
+              scale={LIBRARY_SLIDE_PREVIEW_SCALE}
+              titleFontId={normalizeTitleFontId(carousel.titleFontId)}
+              bodyFontId={normalizeBodyFontId(carousel.bodyFontId)}
+              designTemplate={normalizeDesignTemplate(carousel.designTemplate)}
+            />
+          </div>
+        ) : (
+          <div className="py-12 text-sm text-[var(--muted)]">Sem slides</div>
+        )}
 
         {/* Status badge */}
-        <div className="absolute top-4 right-4 flex items-center gap-1.5">
-          {isLocal && (
-            <div className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-amber-400 bg-amber-50 text-amber-700">
-              Local
-            </div>
-          )}
+        <div className="absolute top-4 right-4 flex items-center gap-1.5 z-10">
           <div
             className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-[#0A0A0A] ${
               status === "published"
@@ -376,6 +397,17 @@ function CarouselCard({
         <h3 className="editorial-serif text-2xl text-[var(--foreground)] leading-tight truncate mb-4">
           {title}
         </h3>
+
+        <div className="mb-4">
+          <CarouselFeedbackPanel
+            carouselId={carousel.id}
+            userId={userId}
+            supabase={sb}
+            initial={carousel.feedback ?? null}
+            onSaved={onFeedbackSaved}
+            compact
+          />
+        </div>
 
         {carousel.exportAssets &&
           (carousel.exportAssets.pdfUrl ||

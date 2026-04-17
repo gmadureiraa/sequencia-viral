@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CreationMode, DesignTemplateId } from "@/lib/carousel-templates";
+import {
+  type CreationMode,
+  type DesignTemplateId,
+  type ImagePeopleMode,
+  normalizeDesignTemplate,
+  normalizeImagePeopleMode,
+} from "@/lib/carousel-templates";
 
 export type CarouselSlide = {
   heading: string;
@@ -11,6 +17,13 @@ export type CarouselSlide = {
 export type CarouselVariationMeta = {
   title: string;
   style: string;
+};
+
+/** Feedback do cliente por carrossel (persistido em `carousels.style.feedback`). */
+export type CarouselFeedback = {
+  sentiment: "up" | "down" | null;
+  comment: string;
+  updatedAt?: string;
 };
 
 /** Metadados persistidos após upload em `carousel-exports` (API /api/carousel/exports). */
@@ -35,9 +48,14 @@ export type SavedCarousel = {
   designTemplate?: DesignTemplateId;
   /** quick vs guided Content Machine (persisted in carousels.style JSON) */
   creationMode?: CreationMode;
+  /** Pares de fonte editorial (`title_font` / `body_font` no JSON style) */
+  titleFontId?: string;
+  bodyFontId?: string;
+  /** Avaliação e comentário (MVP: JSON em `style.feedback`) */
+  feedback?: CarouselFeedback;
+  /** Preferência de pessoas nas fotos (persistido em `style.image_people_mode`) */
+  imagePeopleMode?: ImagePeopleMode;
 };
-
-const GUEST_STORAGE_KEY = "sequencia-viral_carousels";
 
 export function isCarouselUuid(id: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -91,12 +109,35 @@ export function rowToSavedCarousel(row: CarouselRow): SavedCarousel {
 
   const dt = styleObj.design_template;
   const cm = styleObj.creation_mode;
-  const designTemplate: DesignTemplateId | undefined =
-    dt === "twitter" || dt === "principal" || dt === "futurista" || dt === "autoral"
-      ? dt
-      : undefined;
+  const designTemplate: DesignTemplateId = normalizeDesignTemplate(
+    typeof dt === "string" ? dt : undefined
+  );
   const creationMode: CreationMode | undefined =
     cm === "quick" || cm === "guided" ? cm : undefined;
+
+  const titleFontId =
+    typeof styleObj.title_font === "string" ? styleObj.title_font : undefined;
+  const bodyFontId =
+    typeof styleObj.body_font === "string" ? styleObj.body_font : undefined;
+
+  let feedback: CarouselFeedback | undefined;
+  const fb = styleObj.feedback;
+  if (fb && typeof fb === "object") {
+    const o = fb as Record<string, unknown>;
+    const s = o.sentiment;
+    const sentiment = s === "up" || s === "down" ? s : null;
+    feedback = {
+      sentiment,
+      comment: typeof o.comment === "string" ? o.comment : "",
+      updatedAt: typeof o.updated_at === "string" ? o.updated_at : undefined,
+    };
+  }
+
+  const rawIpm = styleObj.image_people_mode;
+  const imagePeopleMode: ImagePeopleMode | undefined =
+    typeof rawIpm === "string"
+      ? normalizeImagePeopleMode(rawIpm)
+      : undefined;
 
   return {
     id: row.id,
@@ -110,6 +151,10 @@ export function rowToSavedCarousel(row: CarouselRow): SavedCarousel {
     thumbnailUrl: row.thumbnail_url ?? null,
     designTemplate,
     creationMode,
+    titleFontId,
+    bodyFontId,
+    feedback,
+    imagePeopleMode,
   };
 }
 
@@ -157,6 +202,9 @@ export async function upsertUserCarousel(
     status: "draft" | "published" | "archived";
     designTemplate?: DesignTemplateId;
     creationMode?: CreationMode;
+    titleFontId?: string;
+    bodyFontId?: string;
+    imagePeopleMode?: ImagePeopleMode;
   }
 ): Promise<{ row: CarouselRow; inserted: boolean }> {
   const style: Record<string, unknown> = {
@@ -171,8 +219,36 @@ export async function upsertUserCarousel(
   if (payload.creationMode) {
     style.creation_mode = payload.creationMode;
   }
+  if (payload.titleFontId) {
+    style.title_font = payload.titleFontId;
+  }
+  if (payload.bodyFontId) {
+    style.body_font = payload.bodyFontId;
+  }
 
   if (payload.id) {
+    const { data: existingRow } = await client
+      .from("carousels")
+      .select("style")
+      .eq("id", payload.id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    const prev =
+      existingRow?.style && typeof existingRow.style === "object"
+        ? (existingRow.style as Record<string, unknown>)
+        : {};
+    if (prev.feedback) {
+      style.feedback = prev.feedback;
+    }
+    const ipm =
+      payload.imagePeopleMode ??
+      (typeof prev.image_people_mode === "string"
+        ? normalizeImagePeopleMode(prev.image_people_mode)
+        : undefined);
+    if (ipm) {
+      style.image_people_mode = ipm;
+    }
+
     const { data, error } = await client
       .from("carousels")
       .update({
@@ -191,6 +267,10 @@ export async function upsertUserCarousel(
       throw error;
     }
     return { row: data as CarouselRow, inserted: false };
+  }
+
+  if (payload.imagePeopleMode) {
+    style.image_people_mode = payload.imagePeopleMode;
   }
 
   const { data, error } = await client
@@ -261,40 +341,43 @@ export async function bumpCarouselUsage(
   }
 }
 
-export function readGuestCarousels(): SavedCarousel[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(GUEST_STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as SavedCarousel[];
-  } catch {
-    // ignore
+const MAX_FEEDBACK_COMMENT = 2000;
+
+/** Salva ou atualiza feedback (joia / negativo / comentário) no JSON do carrossel. */
+export async function upsertCarouselFeedback(
+  client: SupabaseClient,
+  userId: string,
+  carouselId: string,
+  patch: { sentiment: "up" | "down" | null; comment: string }
+): Promise<void> {
+  const { data: existing, error: fetchErr } = await client
+    .from("carousels")
+    .select("style")
+    .eq("id", carouselId)
+    .eq("user_id", userId)
+    .single();
+
+  if (fetchErr || !existing) {
+    throw fetchErr ?? new Error("Carrossel não encontrado");
   }
-  return [];
-}
 
-export function writeGuestCarousels(items: SavedCarousel[]) {
-  localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(items));
-}
+  const base =
+    existing.style && typeof existing.style === "object"
+      ? { ...(existing.style as Record<string, unknown>) }
+      : {};
 
-export function upsertGuestCarousel(draft: SavedCarousel) {
-  const existing = readGuestCarousels();
-  const idx = existing.findIndex((c) => c.id === draft.id);
-  if (idx >= 0) {
-    const next = [...existing];
-    next[idx] = draft;
-    writeGuestCarousels(next);
-  } else {
-    writeGuestCarousels([draft, ...existing]);
-  }
-  localStorage.setItem("sequencia-viral-draft", JSON.stringify(draft));
-}
-
-export function duplicateGuestCarousel(carousel: SavedCarousel): SavedCarousel {
-  return {
-    ...carousel,
-    id: `carousel-${Date.now()}`,
-    title: `${carousel.title || "Sem título"} (cópia)`,
-    savedAt: new Date().toISOString(),
-    status: "draft",
+  const trimmed = patch.comment.trim().slice(0, MAX_FEEDBACK_COMMENT);
+  base.feedback = {
+    sentiment: patch.sentiment,
+    comment: trimmed,
+    updated_at: new Date().toISOString(),
   };
+
+  const { error } = await client
+    .from("carousels")
+    .update({ style: base })
+    .eq("id", carouselId)
+    .eq("user_id", userId);
+
+  if (error) throw error;
 }

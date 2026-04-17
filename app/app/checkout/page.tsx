@@ -80,7 +80,7 @@ function formatPrice(cents: number): string {
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, session, profile, isGuest } = useAuth();
+  const { user, session, profile } = useAuth();
 
   const planParam = (searchParams.get("plan") || "pro") as PlanKey;
   const plan = PLAN_META[planParam] || PLAN_META.pro;
@@ -98,7 +98,7 @@ function CheckoutContent() {
   async function handleSubmit() {
     setError(null);
 
-    if (isGuest || !session?.access_token) {
+    if (!session?.access_token) {
       setError("Faça login ou crie uma conta antes de assinar.");
       return;
     }
@@ -369,20 +369,10 @@ function CheckoutContent() {
                   </p>
                 )}
 
-                {isGuest && (
-                  <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-                    Você está em modo convidado.{" "}
-                    <Link href="/app/login" className="underline">
-                      Entre ou crie uma conta
-                    </Link>{" "}
-                    pra continuar.
-                  </p>
-                )}
-
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={loading || isGuest}
+                  disabled={loading || !session?.access_token}
                   className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-6 py-4 text-base font-black text-white shadow-[0_12px_32px_-8px_rgba(236,96,0,0.5),inset_0_1px_0_rgba(255,255,255,0.3)] transition hover:bg-[var(--accent-dark)] disabled:opacity-50"
                 >
                   {loading ? (

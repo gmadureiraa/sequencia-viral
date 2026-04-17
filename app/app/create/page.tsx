@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
 import CarouselPreview from "@/components/app/carousel-preview";
-import CarouselSlide from "@/components/app/carousel-slide";
+import EditorialSlide from "@/components/app/editorial-slide";
 import Loader from "@/components/kokonutui/loader";
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
 import { toPng } from "html-to-image";
@@ -16,22 +16,72 @@ import { supabase } from "@/lib/supabase";
 import {
   buildContentMachinePluginExport,
   DESIGN_TEMPLATES,
+  getDesignTemplateMeta,
+  normalizeDesignTemplate,
+  normalizeImagePeopleMode,
   type CreationMode,
   type DesignTemplateId,
-  getDesignTemplateMeta,
+  type ImagePeopleMode,
   pluginExportToPrettyText,
-  usesTweetStylePreview,
-  V2_TEMPLATE_COLORS,
 } from "@/lib/carousel-templates";
 import {
   bumpCarouselUsage,
   fetchUserCarousel,
   isCarouselUuid,
-  readGuestCarousels,
+  type CarouselFeedback,
   type SavedCarousel,
-  upsertGuestCarousel,
   upsertUserCarousel,
 } from "@/lib/carousel-storage";
+import CarouselFeedbackPanel from "@/components/app/carousel-feedback";
+import {
+  EDITORIAL_BODY_FONTS,
+  EDITORIAL_TITLE_FONTS,
+  DEFAULT_BODY_FONT_ID,
+  DEFAULT_TITLE_FONT_ID,
+  normalizeBodyFontId,
+  normalizeTitleFontId,
+  type EditorialBodyFontId,
+  type EditorialTitleFontId,
+} from "@/lib/editorial-fonts";
+
+/** Aguarda <img> dentro do nó carregarem (evita PNG em branco). */
+async function waitForImagesInElement(el: HTMLElement): Promise<void> {
+  const imgs = el.querySelectorAll("img");
+  await Promise.all(
+    Array.from(imgs).map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          if (img.complete && img.naturalWidth > 0) {
+            resolve();
+            return;
+          }
+          const done = () => resolve();
+          img.addEventListener("load", done, { once: true });
+          img.addEventListener("error", done, { once: true });
+        })
+    )
+  );
+}
+
+async function waitUntilExportRefsReady(
+  count: number,
+  refs: { current: (HTMLDivElement | null)[] },
+  timeoutMs: number
+): Promise<boolean> {
+  const start = performance.now();
+  while (performance.now() - start < timeoutMs) {
+    let ok = true;
+    for (let i = 0; i < count; i++) {
+      if (!refs.current[i]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return true;
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+  }
+  return false;
+}
 
 // ─── Types ──────────────────────────────────────────────────────────
 type SourceType = "ai" | "link" | "video" | "instagram" | "idea";
@@ -169,6 +219,8 @@ function hydrateFromSavedCarousel(
     setCarouselRecordId: (id: string | null) => void;
     setEditSlides: (slides: Slide[]) => void;
     setSlideStyle: (s: "white" | "dark") => void;
+    setTitleFontId: (id: EditorialTitleFontId) => void;
+    setBodyFontId: (id: EditorialBodyFontId) => void;
     setVariations: (v: Variation[]) => void;
     setSelectedVariation: (n: number) => void;
     setStep: (s: Step) => void;
@@ -176,12 +228,27 @@ function hydrateFromSavedCarousel(
     setCreationMode: (m: CreationMode) => void;
     setV2EditedBlocks: (b: string[]) => void;
     setV2SubStep: (s: V2SubStep) => void;
-  }
+    setCarouselFeedback: (f: CarouselFeedback | null) => void;
+    setImagePeopleMode: (m: ImagePeopleMode) => void;
+  },
+  options?: { profileSpotlightDefault?: string | null }
 ) {
   setters.setCarouselRecordId(c.id);
   setters.setEditSlides(c.slides);
   setters.setSlideStyle(c.style === "dark" ? "dark" : "white");
-  setters.setDesignTemplate(c.designTemplate ?? "twitter");
+  setters.setTitleFontId(normalizeTitleFontId(c.titleFontId));
+  setters.setBodyFontId(normalizeBodyFontId(c.bodyFontId));
+  const dt = normalizeDesignTemplate(c.designTemplate);
+  setters.setDesignTemplate(dt);
+  if (c.imagePeopleMode) {
+    setters.setImagePeopleMode(normalizeImagePeopleMode(c.imagePeopleMode));
+  } else if (dt === "spotlight" && options?.profileSpotlightDefault) {
+    setters.setImagePeopleMode(
+      normalizeImagePeopleMode(options.profileSpotlightDefault)
+    );
+  } else {
+    setters.setImagePeopleMode("auto");
+  }
   setters.setCreationMode(c.creationMode ?? "quick");
   if (c.creationMode === "guided" && c.slides.length > 0) {
     const blocks = c.slides.map((s, i) => {
@@ -207,6 +274,7 @@ function hydrateFromSavedCarousel(
     setters.setVariations([]);
     setters.setSelectedVariation(0);
   }
+  setters.setCarouselFeedback(c.feedback ?? null);
   setters.setStep("edit");
 }
 
@@ -401,7 +469,7 @@ export default function CreatePage() {
 
 function CreatePageContent() {
   const searchParams = useSearchParams();
-  const { profile, user, isGuest, session, refreshProfile } = useAuth();
+  const { profile, user, session, refreshProfile, updateProfile } = useAuth();
   const previewProfile = useMemo(() => buildPreviewProfile(profile), [profile]);
 
   const [step, setStep] = useState<Step>("input");
@@ -412,8 +480,8 @@ function CreatePageContent() {
   const [tone, setTone] = useState("casual");
   const [language, setLanguage] = useState("pt-br");
   /** Visual / Figma template — independent from creation pipeline. */
-  const [designTemplate, setDesignTemplate] = useState<DesignTemplateId>("twitter");
-  /** quick = conceitos + geração única; guided = Content Machine (etapas). */
+  const [designTemplate, setDesignTemplate] = useState<DesignTemplateId>("editorial");
+  /** quick = conceitos v1 + /api/generate; guided = modo avançado Content Machine (etapas). */
   const [creationMode, setCreationMode] = useState<CreationMode>("quick");
 
   // Content Machine guided flow (triagem → … → render)
@@ -431,11 +499,14 @@ function CreatePageContent() {
   const [selectedVariation, setSelectedVariation] = useState<number>(0);
   const [editSlides, setEditSlides] = useState<Slide[]>([]);
   const [slideStyle, setSlideStyle] = useState<"white" | "dark">("white");
+  const [titleFontId, setTitleFontId] = useState<EditorialTitleFontId>(DEFAULT_TITLE_FONT_ID);
+  const [bodyFontId, setBodyFontId] = useState<EditorialBodyFontId>(DEFAULT_BODY_FONT_ID);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [carouselRecordId, setCarouselRecordId] = useState<string | null>(null);
+  const [carouselFeedback, setCarouselFeedback] = useState<CarouselFeedback | null>(null);
   const [draftLoading, setDraftLoading] = useState(false);
   const [imagePickerIndex, setImagePickerIndex] = useState<number | null>(null);
   const [imagePickerOptions, setImagePickerOptions] = useState<string[]>([]);
@@ -444,6 +515,8 @@ function CreatePageContent() {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [imageMode, setImageMode] = useState<"search" | "generate">("search");
+  /** Busca/Gerar IA: automático, sempre com pessoas, ou sempre sem pessoas. */
+  const [imagePeopleMode, setImagePeopleMode] = useState<ImagePeopleMode>("auto");
   const [imageGeneratingSlides, setImageGeneratingSlides] = useState<Set<number>>(new Set());
   const [exportProgress, setExportProgress] = useState("");
   const [exportRenderSlides, setExportRenderSlides] = useState<Slide[] | null>(null);
@@ -464,6 +537,40 @@ function CreatePageContent() {
     if (cs === "dark" || cs === "white") setSlideStyle(cs);
   }, [profile]);
 
+  const handlePickDesignTemplate = useCallback(
+    (t: DesignTemplateId) => {
+      setDesignTemplate(t);
+      if (t === "spotlight") {
+        setImagePeopleMode(
+          normalizeImagePeopleMode(profile?.spotlight_image_people_mode ?? "auto")
+        );
+      }
+    },
+    [profile?.spotlight_image_people_mode]
+  );
+
+  useEffect(() => {
+    if (designTemplate !== "spotlight" || !user) return;
+    const stored = profile?.spotlight_image_people_mode
+      ? normalizeImagePeopleMode(profile.spotlight_image_people_mode)
+      : "auto";
+    if (stored === imagePeopleMode) return;
+    const timer = window.setTimeout(() => {
+      void updateProfile({ spotlight_image_people_mode: imagePeopleMode }).catch(
+        () => {
+          /* ignore */
+        }
+      );
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [
+    designTemplate,
+    imagePeopleMode,
+    user,
+    profile?.spotlight_image_people_mode,
+    updateProfile,
+  ]);
+
   useEffect(() => {
     if (!notice) return;
     const t = window.setTimeout(() => setNotice(""), 3800);
@@ -480,23 +587,34 @@ function CreatePageContent() {
 
     void (async () => {
       try {
-        if (user && !isGuest && isCarouselUuid(rawId)) {
-          if (!supabase) {
-            if (!cancelled) {
-              setError("Configure o Supabase para carregar rascunhos na nuvem.");
-            }
-            return;
+        if (!user) {
+          if (!cancelled) setError("Faça login para abrir rascunhos.");
+          return;
+        }
+        if (!isCarouselUuid(rawId)) {
+          if (!cancelled) setError("Rascunho inválido.");
+          return;
+        }
+        if (!supabase) {
+          if (!cancelled) {
+            setError("Configure o Supabase para carregar rascunhos na nuvem.");
           }
-          const c = await fetchUserCarousel(supabase, rawId);
-          if (cancelled) return;
-          if (!c) {
-            setError("Rascunho nao encontrado.");
-            return;
-          }
-          hydrateFromSavedCarousel(c, {
+          return;
+        }
+        const c = await fetchUserCarousel(supabase, rawId);
+        if (cancelled) return;
+        if (!c) {
+          setError("Rascunho nao encontrado.");
+          return;
+        }
+        hydrateFromSavedCarousel(
+          c,
+          {
             setCarouselRecordId,
             setEditSlides,
             setSlideStyle,
+            setTitleFontId,
+            setBodyFontId,
             setVariations,
             setSelectedVariation,
             setStep,
@@ -504,29 +622,11 @@ function CreatePageContent() {
             setCreationMode,
             setV2EditedBlocks,
             setV2SubStep,
-          });
-          return;
-        }
-
-        const list = readGuestCarousels();
-        const c = list.find((x) => x.id === rawId);
-        if (cancelled) return;
-        if (!c) {
-          setError("Rascunho nao encontrado.");
-          return;
-        }
-        hydrateFromSavedCarousel(c, {
-          setCarouselRecordId,
-          setEditSlides,
-          setSlideStyle,
-          setVariations,
-          setSelectedVariation,
-          setStep,
-          setDesignTemplate,
-          setCreationMode,
-          setV2EditedBlocks,
-          setV2SubStep,
-        });
+            setCarouselFeedback,
+            setImagePeopleMode,
+          },
+          { profileSpotlightDefault: profile?.spotlight_image_people_mode }
+        );
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Erro ao carregar rascunho.");
@@ -539,7 +639,7 @@ function CreatePageContent() {
     return () => {
       cancelled = true;
     };
-  }, [searchParams, user, isGuest]);
+  }, [searchParams, user, profile?.spotlight_image_people_mode]);
 
   // ─── Keyboard navigation (slides rápidos; modo guiado usa editor de blocos) ──
   useEffect(() => {
@@ -593,6 +693,9 @@ function CreatePageContent() {
           niche,
           tone,
           designTemplate,
+          peopleMode: imagePeopleMode,
+          contextHeading: slide.heading?.slice(0, 400),
+          contextBody: slide.body?.slice(0, 500),
         }),
       })
         .then((r) => r.json())
@@ -729,7 +832,7 @@ function CreatePageContent() {
       // Auto-save V2 carousel immediately
       const title = r.blocks[0]?.slice(0, 60) || "Carrossel V2";
       try {
-        if (user && !isGuest && supabase) {
+        if (user && supabase) {
           const slides: Slide[] = r.blocks.map((b, i) => ({
             heading: i === 0 ? title : `Bloco ${i + 1}`,
             body: b,
@@ -744,6 +847,9 @@ function CreatePageContent() {
             status: "draft",
             designTemplate,
             creationMode: "guided",
+            titleFontId,
+            bodyFontId,
+            imagePeopleMode,
           });
           setCarouselRecordId(row.id);
           if (inserted) {
@@ -758,7 +864,7 @@ function CreatePageContent() {
     } else {
       setV2SubStep("backbone");
     }
-  }, [callV2API, v2Context, user, isGuest, supabase, carouselRecordId, slideStyle, refreshProfile, designTemplate]);
+  }, [callV2API, v2Context, user, supabase, carouselRecordId, slideStyle, refreshProfile, designTemplate, titleFontId, bodyFontId, imagePeopleMode]);
 
   // Reset v2 state when going back to input
   const resetV2State = useCallback(() => {
@@ -772,10 +878,10 @@ function CreatePageContent() {
     setV2Context("");
   }, []);
 
-  // STEP 1: Generate 5 concepts (quick) OR start guided Content Machine
+  // STEP 1: Generate 5 concepts (quick) OR start modo avançado (Content Machine)
   const handleGenerate = useCallback(async () => {
     setError("");
-    if (isGuest || !session?.access_token) {
+    if (!session?.access_token) {
       setError("Para gerar carrosséis com IA, entre na sua conta.");
       return;
     }
@@ -825,6 +931,7 @@ function CreatePageContent() {
     }
 
     setCarouselRecordId(null);
+    setCarouselFeedback(null);
     setConcepts([]);
     setStep("generating");
 
@@ -890,7 +997,7 @@ function CreatePageContent() {
       setError(err instanceof Error ? err.message : "Algo deu errado. Tente de novo.");
       setStep("input");
     }
-  }, [sourceType, sourceUrl, topic, niche, tone, language, isGuest, session, creationMode, callV2API, resetV2State]);
+  }, [sourceType, sourceUrl, topic, niche, tone, language, session, creationMode, callV2API, resetV2State]);
 
   // STEP 2: Generate full carousel from chosen concept (~5-8s)
   const handlePickConcept = useCallback(async (conceptIndex: number) => {
@@ -944,61 +1051,31 @@ function CreatePageContent() {
         const title = data.variations[0]?.title || slides[0]?.heading || "Sem título";
         const variationMeta = { title, style: data.variations[0].style };
         try {
-          if (user && !isGuest && supabase) {
-            try {
-              const { row, inserted } = await upsertUserCarousel(supabase, user.id, {
-                id: carouselRecordId,
-                title,
-                slides,
-                slideStyle,
-                variation: variationMeta,
-                status: "draft",
-                designTemplate,
-                creationMode: "quick",
-              });
-              setCarouselRecordId(row.id);
-              if (inserted) {
-                await bumpCarouselUsage(supabase, user.id);
-                await refreshProfile();
-              }
-              lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle });
-              toast.success("Carrossel salvo automaticamente.");
-            } catch (supaErr) {
-              console.error("[auto-save] Supabase erro:", supaErr);
-              const id = carouselRecordId ?? `carousel-${Date.now()}`;
-              setCarouselRecordId(id);
-              upsertGuestCarousel({
-                id,
-                title,
-                slides,
-                style: slideStyle,
-                variation: variationMeta,
-                savedAt: new Date().toISOString(),
-                status: "draft",
-                designTemplate,
-                creationMode: "quick",
-              });
-              lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle });
-              toast.warning("Salvo localmente — nuvem indisponível.");
-            }
-          } else {
-            const id = carouselRecordId ?? `carousel-${Date.now()}`;
-            setCarouselRecordId(id);
-            upsertGuestCarousel({
-              id,
+          if (user && supabase) {
+            const { row, inserted } = await upsertUserCarousel(supabase, user.id, {
+              id: carouselRecordId,
               title,
               slides,
-              style: slideStyle,
+              slideStyle,
               variation: variationMeta,
-              savedAt: new Date().toISOString(),
               status: "draft",
               designTemplate,
               creationMode: "quick",
+              titleFontId,
+              bodyFontId,
+              imagePeopleMode,
             });
-            lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle });
+            setCarouselRecordId(row.id);
+            if (inserted) {
+              await bumpCarouselUsage(supabase, user.id);
+              await refreshProfile();
+            }
+            lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle, titleFontId, bodyFontId });
+            toast.success("Carrossel salvo automaticamente.");
           }
         } catch (e) {
-          console.error("[auto-save] Erro inesperado:", e);
+          console.error("[auto-save] Erro ao salvar:", e);
+          toast.error("Carrossel gerado, mas falhou ao salvar na nuvem.");
         }
       } else {
         // Show variation picker — user chooses 1 of 3
@@ -1008,7 +1085,7 @@ function CreatePageContent() {
       setError(err instanceof Error ? err.message : "Falha ao gerar carrossel.");
       setStep("pick"); // Go back to concept picker
     }
-  }, [concepts, session, niche, tone, language, user, isGuest, supabase, carouselRecordId, slideStyle, refreshProfile, sourceType, sourceUrl, designTemplate]);
+  }, [concepts, session, niche, tone, language, user, supabase, carouselRecordId, slideStyle, refreshProfile, sourceType, sourceUrl, designTemplate, titleFontId, bodyFontId]);
 
   const handleSelectVariation = async (index: number) => {
     setSelectedVariation(index);
@@ -1021,63 +1098,31 @@ function CreatePageContent() {
     const title = variations[index]?.title || slides[0]?.heading || "Sem titulo";
     const variationMeta = { title: variations[index].title, style: variations[index].style };
     try {
-      if (user && !isGuest && supabase) {
-        try {
-          const { row, inserted } = await upsertUserCarousel(supabase, user.id, {
-            id: carouselRecordId,
-            title,
-            slides,
-            slideStyle: slideStyle,
-            variation: variationMeta,
-            status: "draft",
-            designTemplate,
-            creationMode: "quick",
-          });
-          setCarouselRecordId(row.id);
-          if (inserted) {
-            await bumpCarouselUsage(supabase, user.id);
-            await refreshProfile();
-          }
-          lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle });
-          console.log("[auto-save] Variacao salva no Supabase, id:", row.id);
-          toast.success("Carrossel salvo automaticamente.");
-        } catch (supaErr) {
-          console.error("[auto-save] Supabase erro:", supaErr);
-          const id = carouselRecordId ?? `carousel-${Date.now()}`;
-          setCarouselRecordId(id);
-          upsertGuestCarousel({
-            id,
-            title,
-            slides,
-            style: slideStyle,
-            variation: variationMeta,
-            savedAt: new Date().toISOString(),
-            status: "draft",
-            designTemplate,
-            creationMode: "quick",
-          });
-          lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle });
-          toast.warning("Salvo localmente — nuvem indisponível.");
-        }
-      } else {
-        const id = carouselRecordId ?? `carousel-${Date.now()}`;
-        setCarouselRecordId(id);
-        upsertGuestCarousel({
-          id,
+      if (user && supabase) {
+        const { row, inserted } = await upsertUserCarousel(supabase, user.id, {
+          id: carouselRecordId,
           title,
           slides,
-          style: slideStyle,
+          slideStyle: slideStyle,
           variation: variationMeta,
-          savedAt: new Date().toISOString(),
           status: "draft",
           designTemplate,
           creationMode: "quick",
+          titleFontId,
+          bodyFontId,
+          imagePeopleMode,
         });
-        lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle });
-        console.log("[auto-save] Variacao salva localmente, id:", id);
+        setCarouselRecordId(row.id);
+        if (inserted) {
+          await bumpCarouselUsage(supabase, user.id);
+          await refreshProfile();
+        }
+        lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle, titleFontId, bodyFontId });
+        toast.success("Carrossel salvo automaticamente.");
       }
     } catch (e) {
-      console.error("[auto-save] Erro inesperado:", e);
+      console.error("[auto-save] Erro ao salvar variação:", e);
+      toast.error("Não foi possível salvar o carrossel na nuvem.");
     }
   };
 
@@ -1188,6 +1233,9 @@ function CreatePageContent() {
           niche,
           tone,
           designTemplate,
+          peopleMode: imagePeopleMode,
+          contextHeading: slide.heading?.slice(0, 400),
+          contextBody: slide.body?.slice(0, 500),
         }),
       });
       const data = await res.json();
@@ -1269,7 +1317,7 @@ function CreatePageContent() {
 
   useEffect(() => {
     if (step !== "edit" || editSlides.length === 0) return;
-    const serialized = JSON.stringify({ editSlides, slideStyle });
+    const serialized = JSON.stringify({ editSlides, slideStyle, titleFontId, bodyFontId });
     if (serialized === lastSerializedSlidesRef.current) return;
 
     const handle = window.setTimeout(async () => {
@@ -1286,7 +1334,7 @@ function CreatePageContent() {
 
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editSlides, slideStyle, step]);
+  }, [editSlides, slideStyle, titleFontId, bodyFontId, step]);
 
   /**
    * Captura um slide do container de export (scale=1) como PNG 1080x1350.
@@ -1299,7 +1347,6 @@ function CreatePageContent() {
       height: 1350,
       pixelRatio: 1,
       cacheBust: true,
-      skipFonts: true,
       fetchRequestInit: { mode: "cors" } as RequestInit,
     });
   };
@@ -1313,10 +1360,18 @@ function CreatePageContent() {
   ): Promise<T> => {
     exportSlideRefs.current = [];
     setExportRenderSlides(slides);
-    // Wait for React to render the hidden export container
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    // Extra delay for images to load
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+    const refsOk = await waitUntilExportRefsReady(slides.length, exportSlideRefs, 8000);
+    if (!refsOk) {
+      throw new Error("Slides de export não renderizaram a tempo. Recarregue e tente de novo.");
+    }
+    await Promise.all(
+      slides.map(async (_, i) => {
+        const node = exportSlideRefs.current[i];
+        if (node) await waitForImagesInElement(node);
+      })
+    );
+    await new Promise((r) => setTimeout(r, 50));
     try {
       return await fn();
     } finally {
@@ -1352,10 +1407,6 @@ function CreatePageContent() {
   };
 
   const handleExportPng = async () => {
-    if (!usesTweetStylePreview(designTemplate)) {
-      toast.error("Export PNG só está disponível no template visual Twitter (preview tweet). Use copiar JSON para os outros layouts.");
-      return;
-    }
     setIsExporting(true);
     setError("");
     setExportProgress("Preparando export...");
@@ -1400,10 +1451,6 @@ function CreatePageContent() {
   };
 
   const handleExportPdf = async () => {
-    if (!usesTweetStylePreview(designTemplate)) {
-      toast.error("PDF só está disponível no template visual Twitter.");
-      return;
-    }
     setIsExporting(true);
     setError("");
     setExportProgress("Preparando PDF...");
@@ -1450,68 +1497,37 @@ function CreatePageContent() {
       : null;
 
     setError("");
+    if (!user || !supabase) {
+      toast.error("Sessão inválida. Faça login novamente.");
+      return null;
+    }
     try {
-      if (user && !isGuest && supabase) {
-        try {
-          const { row, inserted } = await upsertUserCarousel(supabase, user.id, {
-            id: carouselRecordId,
-            title,
-            slides: editSlides,
-            slideStyle: slideStyle,
-            variation: variationMeta,
-            status: "draft",
-            designTemplate,
-            creationMode,
-          });
-          setCarouselRecordId(row.id);
-          if (inserted) {
-            await bumpCarouselUsage(supabase, user.id);
-            await refreshProfile();
-          }
-          console.log("[save] Rascunho salvo na nuvem, id:", row.id);
-          return row.id;
-        } catch (supaErr) {
-          // Supabase failed — fall back to localStorage
-          console.error("[save] Supabase erro:", supaErr);
-          const id = carouselRecordId ?? `carousel-${Date.now()}`;
-          setCarouselRecordId(id);
-          upsertGuestCarousel({
-            id,
-            title,
-            slides: editSlides,
-            style: slideStyle,
-            variation: variationMeta ?? undefined,
-            savedAt: new Date().toISOString(),
-            status: "draft",
-            designTemplate,
-            creationMode,
-          });
-          toast.warning("Salvo localmente — nuvem indisponível.");
-          return id;
-        }
-      }
-      if (!supabase) {
-        console.warn("[save] Supabase nao configurado — salvando localmente.");
-      }
-      const id = carouselRecordId ?? `carousel-${Date.now()}`;
-      setCarouselRecordId(id);
-      upsertGuestCarousel({
-        id,
+      const { row, inserted } = await upsertUserCarousel(supabase, user.id, {
+        id: carouselRecordId,
         title,
         slides: editSlides,
-        style: slideStyle,
-        variation: variationMeta ?? undefined,
-        savedAt: new Date().toISOString(),
+        slideStyle: slideStyle,
+        variation: variationMeta,
         status: "draft",
         designTemplate,
         creationMode,
+        titleFontId,
+        bodyFontId,
+        imagePeopleMode,
       });
-      return id;
+      setCarouselRecordId(row.id);
+      if (inserted) {
+        await bumpCarouselUsage(supabase, user.id);
+        await refreshProfile();
+      }
+      console.log("[save] Rascunho salvo na nuvem, id:", row.id);
+      return row.id;
     } catch (e) {
       console.error("[save] Erro ao salvar rascunho:", e);
-      setError(
-        e instanceof Error ? e.message : "Nao foi possivel salvar o rascunho."
-      );
+      const msg =
+        e instanceof Error ? e.message : "Nao foi possivel salvar o rascunho.";
+      setError(msg);
+      toast.error(msg);
       return null;
     }
   };
@@ -1594,11 +1610,11 @@ function CreatePageContent() {
           : 4;
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-0 w-full max-w-full min-w-0 bg-white overflow-x-hidden">
       {/* Top bar */}
       <div className="border-b border-[var(--border)] bg-white/80 backdrop-blur-xl sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto min-w-0 px-4 sm:px-6 py-3 sm:py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0 shrink-0">
             {step !== "input" && (
               <button
                 onClick={() => {
@@ -1621,13 +1637,13 @@ function CreatePageContent() {
                 <Icon name="arrow-left" size={18} />
               </button>
             )}
-            <h1 className="editorial-serif text-3xl text-[var(--foreground)]">
+            <h1 className="editorial-serif text-xl sm:text-2xl md:text-3xl text-[var(--foreground)] truncate">
               Criar carrossel<span className="text-[var(--accent)]">.</span>
             </h1>
           </div>
 
           {/* Step indicator */}
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-1 sm:gap-2 min-w-0 flex-wrap justify-center lg:justify-start">
             {[
               { n: 1, label: "Tema" },
               { n: 2, label: "IA" },
@@ -1667,8 +1683,8 @@ function CreatePageContent() {
           </div>
 
           {/* Edit-step toolbar — preview estilo tweet + export PNG/PDF */}
-          {step === "edit" && creationMode === "quick" && usesTweetStylePreview(designTemplate) && (
-            <div className="flex items-center gap-2">
+          {step === "edit" && creationMode === "quick" && (
+            <div className="flex flex-wrap items-center gap-2 shrink-0 justify-end w-full lg:w-auto">
               <div className="flex items-center gap-1 bg-[var(--card)] rounded-lg p-0.5 border border-[var(--border)]">
                 <button
                   onClick={() => setSlideStyle("white")}
@@ -1750,7 +1766,7 @@ function CreatePageContent() {
         <div className="fixed inset-0 z-10" onClick={() => setShowExportPanel(false)} />
       )}
 
-      <div className="max-w-7xl mx-auto px-6 py-10">
+      <div className="max-w-7xl mx-auto min-w-0 px-4 sm:px-6 py-8 sm:py-10">
         {draftLoading && (
           <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm text-[var(--muted)]">
             Carregando rascunho...
@@ -1822,20 +1838,6 @@ function CreatePageContent() {
                 Escolha seu ponto de partida e a gente gera 3 variacoes do carrossel.
               </p>
             </div>
-
-            {isGuest && (
-              <div className="max-w-2xl mx-auto mb-8 p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-950 text-sm leading-relaxed">
-                <strong>Modo convidado:</strong> voce pode abrir e editar rascunhos salvos no
-                navegador. Para <strong>gerar com IA</strong>, faca login — ai seus rascunhos
-                tambem podem sincronizar na nuvem.
-                <Link
-                  href="/app/login"
-                  className="mt-3 inline-block font-semibold text-[var(--accent)] underline underline-offset-2"
-                >
-                  Entrar na conta
-                </Link>
-              </div>
-            )}
 
             {/* Source type cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -1999,11 +2001,14 @@ function CreatePageContent() {
                 </div>
               </div>
 
-              {/* Modo de criação (independente do template visual) */}
+              {/* Modo de criação: define COMO a copy é gerada (rápido = conceitos v1; avançado = Content Machine) */}
               <div>
                 <label className="block text-xs font-medium mb-2 text-[var(--muted)]">
                   Modo de criação
                 </label>
+                <p className="text-[11px] text-[var(--muted)] mb-2 leading-relaxed">
+                  O template visual não muda o texto — só o layout e o tipo de imagem. Quem muda a profundidade da copy é o modo abaixo.
+                </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     type="button"
@@ -2021,7 +2026,7 @@ function CreatePageContent() {
                     )}
                     <p className="text-sm font-bold text-[var(--foreground)]">Rápido</p>
                     <p className="text-[11px] text-[var(--muted)] mt-1 leading-relaxed">
-                      5 ângulos → carrossel completo. Ideal para iterar rápido.
+                      5 conceitos → mesma geração v1 de sempre. Ideal para iterar rápido.
                     </p>
                   </button>
                   <button
@@ -2040,49 +2045,46 @@ function CreatePageContent() {
                     )}
                     <p className="text-sm font-bold text-[var(--foreground)] flex items-center gap-1">
                       <Icon name="sparkles" size={14} />
-                      Guiado (Content Machine)
+                      Avançado (Content Machine)
                     </p>
                     <p className="text-[11px] text-[var(--muted)] mt-1 leading-relaxed">
-                      Triagem, headlines, espinha — mais controle editorial.
+                      Triagem, headlines e espinha — copy mais controlada, fluxo diferente do rápido.
                     </p>
                   </button>
                 </div>
               </div>
 
-              {/* Template visual (Figma / export) — não altera o modo de criação */}
+              {/* Dois templates visuais — mesmo pipeline de conceitos + /api/generate no modo rápido */}
               <div>
                 <label className="block text-xs font-medium mb-2 text-[var(--muted)]">
-                  Template visual (design)
+                  Template visual
                 </label>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  {DESIGN_TEMPLATES.map((t) => {
-                    const selected = designTemplate === t.id;
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setDesignTemplate(t.id)}
-                        className={`relative rounded-xl border-2 p-3 text-left transition-all duration-200 active:scale-[0.97] ${
-                          selected
-                            ? "border-[var(--accent)] bg-[var(--accent)]/[0.04] shadow-md shadow-orange-500/5"
-                            : "border-[var(--border)] bg-[var(--card)] hover:border-zinc-300"
-                        }`}
-                      >
-                        {selected && (
-                          <div className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px]" style={{ background: "var(--accent)" }}>
-                            <Icon name="check" size={10} />
-                          </div>
-                        )}
-                        <div className="text-lg mb-1">{t.emoji}</div>
-                        <p className="text-xs font-bold" style={{ color: selected ? "var(--accent)" : "var(--foreground)" }}>
-                          {t.name}
-                        </p>
-                        <p className="text-[10px] text-[var(--muted)] mt-0.5 leading-snug">
-                          {t.desc}
-                        </p>
-                      </button>
-                    );
-                  })}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {DESIGN_TEMPLATES.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => handlePickDesignTemplate(t.id)}
+                      className={`relative rounded-xl border-2 p-4 text-left transition-all ${
+                        designTemplate === t.id
+                          ? "border-[var(--accent)] bg-[var(--accent)]/[0.04]"
+                          : "border-[var(--border)] bg-[var(--card)] hover:border-zinc-300"
+                      }`}
+                    >
+                      {designTemplate === t.id && (
+                        <div
+                          className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px]"
+                          style={{ background: "var(--accent)" }}
+                        >
+                          <Icon name="check" size={10} />
+                        </div>
+                      )}
+                      <p className="text-sm font-bold text-[var(--foreground)] flex items-center gap-2">
+                        <span>{t.emoji}</span> {t.name}
+                      </p>
+                      <p className="text-[11px] text-[var(--muted)] mt-1 leading-relaxed">{t.desc}</p>
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -2090,7 +2092,6 @@ function CreatePageContent() {
               <button
                 onClick={handleGenerate}
                 disabled={
-                  isGuest ||
                   !session?.access_token ||
                   (sourceType === "idea" && !topic.trim()
                     ? true
@@ -2535,39 +2536,29 @@ function CreatePageContent() {
                         });
                         const variationMeta = { title, style: designTemplate };
                         try {
-                          if (user && !isGuest && supabase) {
-                            const { row, inserted } = await upsertUserCarousel(supabase, user.id, {
-                              id: carouselRecordId,
-                              title,
-                              slides,
-                              slideStyle: "dark",
-                              variation: variationMeta,
-                              status: "draft",
-                              designTemplate,
-                              creationMode: "guided",
-                            });
-                            setCarouselRecordId(row.id);
-                            if (inserted) {
-                              await bumpCarouselUsage(supabase, user.id);
-                              await refreshProfile();
-                            }
-                            toast.success("Carrossel salvo na nuvem!");
-                          } else {
-                            const id = carouselRecordId ?? `carousel-v2-${Date.now()}`;
-                            setCarouselRecordId(id);
-                            upsertGuestCarousel({
-                              id,
-                              title,
-                              slides,
-                              style: "dark",
-                              variation: variationMeta,
-                              savedAt: new Date().toISOString(),
-                              status: "draft",
-                              designTemplate,
-                              creationMode: "guided",
-                            });
-                            toast.success("Carrossel salvo localmente!");
+                          if (!user || !supabase) {
+                            toast.error("Sessão inválida. Faça login novamente.");
+                            return;
                           }
+                          const { row, inserted } = await upsertUserCarousel(supabase, user.id, {
+                            id: carouselRecordId,
+                            title,
+                            slides,
+                            slideStyle: "dark",
+                            variation: variationMeta,
+                            status: "draft",
+                            designTemplate,
+                            creationMode: "guided",
+                            titleFontId,
+                            bodyFontId,
+                            imagePeopleMode,
+                          });
+                          setCarouselRecordId(row.id);
+                          if (inserted) {
+                            await bumpCarouselUsage(supabase, user.id);
+                            await refreshProfile();
+                          }
+                          toast.success("Carrossel salvo na nuvem!");
                         } catch (e) {
                           console.error("[v2-save] Erro:", e);
                           toast.error("Erro ao salvar carrossel.");
@@ -2589,12 +2580,7 @@ function CreatePageContent() {
                       key={i}
                       index={i}
                       text={block}
-                      templateColor={
-                        designTemplate === "twitter"
-                          ? "#0ea5e9"
-                          : V2_TEMPLATE_COLORS[designTemplate as Exclude<DesignTemplateId, "twitter">]?.accent ||
-                            "#EC6000"
-                      }
+                      templateColor={getDesignTemplateMeta(designTemplate).color}
                       onChange={(val) => {
                         const next = [...v2EditedBlocks];
                         next[i] = val;
@@ -2602,6 +2588,16 @@ function CreatePageContent() {
                       }}
                     />
                   ))}
+                </div>
+
+                <div className="mt-8">
+                  <CarouselFeedbackPanel
+                    carouselId={carouselRecordId}
+                    userId={user?.id}
+                    supabase={supabase}
+                    initial={carouselFeedback}
+                    onSaved={setCarouselFeedback}
+                  />
                 </div>
 
                 {/* Back */}
@@ -2621,10 +2617,10 @@ function CreatePageContent() {
             {creationMode === "quick" && editSlides.length > 0 && (
             <>
             {/* Editor header */}
-            <div className="flex items-center justify-between mb-6">
-              <div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-6 min-w-0">
+              <div className="min-w-0">
                 <h2
-                  className="text-2xl font-bold"
+                  className="text-xl sm:text-2xl font-bold"
                   style={{
                     fontFamily:
                       "var(--font-serif), 'DM Serif Display', Georgia, serif",
@@ -2632,7 +2628,7 @@ function CreatePageContent() {
                 >
                   Editar seus slides
                 </h2>
-                <p className="text-sm text-[var(--muted)] mt-1 flex items-center gap-3">
+                <p className="text-sm text-[var(--muted)] mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span>
                     {editSlides.length} slides &middot;{" "}
                     {STYLE_BADGES[variations[selectedVariation]?.style]?.label ||
@@ -2671,9 +2667,9 @@ function CreatePageContent() {
               </div>
             </div>
 
-            <div className="grid lg:grid-cols-[1fr_440px] gap-8">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(300px,420px)] gap-6 xl:gap-8 xl:items-start">
               {/* Slide editor list */}
-              <div className="space-y-3">
+              <div className="space-y-3 min-w-0 max-w-full">
                 {editSlides.map((slide, index) => {
                   const isActive = index === activeSlideIndex;
                   const isDragOver = index === dragOverIndex && draggedIndex !== index;
@@ -2688,7 +2684,7 @@ function CreatePageContent() {
                       onDragOver={(e) => handleDragOver(e, index)}
                       onDragEnd={handleDragEnd}
                       onClick={() => setActiveSlideIndex(index)}
-                      className={`rounded-xl p-4 transition-all cursor-pointer ${
+                      className={`rounded-xl p-3 sm:p-4 min-w-0 max-w-full overflow-hidden transition-all cursor-pointer ${
                         isActive
                           ? "border-2 border-[var(--accent)] bg-white shadow-lg shadow-orange-500/5 ring-1 ring-[var(--accent)]/10"
                           : "border border-[var(--border)] bg-white hover:border-zinc-300 hover:shadow-sm"
@@ -2793,9 +2789,9 @@ function CreatePageContent() {
                             />
 
                             {/* Image row */}
-                            <div className="mt-2 flex items-start gap-3">
+                            <div className="mt-2 flex flex-col sm:flex-row sm:items-start gap-3 min-w-0">
                               {/* Thumbnail */}
-                              <div className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-[var(--border)] bg-zinc-100 group">
+                              <div className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-[var(--border)] bg-zinc-100 group self-start">
                                 {slide.imageUrl ? (
                                   <>
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2825,29 +2821,50 @@ function CreatePageContent() {
                               </div>
 
                               {/* Query + actions */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 mb-1">
-                                  <input
-                                    type="text"
-                                    value={slide.imageQuery}
-                                    onChange={(e) =>
-                                      handleUpdateSlide(index, "imageQuery", e.target.value)
+                              <div className="flex-1 min-w-0 w-full sm:w-auto">
+                                <input
+                                  type="text"
+                                  value={slide.imageQuery}
+                                  onChange={(e) =>
+                                    handleUpdateSlide(index, "imageQuery", e.target.value)
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      void handleRefetchImage(index);
                                     }
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        void handleRefetchImage(index);
-                                      }
-                                    }}
-                                    className="flex-1 min-w-0 text-xs px-2.5 py-1.5 rounded-lg border border-[var(--border)] focus:outline-none focus:border-[var(--accent)] bg-white hover:bg-zinc-50 transition-colors"
-                                    placeholder="Termo de busca"
+                                  }}
+                                  className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-[var(--border)] focus:outline-none focus:border-[var(--accent)] bg-white hover:bg-zinc-50 transition-colors mb-2"
+                                  placeholder="Termo de busca"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                  <label className="text-[10px] text-zinc-500 shrink-0">Pessoas na foto</label>
+                                  <select
+                                    value={imagePeopleMode}
+                                    onChange={(e) =>
+                                      setImagePeopleMode(e.target.value as ImagePeopleMode)
+                                    }
+                                    className="text-[10px] px-2 py-1 rounded-md border border-[var(--border)] bg-white max-w-[min(100%,220px)]"
                                     onClick={(e) => e.stopPropagation()}
-                                  />
+                                    title="Afeta busca (stock) e geração (IA)"
+                                  >
+                                    <option value="auto">Automático (tema do slide)</option>
+                                    <option value="with_people">Com pessoas</option>
+                                    <option value="no_people">Sem pessoas</option>
+                                  </select>
+                                </div>
+                                {designTemplate === "spotlight" && (
+                                  <p className="text-[9px] text-zinc-400 mb-1.5 leading-snug">
+                                    No Spotlight, esta escolha também vira padrão na sua conta.
+                                  </p>
+                                )}
+                                <div className="flex flex-wrap items-center gap-1.5 mb-1">
                                   <button
                                     type="button"
                                     onClick={(e) => { e.stopPropagation(); void handleRefetchImage(index, "search"); }}
                                     disabled={imageLoadingIndex === index || imageGeneratingSlides.has(index)}
-                                    className="shrink-0 text-[10px] font-bold px-2 py-1.5 rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-dark)] disabled:opacity-50 transition-colors"
+                                    className="shrink-0 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-dark)] disabled:opacity-50 transition-colors"
                                     title="Buscar outra imagem"
                                   >
                                     Buscar
@@ -2856,7 +2873,7 @@ function CreatePageContent() {
                                     type="button"
                                     onClick={(e) => { e.stopPropagation(); void handleRefetchImage(index, "generate"); }}
                                     disabled={imageLoadingIndex === index || imageGeneratingSlides.has(index)}
-                                    className="shrink-0 text-[10px] font-bold px-2 py-1.5 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                                    className="shrink-0 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors"
                                     title="Gerar imagem com IA"
                                   >
                                     Gerar IA
@@ -2903,7 +2920,7 @@ function CreatePageContent() {
                                         Fechar
                                       </button>
                                     </div>
-                                    <div className="grid grid-cols-4 gap-2">
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                       {imagePickerOptions.map((url, imgIdx) => (
                                         <button
                                           key={imgIdx}
@@ -2973,7 +2990,7 @@ function CreatePageContent() {
               </div>
 
               {/* Preview panel */}
-              <div className="lg:sticky lg:top-24 lg:self-start">
+              <div className="min-w-0 max-w-full xl:sticky xl:top-24 xl:self-start">
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-2">
                     <Icon name="eye" size={13} />
@@ -2983,92 +3000,125 @@ function CreatePageContent() {
                     Slide {activeSlideIndex + 1}/{editSlides.length}
                   </div>
                 </div>
-                <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
-                  {usesTweetStylePreview(designTemplate) ? (
-                    <CarouselPreview
-                      slides={editSlides}
-                      profile={previewProfile}
-                      style={slideStyle}
-                      slideRefs={slideRefs}
-                      activeSlideIndex={activeSlideIndex}
-                      onSlideSelect={setActiveSlideIndex}
-                      showThumbnails
-                    />
-                  ) : (
-                    <div className="space-y-4 text-sm text-[var(--foreground)]">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
-                        Template Figma · {getDesignTemplateMeta(designTemplate).figmaLabel}
-                      </p>
-                      <p className="text-[13px] text-[var(--muted)] leading-relaxed">
-                        O preview estilo tweet não se aplica a este layout. Copie o JSON ou o texto para o plugin
-                        Content Machine no arquivo Figma duplicado (desktop).
-                      </p>
-                      <div className="flex flex-col gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const blocks = editSlides.map((s) =>
-                              [s.heading, s.body].filter(Boolean).join("\n\n").trim()
-                            );
-                            const payload = buildContentMachinePluginExport({
-                              designTemplate,
-                              creationMode: "quick",
-                              blocks,
-                            });
-                            void navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-                            toast.success("JSON copiado — cole no plugin.");
-                          }}
-                          className="w-full py-2.5 rounded-lg text-xs font-bold text-white"
-                          style={{ background: "var(--accent)" }}
-                        >
-                          Copiar JSON (plugin)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const blocks = editSlides.map((s) =>
-                              [s.heading, s.body].filter(Boolean).join("\n\n").trim()
-                            );
-                            const text = pluginExportToPrettyText(
-                              buildContentMachinePluginExport({
-                                designTemplate,
-                                creationMode: "quick",
-                                blocks,
-                              })
-                            );
-                            void navigator.clipboard.writeText(text);
-                            toast.success("Texto legível copiado.");
-                          }}
-                          className="w-full py-2.5 rounded-lg text-xs font-semibold border border-[var(--border)] hover:bg-zinc-50"
-                        >
-                          Copiar texto numerado
-                        </button>
-                      </div>
-                    </div>
-                  )}
+
+                <div className="mb-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-2">
+                    Título
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {EDITORIAL_TITLE_FONTS.map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setTitleFontId(f.id)}
+                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold border transition-all ${
+                          titleFontId === f.id
+                            ? "border-[var(--accent)] bg-orange-50 text-[#c2410c]"
+                            : "border-[var(--border)] text-[var(--muted)] hover:border-zinc-300"
+                        }`}
+                        style={{ fontFamily: f.stack }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-2">
+                    Texto
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {EDITORIAL_BODY_FONTS.map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setBodyFontId(f.id)}
+                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold border transition-all ${
+                          bodyFontId === f.id
+                            ? "border-[var(--accent)] bg-orange-50 text-[#c2410c]"
+                            : "border-[var(--border)] text-[var(--muted)] hover:border-zinc-300"
+                        }`}
+                        style={{ fontFamily: f.stack }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Export PNG/PDF — só faz sentido no preview estilo tweet */}
-                {usesTweetStylePreview(designTemplate) && (
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    onClick={handleExportPng}
-                    disabled={isExporting}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-[var(--border)] hover:bg-orange-50 hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all disabled:opacity-50"
-                  >
-                    <Icon name="download" size={13} />
-                    {isExporting ? "..." : "PNG"}
-                  </button>
-                  <button
-                    onClick={handleExportPdf}
-                    disabled={isExporting}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-[var(--border)] hover:bg-orange-50 hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all disabled:opacity-50"
-                  >
-                    <Icon name="file-text" size={13} />
-                    {isExporting ? "..." : "PDF"}
-                  </button>
+                <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+                  <CarouselPreview
+                    slides={editSlides}
+                    profile={previewProfile}
+                    style={slideStyle}
+                    slideRefs={slideRefs}
+                    activeSlideIndex={activeSlideIndex}
+                    onSlideSelect={setActiveSlideIndex}
+                    showThumbnails
+                    titleFontId={titleFontId}
+                    bodyFontId={bodyFontId}
+                    designTemplate={designTemplate}
+                  />
                 </div>
-                )}
+
+                <div className="mt-3 flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleExportPng}
+                      disabled={isExporting}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-[var(--border)] hover:bg-orange-50 hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all disabled:opacity-50"
+                    >
+                      <Icon name="download" size={13} />
+                      {isExporting ? "..." : "PNG"}
+                    </button>
+                    <button
+                      onClick={handleExportPdf}
+                      disabled={isExporting}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-[var(--border)] hover:bg-orange-50 hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all disabled:opacity-50"
+                    >
+                      <Icon name="file-text" size={13} />
+                      {isExporting ? "..." : "PDF"}
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const blocks = editSlides.map((s) =>
+                          [s.heading, s.body].filter(Boolean).join("\n\n").trim()
+                        );
+                        const payload = buildContentMachinePluginExport({
+                          designTemplate,
+                          creationMode: "quick",
+                          blocks,
+                        });
+                        void navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+                        toast.success("JSON do plugin copiado.");
+                      }}
+                      className="flex-1 py-2 rounded-lg text-[10px] font-semibold border border-[var(--border)] text-[var(--muted)] hover:bg-zinc-50"
+                    >
+                      Copiar JSON (Figma)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const blocks = editSlides.map((s) =>
+                          [s.heading, s.body].filter(Boolean).join("\n\n").trim()
+                        );
+                        const text = pluginExportToPrettyText(
+                          buildContentMachinePluginExport({
+                            designTemplate,
+                            creationMode: "quick",
+                            blocks,
+                          })
+                        );
+                        void navigator.clipboard.writeText(text);
+                        toast.success("Texto numerado copiado.");
+                      }}
+                      className="flex-1 py-2 rounded-lg text-[10px] font-semibold border border-[var(--border)] text-[var(--muted)] hover:bg-zinc-50"
+                    >
+                      Texto legível
+                    </button>
+                  </div>
+                </div>
                 {/* Auto-save indicator */}
                 <div className="mt-2 text-center">
                   {autosaveState === "saving" && (
@@ -3077,6 +3127,16 @@ function CreatePageContent() {
                   {autosaveState === "saved" && (
                     <span className="text-[10px] text-emerald-600 font-medium">✓ Salvo automaticamente</span>
                   )}
+                </div>
+
+                <div className="mt-5">
+                  <CarouselFeedbackPanel
+                    carouselId={carouselRecordId}
+                    userId={user?.id}
+                    supabase={supabase}
+                    initial={carouselFeedback}
+                    onSaved={setCarouselFeedback}
+                  />
                 </div>
               </div>
             </div>
@@ -3090,27 +3150,37 @@ function CreatePageContent() {
       {exportRenderSlides && (
         <div
           ref={exportContainerRef}
-          style={{ position: "fixed", left: "-9999px", top: 0, opacity: 0, pointerEvents: "none" }}
+          style={{
+            position: "fixed",
+            left: 0,
+            top: 0,
+            width: 1080,
+            pointerEvents: "none",
+            opacity: 1,
+            transform: "translateX(-120vw)",
+          }}
           aria-hidden="true"
         >
           {exportRenderSlides.map((slide, i) => (
-            <div
+            <EditorialSlide
               key={i}
-              ref={(el) => { exportSlideRefs.current[i] = el; }}
-            >
-              <CarouselSlide
-                heading={slide.heading}
-                body={slide.body}
-                imageUrl={slide.imageUrl}
-                slideNumber={i + 1}
-                totalSlides={exportRenderSlides.length}
-                profile={previewProfile}
-                style={slideStyle}
-                isLastSlide={i === exportRenderSlides.length - 1}
-                showFooter={i === 0}
-                scale={1}
-              />
-            </div>
+              ref={(el) => {
+                exportSlideRefs.current[i] = el;
+              }}
+              heading={slide.heading}
+              body={slide.body}
+              imageUrl={slide.imageUrl}
+              slideNumber={i + 1}
+              totalSlides={exportRenderSlides.length}
+              profile={previewProfile}
+              style={slideStyle}
+              isLastSlide={i === exportRenderSlides.length - 1}
+              showFooter={i === 0}
+              scale={1}
+              titleFontId={titleFontId}
+              bodyFontId={bodyFontId}
+              designTemplate={designTemplate}
+            />
           ))}
         </div>
       )}

@@ -19,6 +19,7 @@ import {
   Brain,
   LayoutTemplate,
   Share2,
+  Layers,
 } from "lucide-react";
 import { TweetCard } from "@/components/kokonutui/tweet-card";
 import LandingHeroCarousel from "@/components/marketing/landing-hero-carousel";
@@ -47,33 +48,33 @@ const FEATURES = [
   {
     icon: Zap,
     tag: "Velocidade",
-    title: "3 variações em 30 segundos",
+    title: "Cinco conceitos, três variações",
     description:
-      "Cada ideia vira três ângulos diferentes — dados, história e provocação. Você escolhe o que mais soa com sua marca.",
+      "A IA propõe cinco ângulos; você escolhe um e recebe três versões do carrossel (dados, narrativa, provocação). Compare no mesmo lugar e publique a que converter melhor.",
     accent: "#f59e0b",
   },
   {
-    icon: Palette,
-    tag: "Identidade",
-    title: "Parece você, não IA",
+    icon: Layers,
+    tag: "Visual",
+    title: "Dois layouts: Editorial e Spotlight",
     description:
-      "Tom, exemplos e estrutura treinados na sua voz. Nada de frase genérica cheirando a ChatGPT sem personalidade.",
+      "Mesmo texto e mesmo fluxo de geração — você escolhe se o slide parece revista editorial (laranja) ou destaque com hero image no topo (azul). Imagens e busca seguem o estilo do layout.",
     accent: "#EC6000",
   },
   {
     icon: Workflow,
     tag: "Fluxo",
-    title: "Um app no lugar de cinco",
+    title: "Rápido ou avançado (Content Machine)",
     description:
-      "Ideia, geração, edição, export e publicação no mesmo produto. Sem Notion → ChatGPT → Figma → Canva → Meta.",
+      "Modo rápido: conceitos → carrossel em minutos. Modo avançado: triagem, headlines e espinha dorsal para quem quer mais controle na copy. O template visual não muda o texto — só o desenho do slide.",
     accent: "#60a5fa",
   },
   {
     icon: Rocket,
     tag: "Export",
-    title: "Pronto pra postar hoje",
+    title: "1080×1350, pronto para redes",
     description:
-      "PNG em alta, proporção 4:5, brand kit aplicado. Você termina de gerar e publica antes do café esfriar.",
+      "Export em PNG (e PDF quando precisar) na proporção certa para Instagram e LinkedIn. Baixe slide a slide ou o pacote inteiro.",
     accent: "#a78bfa",
   },
 ];
@@ -182,7 +183,7 @@ const TESTIMONIALS: Array<{
     handle: "marinanutri",
     content: [
       "Uso pra transformar artigos do blog em carrosséis.",
-      "Cole o link, gera, edita e publica. Simples assim.",
+      "Cole o link, gera, edita e publica. Direto ao ponto.",
       "Meu alcance no Instagram triplicou desde que comecei.",
     ],
   },
@@ -307,7 +308,7 @@ function Hero() {
             <Sparkles size={12} />
           </span>
           <span className="text-[13px] font-semibold text-[#0A0A0A]/70">
-            Criador de conteúdo com IA
+            Carrosséis com IA · Editorial & Spotlight
           </span>
         </motion.div>
 
@@ -333,8 +334,8 @@ function Hero() {
           transition={{ delay: 0.2, duration: 0.6 }}
           className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-[var(--muted)]"
         >
-          Cole um link, um PDF, uma ideia solta. O Sequência Viral devolve um carrossel
-          pronto pra publicar — com a voz da sua marca, em 30 segundos.
+          Cinco conceitos por tema, depois três variações de carrossel. Dois layouts visuais,
+          modo rápido ou Content Machine para copy mais profunda — tudo com a voz da sua marca.
         </motion.p>
 
         {/* CTA buttons */}
@@ -370,9 +371,23 @@ function Hero() {
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Check size={14} className="text-[var(--accent)]" strokeWidth={2.5} />
+            2 layouts visuais
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Check size={14} className="text-[var(--accent)]" strokeWidth={2.5} />
             Export PNG
           </span>
         </motion.p>
+
+        {/* Mockup do app — antes só estava importado */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45, duration: 0.6 }}
+          className="mt-10 flex w-full justify-center px-2"
+        >
+          <LandingHeroCarousel />
+        </motion.div>
       </div>
 
       {/* ─── Animation scene — overlaps with text, fills entire hero ─── */}
@@ -394,20 +409,20 @@ function Hero() {
 function TrustStrip() {
   return (
     <div className="border-b border-[#E8E8E5] bg-[#FAFAF8] py-5">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-2 px-5 font-mono text-[11px] uppercase tracking-widest text-[#0A0A0A]/50">
-        <span className="flex items-center gap-2">
-          <Zap size={14} className="text-[var(--accent)]" />
-          3 variações por ideia
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-2 px-5 text-center font-mono text-[11px] uppercase tracking-widest text-[#0A0A0A]/50">
+        <span className="flex max-w-[220px] items-start gap-2 sm:max-w-none sm:items-center">
+          <Zap size={14} className="mt-0.5 shrink-0 text-[var(--accent)] sm:mt-0" />
+          Ideia, link ou post viram carrossel
         </span>
         <span className="hidden sm:inline text-[#0A0A0A]/15">|</span>
         <span className="flex items-center gap-2">
-          <Palette size={14} className="text-[var(--accent)]" />
-          Branding automático
+          <Palette size={14} className="shrink-0 text-[var(--accent)]" />
+          Editorial ou Spotlight
         </span>
         <span className="hidden sm:inline text-[#0A0A0A]/15">|</span>
         <span className="flex items-center gap-2">
-          <Sparkles size={14} className="text-[var(--accent)]" />
-          A partir de $9.99/mês no Pro
+          <Sparkles size={14} className="shrink-0 text-[var(--accent)]" />
+          Plano Pro a partir de $9,99/mês
         </span>
       </div>
     </div>
@@ -438,6 +453,9 @@ function Features() {
           <br />
           <span className="text-[var(--muted)]">Nada que você não precisa.</span>
         </h2>
+        <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-[var(--muted)]">
+          Conceitos, variações, dois templates visuais e export em alta — sem perder tempo trocando de app.
+        </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -478,23 +496,23 @@ function Processo() {
     () =>
       [
         {
-          title: "Input",
-          desc: "Você envia ideia, link ou transcrição.",
+          title: "Entrada",
+          desc: "Cole link, PDF, Reel ou escreva a ideia em uma linha.",
           icon: FileText,
         },
         {
-          title: "Estratégia",
-          desc: "A IA propõe estrutura com gancho, narrativa e CTA.",
+          title: "Estrutura",
+          desc: "Modo rápido: a partir do conceito escolhido, a IA monta o carrossel. Modo avançado: triagem e espinha dorsal no Content Machine.",
           icon: Brain,
         },
         {
-          title: "Design",
-          desc: "O carrossel nasce com estilo consistente e pronto para edição.",
+          title: "Refino",
+          desc: "Escolha Editorial ou Spotlight, ajuste fontes, imagens (busca ou IA) e texto no preview.",
           icon: LayoutTemplate,
         },
         {
-          title: "Distribuição",
-          desc: "Export em PNG e publicação nas redes sem quebrar o fluxo.",
+          title: "Publicar",
+          desc: "Exporte PNG 4:5 (ou PDF) e poste no Instagram ou LinkedIn.",
           icon: Share2,
         },
       ] as const,
@@ -510,11 +528,11 @@ function Processo() {
               Processo
             </span>
             <h2 className="editorial-serif mt-6 max-w-3xl text-4xl leading-[0.92] text-white md:text-[3.5rem]">
-              Conteúdo não deveria precisar de 5 ferramentas diferentes.
+              Um lugar para ideia, texto, visual e export.
             </h2>
             <p className="mt-5 max-w-2xl text-white/85">
-              Notion pra ideia, ChatGPT pro texto, Figma pro visual, Canva pra ajustar, Meta
-              pra postar. Cada ferramenta mata um pedaço da consistência — e do seu tempo.
+              Quando cada etapa vive em um app diferente, a mensagem esfria e o tempo some. Aqui você gera,
+              escolhe o layout, revisa e baixa os PNG — sem sair do fluxo.
             </p>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
@@ -566,7 +584,7 @@ const PLANS_DATA = [
     bullets: [
       "5 carrosséis/mês",
       "Marca d'água Sequência Viral",
-      "Estilos básicos",
+      "2 layouts · modo rápido e avançado",
       "Export PNG",
       "1 perfil",
     ],
@@ -583,8 +601,8 @@ const PLANS_DATA = [
     bullets: [
       "30 carrosséis/mês",
       "Sem marca d'água",
-      "Todos os estilos",
-      "Imagens com IA",
+      "Editorial & Spotlight inclusos",
+      "Imagens com IA / busca",
       "Export PNG",
       "1 perfil",
     ],
@@ -804,6 +822,9 @@ function Faq() {
         <h2 className="editorial-serif mt-6 text-5xl leading-[0.95] text-[#0A0A0A]">
           Dúvidas antes de começar?
         </h2>
+        <p className="mx-auto mt-4 max-w-lg text-[15px] text-[var(--muted)]">
+          Preços, export, limites do plano grátis e uso da IA — respostas diretas abaixo.
+        </p>
       </div>
 
       <div className="space-y-3">
@@ -853,8 +874,8 @@ function FinalCta() {
           <span className="text-[var(--accent-light)] italic">em 30 segundos.</span>
         </h2>
         <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-white/70">
-          Cole um link, um texto ou só uma ideia. O Sequência Viral devolve um carrossel pronto —
-          com sua voz, sua cara, seu timing.
+          Cole um link, um texto ou só uma ideia. Conceitos, variações e o layout que combina com seu post —
+          com sua voz e seu timing.
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
           <Link href="/app/login" className={`${BTN_PRIMARY} px-8 py-4 text-base`}>
@@ -899,7 +920,7 @@ function Footer() {
               </span>
             </div>
             <p className="text-[13px] text-[#0A0A0A]/60 leading-relaxed mb-5">
-              Carrosséis com IA que parecem feitos por você. Cole um link, descreva uma ideia e publique em 30 segundos.
+              Carrosséis com IA que parecem feitos por você. Conceitos, variações, dois layouts e export PNG no mesmo lugar.
             </p>
             <a
               href="https://kaleidos.com.br"

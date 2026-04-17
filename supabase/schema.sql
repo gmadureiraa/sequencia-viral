@@ -24,6 +24,8 @@ create table if not exists public.profiles (
   usage_limit int default 5,
   onboarding_completed boolean default false,
   brand_analysis jsonb default null,
+  spotlight_image_people_mode text default 'auto'
+    check (spotlight_image_people_mode in ('auto', 'with_people', 'no_people')),
   stripe_customer_id text,
   stripe_subscription_id text,
   created_at timestamptz default now(),

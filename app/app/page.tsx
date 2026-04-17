@@ -23,7 +23,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { fetchUserCarousels, readGuestCarousels, type SavedCarousel } from "@/lib/carousel-storage";
+import { fetchUserCarousels, type SavedCarousel } from "@/lib/carousel-storage";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -33,7 +33,7 @@ function getGreeting(): string {
 }
 
 export default function DashboardPage() {
-  const { profile, user, isGuest } = useAuth();
+  const { profile, user } = useAuth();
   const [carousels, setCarousels] = useState<SavedCarousel[]>([]);
   const [carouselError, setCarouselError] = useState<string | null>(null);
   const [carouselLoading, setCarouselLoading] = useState(true);
@@ -42,11 +42,11 @@ export default function DashboardPage() {
     setCarouselError(null);
     setCarouselLoading(true);
     try {
-      if (user && !isGuest && supabase) {
+      if (user && supabase) {
         const list = await fetchUserCarousels(supabase);
         setCarousels(list);
       } else {
-        setCarousels(readGuestCarousels());
+        setCarousels([]);
       }
     } catch (err) {
       console.error("[dashboard] Failed to load carousels:", err);
@@ -55,7 +55,7 @@ export default function DashboardPage() {
     } finally {
       setCarouselLoading(false);
     }
-  }, [user, isGuest]);
+  }, [user]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -95,25 +95,6 @@ export default function DashboardPage() {
           Dashboard · Ed. {new Date().getFullYear()}
         </span>
       </motion.div>
-
-      {isGuest && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-10 rounded-[22px] border border-[#0A0A0A] bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-[4px_4px_0_0_#0A0A0A]"
-        >
-          <strong className="font-bold">Modo convidado:</strong> seus rascunhos ficam salvos neste
-          navegador. Para nuvem, histórico entre dispositivos e fluxo completo,{" "}
-          <Link href="/app/login" className="font-bold text-[var(--accent)] underline underline-offset-2">
-            entre ou crie uma conta
-          </Link>
-          . (Importar @ no onboarding sem login é temporário — veja o{" "}
-          <Link href="/app/roadmap" className="font-bold underline underline-offset-2">
-            roadmap
-          </Link>
-          .)
-        </motion.div>
-      )}
 
       {/* Welcome — editorial hero */}
       <motion.div
@@ -155,20 +136,16 @@ export default function DashboardPage() {
         <StatCard
           icon={<CalendarDays size={18} />}
           kicker="Nº 02"
-          label={isGuest ? "Rascunhos (limite free)" : "Uso do plano (criações)"}
+          label="Uso do plano (criações)"
           value={
             isUnlimited
               ? "Ilimitado"
-              : isGuest
-                ? `${Math.min(savedInLibrary, usageLimit)}/${usageLimit}`
-                : `${usageCount}/${usageLimit}`
+              : `${usageCount}/${usageLimit}`
           }
           progress={
             isUnlimited
               ? undefined
-              : isGuest
-                ? Math.min(1, savedInLibrary / usageLimit)
-                : Math.min(1, usageCount / usageLimit)
+              : Math.min(1, usageCount / usageLimit)
           }
         />
         <StatCard

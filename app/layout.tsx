@@ -1,5 +1,15 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import {
+  Plus_Jakarta_Sans,
+  Instrument_Serif,
+  JetBrains_Mono,
+  DM_Serif_Display,
+  Playfair_Display,
+  Outfit,
+  Inter,
+  Source_Sans_3,
+  Literata,
+} from "next/font/google";
 import { LANDING_FAQ } from "@/lib/landing-faq";
 import "./globals.css";
 
@@ -21,10 +31,46 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ["400", "500"],
 });
 
+const dmSerifDisplay = DM_Serif_Display({
+  variable: "--font-dm-serif",
+  subsets: ["latin"],
+  weight: "400",
+});
+
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+});
+
+const outfit = Outfit({
+  variable: "--font-outfit",
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
+});
+
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const sourceSans = Source_Sans_3({
+  variable: "--font-source-sans",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const literata = Literata({
+  variable: "--font-literata",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
 export const metadata: Metadata = {
   title: "Sequência Viral — Carrosséis com IA para Instagram, LinkedIn e X",
   description:
-    "Gere até 3 variações por ideia, com branding consistente e export em PNG. Um fluxo único para creators e times — do texto ao post.",
+    "Cinco conceitos, três variações por tema, layouts Editorial e Spotlight, modo rápido ou Content Machine. Export PNG num fluxo só.",
   metadataBase: new URL("https://sequencia-viral.app"),
   keywords: [
     "gerador de carrossel",
@@ -43,7 +89,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Sequência Viral — Carrosséis com IA em um fluxo só",
     description:
-      "Ideia, geração, edição e export PNG no mesmo lugar. Menos ferramentas, mais consistência para Instagram, LinkedIn e X.",
+      "Conceitos, variações, dois layouts visuais e edição completa antes do export. Instagram, LinkedIn e X.",
     type: "website",
     url: "https://sequencia-viral.app",
     siteName: "Sequência Viral",
@@ -53,7 +99,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Sequência Viral — Carrosséis com IA",
     description:
-      "Três variações por ideia, branding automático e export em PNG. Feito para quem publica em escala.",
+      "Cinco conceitos e três variações por tema, Editorial ou Spotlight, export PNG. Para quem publica em escala.",
     site: "@sequencia-viral",
     creator: "@sequencia-viral",
   },
@@ -75,7 +121,7 @@ const jsonLd = {
   "@type": "SoftwareApplication",
   name: "Sequência Viral",
   description:
-    "Geração de carrosséis e threads visuais com IA para Instagram, X e LinkedIn. Três variações por ideia e export em PNG.",
+    "Geração de carrosséis com IA para Instagram, X e LinkedIn. Cinco conceitos, três variações, layouts Editorial e Spotlight, modo rápido ou Content Machine.",
   url: "https://sequencia-viral.app",
   applicationCategory: "DesignApplication",
   operatingSystem: "Web",
@@ -105,10 +151,12 @@ const jsonLd = {
     },
   ],
   featureList: [
-    "3 variações geradas por IA a partir de uma ideia",
+    "5 conceitos e até 3 variações de carrossel por tema (dados, narrativa, provocação)",
+    "Dois layouts visuais: Editorial e Spotlight",
+    "Modo rápido ou modo avançado (Content Machine) para a copy",
     "Branding com foto de perfil e @handle",
-    "Entrada por URL, vídeo (YouTube) ou texto",
-    "Imagens sugeridas por IA ou busca",
+    "Entrada por URL, vídeo (YouTube), Instagram ou texto",
+    "Imagens por busca ou geração com IA alinhadas ao layout",
     "Export em PNG otimizado para redes (PDF em roadmap)",
   ],
 };
@@ -132,7 +180,7 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       suppressHydrationWarning
-      className={`${jakarta.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} antialiased`}
+      className={`${jakarta.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${dmSerifDisplay.variable} ${playfair.variable} ${outfit.variable} ${inter.variable} ${sourceSans.variable} ${literata.variable} antialiased`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: `try{if(localStorage.getItem("sequencia-viral_theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}` }} />

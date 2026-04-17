@@ -40,49 +40,43 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
-  const { profile, loading, user, isGuest, signOut } = useAuth();
+  const { profile, loading, user, session } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+
+  const authenticated = !!(user && session?.access_token);
+  const isLoginPage = pathname === "/app/login";
+  const isOnboardingPage = pathname === "/app/onboarding";
 
   useEffect(() => {
     if (loading) return;
 
-    const isLoginPage = pathname === "/app/login";
-    const isOnboardingPage = pathname === "/app/onboarding";
-
-    // STRICT: require a real authenticated Supabase user. Guest mode is no
-    // longer allowed inside /app — anyone landing here without a real session
-    // is bounced to /app/login. If they were in guest mode, clear it.
-    if (!user) {
-      if (isGuest) {
-        // Clean guest flag so the next arrival goes straight to login.
-        void signOut();
-      }
+    if (!authenticated) {
       if (!isLoginPage) {
-        router.push("/app/login");
+        router.replace("/app/login");
       }
       return;
     }
 
-    // Authenticated but onboarding not complete and not on onboarding page
     if (
       profile &&
       !profile.onboarding_completed &&
       !isOnboardingPage &&
       !isLoginPage
     ) {
-      router.push("/app/onboarding");
-      return;
+      router.replace("/app/onboarding");
     }
-  }, [loading, user, isGuest, profile, pathname, router, signOut]);
+  }, [loading, authenticated, profile, pathname, router, isLoginPage, isOnboardingPage]);
 
-  // While we're resolving auth or redirecting, render nothing for protected
-  // pages to avoid leaking a flash of app UI.
-  if (
-    !loading &&
-    !user &&
-    pathname !== "/app/login"
-  ) {
+  if (loading && !isLoginPage) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#FAFAF8]">
+        <p className="text-sm font-semibold text-zinc-500">Carregando sessão…</p>
+      </div>
+    );
+  }
+
+  if (!loading && !authenticated && !isLoginPage) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#FAFAF8]">
         <p className="text-sm font-semibold text-zinc-500">Redirecionando pro login…</p>
@@ -246,7 +240,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
             )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-[#0A0A0A] truncate">
-                {profile?.name || "Convidado"}
+                {profile?.name || "Conta"}
               </p>
               <p className="text-[11px] font-mono uppercase tracking-wider text-[var(--muted)] truncate">
                 {profile?.plan === "free" ? "Plano Free" : profile?.plan === "pro" ? "Plano Pro" : "Business"}
@@ -276,7 +270,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
           <div className="w-6" />
         </header>
 
-        <main className="flex-1 p-6 lg:p-10 xl:p-14">{children}</main>
+        <main className="flex-1 min-w-0 overflow-x-hidden p-6 lg:p-10 xl:p-14">
+          {children}
+        </main>
       </div>
       <Toaster />
     </div>

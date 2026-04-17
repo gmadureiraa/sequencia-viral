@@ -1,5 +1,4 @@
 import type { DesignTemplateId } from "@/lib/carousel-templates";
-import { getDesignTemplateMeta } from "@/lib/carousel-templates";
 import { extractContentFromUrl } from "@/lib/url-extractor";
 import { getYouTubeTranscript } from "@/lib/youtube-transcript";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
@@ -15,7 +14,7 @@ interface GenerateRequest {
   niche: string;
   tone: string;
   language: string;
-  /** Visual template: drives slide count and layout intent (default: twitter). */
+  /** Aceito por compatibilidade; a redação não depende do template (só preview/imagens no app). */
   designTemplate?: DesignTemplateId;
 }
 
@@ -106,9 +105,7 @@ USER BRAND CONTEXT (use this to make content sound authentically like this creat
 
     const body: GenerateRequest = await request.json();
     const { topic, sourceType, sourceUrl, niche, tone, language } = body;
-    const designTemplate: DesignTemplateId = body.designTemplate ?? "twitter";
-    const templateMeta = getDesignTemplateMeta(designTemplate);
-    const isTwitterLayout = designTemplate === "twitter";
+    // designTemplate no body é ignorado: mesmo prompt v1 para qualquer visual escolhido no cliente.
 
     if (sourceType === "idea" && !topic) {
       return Response.json({ error: "Topic is required" }, { status: 400 });
@@ -199,11 +196,7 @@ IMPORTANT: Don't just acknowledge these brand signals — WEAVE them into the co
 ` : ""}
 
 # YOUR MISSION
-${
-  isTwitterLayout
-    ? `Create 1 carousel (6-10 slides) built on NARRATIVE TENSION — a conflict between what people assume and what's actually true.`
-    : `Create 1 carousel for design template "${templateMeta.name}" (Content Machine / Figma: ${templateMeta.figmaLabel}). Use EXACTLY ${templateMeta.blockCount} slides — each slide maps to one text block in that template. The narrative must build NARRATIVE TENSION the same way as the tweet style, but slide count is fixed at ${templateMeta.blockCount}.`
-}
+Create 1 carousel (6-10 slides) built on NARRATIVE TENSION — a conflict between what people assume and what's actually true.
 
 Formula: surface reading → friction → reframe → mechanism → proof → implication → expanded closing
 
@@ -260,63 +253,30 @@ BANNED forever: "muitas pessoas", "resultados incriveis", "game-changer", "nesse
 REQUIRED: every claim has a number ("78%", "R$12k", "23 minutos", "3 em cada 10"), a name, or a concrete example. No exceptions.
 
 # STYLE
-${
-  isTwitterLayout
-    ? `Choose: data (statistics/proof-driven), story (narrative/personal), or provocative (contrarian/bold). Pick whichever creates the strongest emotional arc for THIS specific topic.`
-    : `Use style "story" only — one cohesive narrative across all ${templateMeta.blockCount} slides.`
-}
+Choose: data (statistics/proof-driven), story (narrative/personal), or provocative (contrarian/bold). Pick whichever creates the strongest emotional arc for THIS specific topic.
 
 # OUTPUT FORMAT
-${
-  isTwitterLayout
-    ? `Return valid JSON with exactly 3 variations — one in each style (data, story, provocative).
+Return valid JSON with exactly 3 variations — one in each style (data, story, provocative).
 Each variation is a DISTINCT creative approach to the same topic.
+Shape:
 {
   "variations": [
     {
-      "title": "carousel title (compelling, max 60 chars)",
+      "title": "string",
       "style": "data" | "story" | "provocative",
       "ctaType": "save" | "comment" | "share",
       "slides": [
-        {
-          "heading": "max 8 words, bold, scannable",
-          "body": "2-3 short lines\\nwith micro-cliffhanger ending\\nfor readability",
-          "imageQuery": "specific 2-3 word image search in English"
-        }
+        { "heading": "string", "body": "string", "imageQuery": "English keywords for stock search" }
       ]
     }
   ]
-}`
-    : `Return valid JSON with exactly 1 variation (same JSON shape for compatibility).
-The single variation must use style "story".
-Slides array MUST contain exactly ${templateMeta.blockCount} items — no more, no less.
-{
-  "variations": [
-    {
-      "title": "carousel title (compelling, max 60 chars)",
-      "style": "story",
-      "ctaType": "save" | "comment" | "share",
-      "slides": [
-        {
-          "heading": "max 8 words, bold, scannable",
-          "body": "2-3 short lines\\nwith micro-cliffhanger ending\\nfor readability",
-          "imageQuery": "specific 2-3 word image search in English"
-        }
-        ... repeat until exactly ${templateMeta.blockCount} slides ...
-      ]
-    }
-  ]
-}`
-}`;
+}
+Each slides array must have 6-10 items.`;
 
     const userMessage =
       sourceContent
-        ? isTwitterLayout
-          ? `Create 3 carousel variations (data, story, provocative) based on this content:\n\nTopic: ${topic}\n\nSource:\n${sourceContent.slice(0, 3000)}`
-          : `Create 1 carousel variation with exactly ${templateMeta.blockCount} slides for template "${templateMeta.name}" based on this content:\n\nTopic: ${topic}\n\nSource:\n${sourceContent.slice(0, 3000)}`
-        : isTwitterLayout
-          ? `Create 3 carousel variations (data, story, provocative) about: ${topic}`
-          : `Create 1 carousel variation with exactly ${templateMeta.blockCount} slides for template "${templateMeta.name}" about: ${topic}`;
+        ? `Create 3 carousel variations (data, story, provocative) based on this content:\n\nTopic: ${topic}\n\nSource:\n${sourceContent.slice(0, 3000)}`
+        : `Create 3 carousel variations (data, story, provocative) about: ${topic}`;
 
     // 3. Increment usage BEFORE calling AI — ensures quota is always counted
     //    even if the response fails or user closes the tab.

@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "seed:demos": "npx tsx scripts/seed-demo-carousels.ts",
     "assets:landing": "bun scripts/generate-landing-assets.ts"
   },
   "dependencies": {

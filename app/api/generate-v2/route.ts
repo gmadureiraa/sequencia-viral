@@ -1,4 +1,4 @@
-import { CONTENT_MACHINE_RENDER_SPECS } from "@/lib/carousel-templates";
+import { CONTENT_MACHINE_RENDER_SPECS, normalizeDesignTemplate } from "@/lib/carousel-templates";
 import type { DesignTemplateId } from "@/lib/carousel-templates";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
@@ -198,8 +198,9 @@ function buildRenderPrompt(topic: string, context: string, template: TemplateNam
 
 ETAPA: RENDER FINAL — Transformar a espinha dorsal em um carrossel onde NENHUM bloco é pulável.
 
-TEMPLATE: ${template.toUpperCase()} (${spec.blocks} blocos)
-REGRAS DO TEMPLATE: ${spec.rules}
+O identificador visual "${template}" só define export/layout no app — não mude tom, densidade ou estrutura argumentativa por causa dele.
+BLOCOS OBRIGATÓRIOS: exatamente ${spec.blocks}.
+${spec.rules}
 
 PRINCÍPIO DO RENDER: Cada bloco deve FLUIR para o próximo. O leitor não deve conseguir parar no meio. Se um bloco pode ser removido sem perda, ele é fraco — reescreva.
 
@@ -220,7 +221,7 @@ REGRAS DE QUALIDADE POR BLOCO:
    - CTA implícito: a formulação final deve provocar save, share, ou comentário pela QUALIDADE da conclusão, não por pedir explicitamente
 
 REGRAS GERAIS:
-- Obedecer integralmente ao template (exatamente ${spec.blocks} blocos)
+- Exatamente ${spec.blocks} blocos de texto (o "template visual" no app não altera esta etapa)
 - Manter a capa coerente com a headline escolhida na espinha dorsal
 - Não usar 2ª pessoa
 - Não truncar — se estourar, comprimir mantendo densidade
@@ -304,7 +305,8 @@ export async function POST(request: Request) {
     }
 
     const body: GenerateV2Request = await request.json();
-    const { step, topic, template, context, choice, niche, tone, language } = body;
+    const { step, topic, context, choice, niche, tone, language } = body;
+    const template: DesignTemplateId = normalizeDesignTemplate(body.template);
 
     if (!topic || !step) {
       return Response.json({ error: "topic e step são obrigatórios" }, { status: 400 });
@@ -329,9 +331,6 @@ export async function POST(request: Request) {
         prompt = buildBackbonePrompt(topic, context || "", choice, niche || "", tone || "", language || "pt-br");
         break;
       case "render":
-        if (!template) {
-          return Response.json({ error: "Template é obrigatório para render" }, { status: 400 });
-        }
         prompt = buildRenderPrompt(topic, context || "", template, niche || "", tone || "", language || "pt-br");
         break;
       default:

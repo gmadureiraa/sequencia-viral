@@ -1,7 +1,37 @@
-import type { DesignTemplateId } from "@/lib/carousel-templates";
-import { getDesignTemplateMeta } from "@/lib/carousel-templates";
+import type { DesignTemplateId, ImagePeopleMode } from "@/lib/carousel-templates";
+import {
+  getDesignTemplateMeta,
+  imagePeopleModeImagenInstruction,
+  imagePeopleModeSearchSuffix,
+  normalizeDesignTemplate,
+  normalizeImagePeopleMode,
+} from "@/lib/carousel-templates";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+
+const MAX_QUERY_LEN = 500;
+
+function clip(s: string, n: number): string {
+  const t = s.trim();
+  if (t.length <= n) return t;
+  return `${t.slice(0, n - 1)}…`;
+}
+
+/** Junta termo de busca com trechos do slide para resultados mais alinhados ao conteúdo. */
+function mergeImageSearchText(
+  query: string,
+  contextHeading?: string,
+  contextBody?: string
+): string {
+  const base = query.trim();
+  const ctx = [contextHeading, contextBody]
+    .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!ctx) return clip(base, MAX_QUERY_LEN);
+  return clip(`${base} ${ctx}`, MAX_QUERY_LEN);
+}
 
 export async function POST(request: Request) {
   try {
@@ -35,12 +65,18 @@ export async function POST(request: Request) {
       niche,
       tone,
       designTemplate,
+      contextHeading,
+      contextBody,
+      peopleMode: peopleModeRaw,
     } = body as {
       query?: string;
       mode?: "search" | "generate";
       niche?: string;
       tone?: string;
       designTemplate?: DesignTemplateId;
+      contextHeading?: string;
+      contextBody?: string;
+      peopleMode?: ImagePeopleMode;
     };
 
     if (!query || typeof query !== "string") {
@@ -49,12 +85,34 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    if (query.length > 500) {
+    if (query.length > MAX_QUERY_LEN) {
       return Response.json(
         { error: "Query too long (max 500 chars)" },
         { status: 400 }
       );
     }
+
+    const heading =
+      typeof contextHeading === "string" ? contextHeading : undefined;
+    const bodyCtx =
+      typeof contextBody === "string" ? contextBody : undefined;
+    const mergedSearch = mergeImageSearchText(query, heading, bodyCtx);
+    const tmplId = normalizeDesignTemplate(designTemplate);
+    const tmplMeta = getDesignTemplateMeta(tmplId);
+    const peopleMode = normalizeImagePeopleMode(peopleModeRaw);
+    const peopleSearch = imagePeopleModeSearchSuffix(peopleMode);
+    const searchQuery = clip(
+      `${mergedSearch} ${tmplMeta.imageSearchStyleHint} ${peopleSearch}`
+        .replace(/\s+/g, " ")
+        .trim(),
+      MAX_QUERY_LEN
+    );
+    const slideThemeHint = [heading, bodyCtx]
+      .filter(Boolean)
+      .join(" — ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 400);
 
     // ── MODE: GENERATE (Gemini Imagen) ──────────────────────────────
     if (mode === "generate") {
@@ -63,19 +121,23 @@ export async function POST(request: Request) {
         try {
           const { GoogleGenAI } = await import("@google/genai");
           const ai = new GoogleGenAI({ apiKey: geminiKey });
-          const tmpl = designTemplate ? getDesignTemplateMeta(designTemplate) : null;
-          const styleHint = tmpl
-            ? `Visual tone aligned with "${tmpl.name}" carousel template (${tmpl.figmaLabel}): ${tmpl.desc}.`
-            : "";
+          const peopleInstr = imagePeopleModeImagenInstruction(peopleMode);
+          const styleHint = `Layout: ${tmplMeta.name} — ${tmplMeta.desc} Keywords: ${tmplMeta.imageSearchStyleHint}.`;
           const nicheHint = niche ? `Niche/context: ${niche}.` : "";
           const toneHint = tone ? `Editorial tone: ${tone}.` : "";
           const imagePrompt = [
-            "Professional editorial photograph for social media carousel.",
+            "Hyper-realistic professional photograph for Instagram carousel square frame.",
+            tmplMeta.imageGenRealismFragment,
             nicheHint,
             toneHint,
             styleHint,
-            `Subject/focus: ${query}.`,
-            "Clean, modern, high quality, no text overlay, no logos.",
+            peopleInstr,
+            slideThemeHint
+              ? `Slide theme — the image mood, setting, and subject matter must directly reflect this content (no readable text in frame): ${slideThemeHint}.`
+              : "",
+            `Primary subject / visual focus: ${query}.`,
+            "Technical: sharp focus on subject, natural color, believable shadows, 8K detail level, documentary realism.",
+            "Hard constraints: no text, no letters, no watermarks, no logos, no UI mockups with readable text.",
           ]
             .filter(Boolean)
             .join(" ");
@@ -153,7 +215,7 @@ export async function POST(request: Request) {
             "X-API-KEY": serperKey,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ q: query, num: 5 }),
+          body: JSON.stringify({ q: searchQuery, num: 5 }),
           signal: AbortSignal.timeout(10_000),
         });
 
@@ -182,7 +244,7 @@ export async function POST(request: Request) {
     }
 
     // Strategy 2: Fallback — return placeholder images using Unsplash
-    const encodedQuery = encodeURIComponent(query);
+    const encodedQuery = encodeURIComponent(searchQuery);
     const fallbackImages = Array.from({ length: 5 }, (_, i) => ({
       url: `https://source.unsplash.com/800x600/?${encodedQuery}&sig=${i}`,
       title: `${query} - Image ${i + 1}`,

@@ -218,7 +218,13 @@ O Sequência Viral foca no **visual**; ainda assim recomenda-se:
 
 ---
 
-## 10. Onde ajustar cada coisa no app
+## 10. Feedback (bom / ruim / comentário)
+
+Depois que o carrossel está **salvo na nuvem**, no editor ou em **Meus carrosséis** você pode avaliar com 👍 ou 👎 e escrever um comentário opcional. Isso fica **persistido naquele carrossel** (campo `style.feedback` no Supabase) para o time evoluir o produto.
+
+---
+
+## 11. Onde ajustar cada coisa no app
 
 - **Perfil completo** — `Ajustes` (`/app/settings`) e onboarding inicial.  
 - **Novo carrossel** — `Criar` (`/app/create`).  

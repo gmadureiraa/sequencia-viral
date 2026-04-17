@@ -9,7 +9,7 @@ import {
   type PlanId,
   FREE_PLAN_USAGE_LIMIT,
   BUSINESS_USAGE_LIMIT_SENTINEL,
-} from "@/lib/stripe";
+} from "@/lib/pricing";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   User,
@@ -31,7 +31,7 @@ function isPaidPlanParam(id: string): id is PlanId {
 
 function SettingsPageContent() {
   const searchParams = useSearchParams();
-  const { profile, updateProfile, signOut, isGuest, user, session, refreshProfile } =
+  const { profile, updateProfile, signOut, user, session, refreshProfile } =
     useAuth();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -101,10 +101,6 @@ function SettingsPageContent() {
   }
 
   function handleUpgrade(planId: PlanId) {
-    if (isGuest) {
-      setPaymentNotice("Faça login para assinar um plano pago.");
-      return;
-    }
     // Redireciona pra página de checkout customizada (ancoragem + orderbump + prova social).
     // A chamada real pra Stripe é feita de lá.
     window.location.href = `/app/checkout?plan=${planId}`;
@@ -137,16 +133,12 @@ function SettingsPageContent() {
   }
 
   async function handleDeleteAccount() {
-    if (isGuest) {
-      localStorage.removeItem("sequencia-viral_guest");
-      localStorage.removeItem("sequencia-viral_guest_profile");
+    try {
       localStorage.removeItem("sequencia-viral_onboarding");
-      localStorage.removeItem("sequencia-viral_carousels");
-      localStorage.removeItem("sequencia-viral-draft");
-      await signOut();
-    } else {
-      await signOut();
+    } catch {
+      /* ignore */
     }
+    await signOut();
   }
 
   const plan = profile?.plan ?? "free";
@@ -199,24 +191,6 @@ function SettingsPageContent() {
       )}
 
       <div className="space-y-8">
-        {isGuest && (
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl border border-amber-200 bg-amber-50/90 p-6 text-sm text-amber-950"
-          >
-            <p className="font-bold">Você está no modo convidado</p>
-            <p className="mt-2 leading-relaxed">
-              Perfil e rascunhos ficam salvos neste navegador (local). Para sincronizar na nuvem,
-              assinar um plano e usar o checkout,{" "}
-              <Link href="/app/login" className="font-semibold text-[var(--accent)] underline">
-                crie sua conta ou entre
-              </Link>
-              .
-            </p>
-          </motion.section>
-        )}
-
         {/* Profile Section */}
         <motion.section
           initial={{ opacity: 0, y: 12 }}
@@ -270,7 +244,7 @@ function SettingsPageContent() {
               <label className="block text-[11px] font-mono uppercase tracking-widest text-[var(--muted)] mb-2">E-mail</label>
               <div className="flex items-center gap-2 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
                 <Mail size={14} />
-                {profile?.email || (isGuest ? "Modo convidado" : "Não definido")}
+                {profile?.email || "Não definido"}
               </div>
             </div>
           </div>
@@ -476,6 +450,9 @@ function SettingsPageContent() {
               </p>
               <p className="text-xs text-[var(--muted)] mt-1">{planBlurb}</p>
               <p className="text-xs text-[var(--muted)] mt-2 font-medium">{usageLabel}</p>
+              <p className="text-xs text-[var(--muted)] mt-2 leading-relaxed">
+                Os dois templates visuais e os modos rápido e avançado estão disponíveis em qualquer plano. O limite mensal conta gerações de carrossel com IA (conceitos, texto e Content Machine).
+              </p>
               <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mt-2">
                 Novidades:{" "}
                 <Link href="/app/roadmap" className="underline hover:text-[var(--foreground)]">
@@ -483,7 +460,7 @@ function SettingsPageContent() {
                 </Link>
               </p>
             </div>
-            {plan === "free" && !isGuest && (
+            {plan === "free" && (
               <div className="flex flex-col sm:flex-row flex-wrap gap-3">
                 <button
                   type="button"
@@ -504,14 +481,6 @@ function SettingsPageContent() {
                   Assinar Business — US$29,99/mês
                 </button>
               </div>
-            )}
-            {plan === "free" && isGuest && (
-              <p className="text-sm text-[var(--muted)]">
-                <Link href="/app/login" className="font-bold text-[var(--accent)] underline">
-                  Entre na sua conta
-                </Link>{" "}
-                para assinar Pro ou Business.
-              </p>
             )}
           </div>
         </motion.section>

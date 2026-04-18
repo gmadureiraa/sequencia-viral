@@ -30,6 +30,7 @@ import {
 import { TweetCard } from "@/components/kokonutui/tweet-card";
 import { LANDING_FAQ } from "@/lib/landing-faq";
 import { PLANS, FREE_PLAN_USAGE_LIMIT } from "@/lib/pricing";
+import { useLandingSession } from "@/lib/use-landing-session";
 
 /* ------------------------------------------------------------------ */
 /*  Tokens reutilizados — alinhados ao neo-brutal warm                 */
@@ -84,6 +85,7 @@ function LogoMark() {
 
 function Header() {
   const [open, setOpen] = useState(false);
+  const { isLoggedIn } = useLandingSession();
 
   return (
     <header className="sticky top-0 z-50 border-b-2 border-[#0A0A0A] bg-[#FFFDF9]/95 backdrop-blur-sm">
@@ -105,15 +107,23 @@ function Header() {
               {item.label}
             </a>
           ))}
-          <Link
-            href="/app/login"
-            className="ml-2 rounded-xl px-3 py-2 text-sm font-semibold text-[#0A0A0A]/80 transition-colors hover:bg-white hover:text-[#0A0A0A]"
-          >
-            Entrar
-          </Link>
-          <Link href="/app/login" className={`${BTN_PRIMARY} ml-2`}>
-            Criar conta grátis
-          </Link>
+          {isLoggedIn ? (
+            <Link href="/app" className={`${BTN_PRIMARY} ml-2`}>
+              Ir pro app →
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/app/login"
+                className="ml-2 rounded-xl px-3 py-2 text-sm font-semibold text-[#0A0A0A]/80 transition-colors hover:bg-white hover:text-[#0A0A0A]"
+              >
+                Entrar
+              </Link>
+              <Link href="/app/login" className={`${BTN_PRIMARY} ml-2`}>
+                Criar conta grátis
+              </Link>
+            </>
+          )}
         </nav>
 
         <button
@@ -146,15 +156,27 @@ function Header() {
                   {item.label}
                 </a>
               ))}
-              <Link
-                href="/app/login"
-                className="rounded-xl px-3 py-2 text-sm font-semibold text-[#0A0A0A]/80 hover:bg-white"
-              >
-                Entrar
-              </Link>
-              <Link href="/app/login" className={`${BTN_PRIMARY} mt-1 w-fit`}>
-                Criar conta grátis
-              </Link>
+              {isLoggedIn ? (
+                <Link
+                  href="/app"
+                  onClick={() => setOpen(false)}
+                  className={`${BTN_PRIMARY} mt-1 w-fit`}
+                >
+                  Ir pro app →
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    href="/app/login"
+                    className="rounded-xl px-3 py-2 text-sm font-semibold text-[#0A0A0A]/80 hover:bg-white"
+                  >
+                    Entrar
+                  </Link>
+                  <Link href="/app/login" className={`${BTN_PRIMARY} mt-1 w-fit`}>
+                    Criar conta grátis
+                  </Link>
+                </>
+              )}
             </div>
           </motion.div>
         )}

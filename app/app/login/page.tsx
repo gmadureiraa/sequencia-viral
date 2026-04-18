@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,11 +12,21 @@ import posthog from "posthog-js";
 export default function LoginPage() {
   const router = useRouter();
   const {
+    user,
+    session,
+    loading: authLoading,
     signInWithGoogle,
     signInWithTwitter,
     signInWithEmail,
     signUpWithEmail,
   } = useAuth();
+
+  // Se usuário já tem sessão, redireciona direto pro app.
+  useEffect(() => {
+    if (!authLoading && user && session?.access_token) {
+      router.replace("/app");
+    }
+  }, [authLoading, user, session, router]);
 
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");

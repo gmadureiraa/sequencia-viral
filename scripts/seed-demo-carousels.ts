@@ -30,8 +30,6 @@ type Demo = {
   title: string;
   variationStyle: "data" | "story" | "provocative";
   slideStyle: "white" | "dark";
-  titleFontId: string;
-  bodyFontId: string;
   slides: Slide[];
 };
 
@@ -47,8 +45,6 @@ const DEMOS: Demo[] = [
     title: "Demo · Baseado em dados",
     variationStyle: "data",
     slideStyle: "white",
-    titleFontId: "dm-serif",
-    bodyFontId: "plus-jakarta",
     slides: [
       {
         heading: "O que os números mostram em 2026",
@@ -74,8 +70,6 @@ const DEMOS: Demo[] = [
     title: "Demo · Narrativa",
     variationStyle: "story",
     slideStyle: "dark",
-    titleFontId: "playfair",
-    bodyFontId: "source-sans",
     slides: [
       {
         heading: "Começou com um post que quase ninguém viu",
@@ -101,8 +95,6 @@ const DEMOS: Demo[] = [
     title: "Demo · Provocativo",
     variationStyle: "provocative",
     slideStyle: "white",
-    titleFontId: "outfit",
-    bodyFontId: "inter",
     slides: [
       {
         heading: "Pare de pedir “engajamento”",
@@ -176,10 +168,8 @@ async function main() {
         title: demo.title,
         style: demo.variationStyle,
       },
-      design_template: "editorial",
+      design_template: "twitter",
       creation_mode: "quick",
-      title_font: demo.titleFontId,
-      body_font: demo.bodyFontId,
     };
 
     const { data, error } = await supabase

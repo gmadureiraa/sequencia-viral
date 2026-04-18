@@ -32,8 +32,7 @@ import {
   type SavedCarousel,
   upsertUserCarousel,
 } from "@/lib/carousel-storage";
-import { normalizeBodyFontId, normalizeTitleFontId } from "@/lib/editorial-fonts";
-import { normalizeDesignTemplate } from "@/lib/carousel-templates";
+import { DEFAULT_DESIGN_TEMPLATE } from "@/lib/carousel-templates";
 
 const LIBRARY_SLIDE_PREVIEW_SCALE = 0.14;
 
@@ -144,10 +143,8 @@ export default function CarouselsPage() {
         slideStyle: carousel.style === "dark" ? "dark" : "white",
         variation: carousel.variation ?? null,
         status: "draft",
-        designTemplate: carousel.designTemplate ?? "editorial",
+        designTemplate: DEFAULT_DESIGN_TEMPLATE,
         creationMode: carousel.creationMode ?? "quick",
-        titleFontId: normalizeTitleFontId(carousel.titleFontId),
-        bodyFontId: normalizeBodyFontId(carousel.bodyFontId),
         imagePeopleMode: carousel.imagePeopleMode,
       });
       if (inserted) {
@@ -345,7 +342,7 @@ function CarouselCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.4, delay: index * 0.07, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -4 }}
-      className="card-offset overflow-hidden group"
+      className="card-soft overflow-hidden group"
     >
       {/* Preview: slide real (template Twitter) ou capa com imagem + texto */}
       <div
@@ -366,9 +363,6 @@ function CarouselCard({
               isLastSlide={slideCount <= 1}
               showFooter
               scale={LIBRARY_SLIDE_PREVIEW_SCALE}
-              titleFontId={normalizeTitleFontId(carousel.titleFontId)}
-              bodyFontId={normalizeBodyFontId(carousel.bodyFontId)}
-              designTemplate={normalizeDesignTemplate(carousel.designTemplate)}
             />
           </div>
         ) : (
@@ -488,7 +482,7 @@ function CarouselCard({
 
 function EmptyState() {
   return (
-    <div className="card-offset p-12 flex flex-col md:flex-row items-center gap-10">
+    <div className="card-soft p-12 flex flex-col md:flex-row items-center gap-10">
       <div className="relative w-48 h-48 md:w-56 md:h-56 flex-shrink-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img

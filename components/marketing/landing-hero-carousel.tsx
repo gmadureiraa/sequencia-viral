@@ -20,9 +20,9 @@ const DEMO_SLIDES = [
     imageUrl: "",
   },
   {
-    heading: "2. Três variações + layout visual",
+    heading: "2. Três variações no mesmo formato thread",
     body:
-      "Dados, narrativa, provocação.\n\nDepois você define Editorial (revista) ou Spotlight (hero no topo). O texto é o mesmo pipeline; muda só o desenho e o tipo de imagem.",
+      "Dados, narrativa, provocação.\n\nO preview segue o formato screenshot de thread (Twitter/X) — tipografia fixa e layout único.",
     imageUrl: "",
   },
   {
@@ -34,7 +34,7 @@ const DEMO_SLIDES = [
   {
     heading: "4. Edite e exporte em PNG 4:5",
     body:
-      "Ajuste texto, fontes, imagens e ordem.\n\nExport em alta para Instagram, LinkedIn ou X — tudo no mesmo fluxo.",
+      "Ajuste texto, imagens e ordem.\n\nExport em alta para Instagram, LinkedIn ou X — tudo no mesmo fluxo.",
     imageUrl: "",
   },
 ];
@@ -139,7 +139,6 @@ export default function LandingHeroCarousel() {
                       style="white"
                       isLastSlide={i === DEMO_SLIDES.length - 1}
                       showFooter={i === 0}
-                      designTemplate="editorial"
                     />
                   </div>
                 </div>
@@ -171,7 +170,7 @@ export default function LandingHeroCarousel() {
                 2.847 curtidas
               </div>
               <div className="text-[8px] text-zinc-500 line-clamp-1">
-                <span className="font-semibold text-zinc-900">sequencia-viral</span> Editorial + Spotlight
+                <span className="font-semibold text-zinc-900">sequencia-viral</span> formato thread
                 · modo rápido e avançado
               </div>
               <div className="mt-1 text-[8px] text-zinc-400">há 12 minutos</div>

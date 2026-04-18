@@ -14,24 +14,22 @@ Este guia explica **como tirar o máximo do produto**: o que configurar no perfi
 
 O Sequência Viral foi pensado para **um fluxo só**: menos cópia em um lugar, design em outro e legenda em outro.
 
-### Modo de criação vs template visual
+### O que o app exporta hoje (preview no produto)
+
+O Sequência Viral usa **um único layout de destino**: formato **thread (Twitter/X)**. O preview na tela e o **export PNG/PDF** vêm do componente **`EditorialSlide`** — cartão estilo post, avatar + nome + @, título numerado, corpo e imagem. É o mesmo desenho descrito em [`REFERENCIA-EDITORIAL-BRANDSDECODED.md`](./REFERENCIA-EDITORIAL-BRANDSDECODED.md).
 
 - **Modo rápido** — a IA gera vários ângulos e um carrossel completo em uma tacada. Bom para iterar rápido.
-- **Modo guiado (Content Machine)** — passos de triagem, headlines, espinha dorsal e render. Mais controle editorial.
+- **Modo guiado** — passos de triagem e estruturação; o **visual final** continua sendo o thread acima.
 
-O **template visual** (Twitter, Principal, Futurista, Autoral) define o **design de destino** (incluindo contagem de blocos para o arquivo Figma) e **não** troca sozinho o modo de criação. Você pode combinar, por exemplo, modo guiado + template Principal.
+### Figma e Content Machine (fluxo opcional, fora do preview do app)
 
-### Figma e plugin Content Machine (templates não estilo tweet)
-
-Para layouts **Principal, Futurista ou Autoral** (e também para export estruturado), use o arquivo oficial no Figma e o plugin da Branddecoded no **app desktop** do Figma:
+Se você também usa o ecossistema **Content Machine no Figma** (layouts alternativos, blocos para plugin), o arquivo de templates da Branddecoded continua válido como **trabalho paralelo** no Figma desktop — não substitui o preview thread dentro do app.
 
 **[Templates | Content Machine 4.0](https://www.figma.com/design/K503FED5B8c6xQbwjgS9wp/Templates-%7C-Content-Machine-4.0?node-id=0-1)**
 
-1. Duplique o arquivo para os seus rascunhos (“Duplicate to your drafts”).  
-2. No Postflow, após gerar o texto, use **Copiar JSON (plugin)** ou **Copiar texto numerado** no painel lateral (templates que não usam preview estilo tweet).  
-3. No Figma desktop: **Plugins → Development → Import plugin from manifest…** (conforme o guia do pacote do plugin) e cole o conteúdo no fluxo do plugin.
-
-O export **PNG/PDF** com preview estilo post do X fica disponível quando o **template visual Twitter** está selecionado no modo rápido.
+1. Duplique o arquivo para os seus rascunhos.  
+2. No app, quando houver opção de copiar JSON ou texto numerado para plugin, use no fluxo do Figma.  
+3. O **PNG/PDF gerado na própria aplicação** segue sempre o formato thread (`EditorialSlide`), independentemente do modo de criação.
 
 ---
 

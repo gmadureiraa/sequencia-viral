@@ -3,8 +3,6 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import EditorialSlide from "./editorial-slide";
-import type { EditorialBodyFontId, EditorialTitleFontId } from "@/lib/editorial-fonts";
-import type { DesignTemplateId } from "@/lib/carousel-templates";
 
 interface Slide {
   heading: string;
@@ -26,11 +24,6 @@ interface CarouselPreviewProps {
   onSlideSelect?: (index: number) => void;
   /** Show thumbnail strip below preview */
   showThumbnails?: boolean;
-  /** Tipografia editorial (template futurista) */
-  titleFontId?: EditorialTitleFontId;
-  bodyFontId?: EditorialBodyFontId;
-  /** Composição visual do slide (preview). */
-  designTemplate?: DesignTemplateId;
 }
 
 export default function CarouselPreview({
@@ -43,9 +36,6 @@ export default function CarouselPreview({
   activeSlideIndex = 0,
   onSlideSelect,
   showThumbnails = false,
-  titleFontId,
-  bodyFontId,
-  designTemplate = "editorial",
 }: CarouselPreviewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [internalActive, setInternalActive] = useState(0);
@@ -178,9 +168,6 @@ export default function CarouselPreview({
                 isLastSlide={index === slides.length - 1}
                 showFooter={showBranding}
                 scale={scale}
-                titleFontId={titleFontId}
-                bodyFontId={bodyFontId}
-                designTemplate={designTemplate}
               />
             </motion.div>
           </div>

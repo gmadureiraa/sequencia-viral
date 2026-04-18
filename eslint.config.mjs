@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Pacotes de landing experimentais (não importados pelo app principal)
+    "packages/**",
   ]),
 ]);
 

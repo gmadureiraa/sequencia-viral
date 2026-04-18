@@ -56,9 +56,9 @@ const FEATURES = [
   {
     icon: Layers,
     tag: "Visual",
-    title: "Dois layouts: Editorial e Spotlight",
+    title: "Formato thread (Twitter/X)",
     description:
-      "Mesmo texto e mesmo fluxo de geração — você escolhe se o slide parece revista editorial (laranja) ou destaque com hero image no topo (azul). Imagens e busca seguem o estilo do layout.",
+      "Um único desenho de slide: avatar, nome, texto e imagem, com tipografia fixa estilo screenshot de rede social. Você foca na mensagem; o layout não compete com a copy.",
     accent: "#EC6000",
   },
   {
@@ -66,7 +66,7 @@ const FEATURES = [
     tag: "Fluxo",
     title: "Rápido ou avançado (Content Machine)",
     description:
-      "Modo rápido: conceitos → carrossel em minutos. Modo avançado: triagem, headlines e espinha dorsal para quem quer mais controle na copy. O template visual não muda o texto — só o desenho do slide.",
+      "Modo rápido: conceitos → carrossel em minutos. Modo avançado: triagem, headlines e espinha dorsal para quem quer mais controle na copy. O formato do slide (thread) é o mesmo nos dois.",
     accent: "#60a5fa",
   },
   {
@@ -308,7 +308,7 @@ function Hero() {
             <Sparkles size={12} />
           </span>
           <span className="text-[13px] font-semibold text-[#0A0A0A]/70">
-            Carrosséis com IA · Editorial & Spotlight
+            Carrosséis com IA · formato thread
           </span>
         </motion.div>
 
@@ -334,7 +334,7 @@ function Hero() {
           transition={{ delay: 0.2, duration: 0.6 }}
           className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-[var(--muted)]"
         >
-          Cinco conceitos por tema, depois três variações de carrossel. Dois layouts visuais,
+          Cinco conceitos por tema, depois três variações de carrossel. Preview no formato thread,
           modo rápido ou Content Machine para copy mais profunda — tudo com a voz da sua marca.
         </motion.p>
 
@@ -371,7 +371,7 @@ function Hero() {
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Check size={14} className="text-[var(--accent)]" strokeWidth={2.5} />
-            2 layouts visuais
+            Formato thread
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Check size={14} className="text-[var(--accent)]" strokeWidth={2.5} />
@@ -417,7 +417,7 @@ function TrustStrip() {
         <span className="hidden sm:inline text-[#0A0A0A]/15">|</span>
         <span className="flex items-center gap-2">
           <Palette size={14} className="shrink-0 text-[var(--accent)]" />
-          Editorial ou Spotlight
+          Formato thread
         </span>
         <span className="hidden sm:inline text-[#0A0A0A]/15">|</span>
         <span className="flex items-center gap-2">
@@ -507,7 +507,7 @@ function Processo() {
         },
         {
           title: "Refino",
-          desc: "Escolha Editorial ou Spotlight, ajuste fontes, imagens (busca ou IA) e texto no preview.",
+          desc: "Ajuste texto, imagens (busca ou IA) e ordem no preview — tipografia fixa estilo thread.",
           icon: LayoutTemplate,
         },
         {
@@ -532,7 +532,7 @@ function Processo() {
             </h2>
             <p className="mt-5 max-w-2xl text-white/85">
               Quando cada etapa vive em um app diferente, a mensagem esfria e o tempo some. Aqui você gera,
-              escolhe o layout, revisa e baixa os PNG — sem sair do fluxo.
+              revisa o texto e as imagens e baixa os PNG — sem sair do fluxo.
             </p>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
@@ -584,7 +584,7 @@ const PLANS_DATA = [
     bullets: [
       "5 carrosséis/mês",
       "Marca d'água Sequência Viral",
-      "2 layouts · modo rápido e avançado",
+      "Modo rápido e avançado",
       "Export PNG",
       "1 perfil",
     ],
@@ -601,7 +601,7 @@ const PLANS_DATA = [
     bullets: [
       "30 carrosséis/mês",
       "Sem marca d'água",
-      "Editorial & Spotlight inclusos",
+      "Formato thread + export PNG",
       "Imagens com IA / busca",
       "Export PNG",
       "1 perfil",

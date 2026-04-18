@@ -10,8 +10,6 @@ import {
 } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import type { ImagePeopleMode } from "./carousel-templates";
-
 export interface BrandAnalysis {
   detected_niche: string[];
   tone_detected: string;
@@ -41,8 +39,6 @@ export interface UserProfile {
   usage_limit: number;
   onboarding_completed: boolean;
   brand_analysis?: BrandAnalysis;
-  /** Preferência "pessoas na foto" para o template Spotlight (hero futurista). */
-  spotlight_image_people_mode?: ImagePeopleMode | null;
 }
 
 interface AuthContextValue {
@@ -107,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.warn(
         "[auth] Supabase client is null — configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY."
       );
-      setLoading(false);
+      queueMicrotask(() => setLoading(false));
       return;
     }
 

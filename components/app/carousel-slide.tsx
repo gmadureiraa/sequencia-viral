@@ -1,7 +1,6 @@
 "use client";
 
 import { forwardRef } from "react";
-import type { DesignTemplateId } from "@/lib/carousel-templates";
 
 /**
  * Slide do carrossel — especificação fiel à ref Canva do Defiverso:
@@ -30,11 +29,6 @@ export interface SlideProps {
   showFooter?: boolean;
   /** Tamanho da escala visual. 1 = full 1080×1350. 0.5 = 540×675. Default: 0.34 ≈ 367×459. */
   scale?: number;
-  /** IDs de fonte editorial (`lib/editorial-fonts.ts`). */
-  titleFontId?: string | null;
-  bodyFontId?: string | null;
-  /** Composição visual do slide (export/preview). Não altera geração de copy. */
-  designTemplate?: DesignTemplateId;
 }
 
 /**

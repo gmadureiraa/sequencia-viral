@@ -1,10 +1,12 @@
 /**
- * Dois templates visuais no produto — mesmo fluxo de geração (conceitos → /api/generate).
- * O que muda: composição no preview/export e hints de imagem (busca/IA).
- * Copy mais profunda vem do modo avançado (Content Machine / generate-v2), não do template.
+ * Template visual único: formato thread (Twitter/X) — preview/export em `EditorialSlide`.
+ * Geração de texto: conceitos → /api/generate (layout não altera o prompt).
  */
 
-export type DesignTemplateId = "editorial" | "spotlight";
+export type DesignTemplateId = "twitter";
+
+/** Único layout do produto (thread / Twitter). */
+export const DEFAULT_DESIGN_TEMPLATE: DesignTemplateId = "twitter";
 
 export type CreationMode = "quick" | "guided";
 
@@ -42,9 +44,9 @@ export function imagePeopleModeImagenInstruction(mode: ImagePeopleMode): string 
   }
 }
 
-/** Regras narrativas do Content Machine (render) — idênticas para qualquer template visual. */
+/** Regras narrativas do Content Machine (render). */
 const CONTENT_MACHINE_NARRATIVE_RULES =
-  "Exatamente 16 blocos. Narrativa contínua estilo editorial premium: alternância de ritmo, micro-ganchos entre blocos, capa forte + fechamento com CTA que referencia o gancho inicial. O layout visual escolhido no app não altera esta redação.";
+  "Exatamente 16 blocos. Narrativa contínua estilo editorial premium: alternância de ritmo, micro-ganchos entre blocos, capa forte + fechamento com CTA que referencia o gancho inicial.";
 
 export const DESIGN_TEMPLATES: {
   id: DesignTemplateId;
@@ -54,41 +56,25 @@ export const DESIGN_TEMPLATES: {
   color: string;
   blockCount: number;
   figmaLabel: string;
-  /** Palavras-chave extras para busca de imagens (inglês, estilo fotográfico). */
   imageSearchStyleHint: string;
-  /** Fragmento para Imagen: hiper-realismo alinhado ao layout (inglês). */
   imageGenRealismFragment: string;
 }[] = [
   {
-    id: "editorial",
-    emoji: "◆",
-    name: "Editorial",
-    desc: "Estilo revista premium: fundo claro/escuro, destaque laranja, imagens em cartão com cantos arredondados, tipografia forte.",
+    id: "twitter",
+    emoji: "𝕏",
+    name: "Thread (Twitter/X)",
+    desc: "Formato screenshot de thread: avatar, nome, @, texto e imagem — tipografia fixa estilo rede social.",
     color: "#FF5500",
     blockCount: 16,
-    figmaLabel: "Template Editorial",
+    figmaLabel: "Template Thread",
     imageSearchStyleHint:
-      "editorial magazine photography photorealistic professional photo cinematic lighting shallow depth of field natural skin texture documentary style",
+      "social thread screenshot style photography photorealistic candid natural light documentary",
     imageGenRealismFragment:
-      "Hyper-realistic editorial magazine photograph, full-frame camera quality, natural skin micro-texture, soft cinematic key and fill light, shallow depth of field, premium color science, authentic environment. Must look like a real photograph from a high-end editorial shoot — not illustration, not 3D render, not anime, not stock composite look.",
-  },
-  {
-    id: "spotlight",
-    emoji: "●",
-    name: "Spotlight",
-    desc: "Hero image no topo, acento azul, fotografia limpa e alto contraste — texto abaixo da imagem, sensação de capa de keynote.",
-    color: "#0EA5E9",
-    blockCount: 16,
-    figmaLabel: "Template Spotlight",
-    imageSearchStyleHint:
-      "minimal keynote hero photography photorealistic clean high contrast bold composition lifestyle tech authentic environment HDR crisp detail",
-    imageGenRealismFragment:
-      "Ultra-realistic keynote hero photograph: bold composition, generous negative space, crisp modern lighting, high dynamic range, believable real-world setting. Apple-event or Wired-magazine photographic quality — tactile materials, real glass and metal reflections. Not CGI, not vector, not painterly.",
+      "Hyper-realistic photograph suitable for a social thread carousel: natural light, authentic environment, believable detail. Must look like a real photo — not illustration, not 3D render, not anime.",
   },
 ] as const;
 
 export const EDITORIAL_ACCENT = "#FF5500";
-export const SPOTLIGHT_ACCENT = "#0EA5E9";
 export const EDITORIAL_BG_DARK = "#121212";
 export const EDITORIAL_BG_LIGHT = "#fafafa";
 
@@ -96,32 +82,28 @@ export function getDesignTemplateMeta(id: DesignTemplateId) {
   return DESIGN_TEMPLATES.find((t) => t.id === id) ?? DESIGN_TEMPLATES[0];
 }
 
-/** Normaliza valor persistido ou legado. IDs antigos caem em editorial. */
+/** Valor persistido legado (editorial/spotlight) → único template atual. */
 export function normalizeDesignTemplate(
   raw: string | null | undefined
 ): DesignTemplateId {
-  if (raw === "spotlight") return "spotlight";
-  if (raw === "editorial") return "editorial";
-  return "editorial";
+  void raw;
+  return "twitter";
 }
 
-/** Rules for Content Machine `render` step — mesmas regras narrativas para ambos os templates. */
 export const CONTENT_MACHINE_RENDER_SPECS: Record<
   DesignTemplateId,
   { blocks: number; rules: string }
 > = {
-  editorial: { blocks: 16, rules: CONTENT_MACHINE_NARRATIVE_RULES },
-  spotlight: { blocks: 16, rules: CONTENT_MACHINE_NARRATIVE_RULES },
+  twitter: { blocks: 16, rules: CONTENT_MACHINE_NARRATIVE_RULES },
 };
 
-/** Preview nativo + export PNG/PDF usam `EditorialSlide`. */
 export function usesNativeSlidePreview(_template: DesignTemplateId): boolean {
   return true;
 }
 
-/** @deprecated Use `usesNativeSlidePreview`. Mantido para buscas no código legado. */
+/** @deprecated */
 export function usesTweetStylePreview(_template: DesignTemplateId): boolean {
-  return false;
+  return true;
 }
 
 export type PluginExportPayload = {

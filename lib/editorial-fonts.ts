@@ -1,7 +1,13 @@
 /**
- * Pares de fonte para o slide editorial (estilo “futurista” / revista).
+ * Pares de fonte legados (não usados no preview atual — thread usa stack fixa).
+ * O formato thread estilo Twitter usa tipografia fixa —
+ * `EDITORIAL_THREAD_FIXED_FONT_STACK` (abaixo).
  * Carregadas em `app/layout.tsx` como variáveis CSS (--font-*).
  */
+
+/** Thread / screenshot estilo Twitter — mesma stack do `carousel-slide` legado; sem troca de fonte na UI. */
+export const EDITORIAL_THREAD_FIXED_FONT_STACK =
+  '"Helvetica Neue", Helvetica, Arial, -apple-system, BlinkMacSystemFont, sans-serif';
 
 export const EDITORIAL_TITLE_FONTS = [
   {

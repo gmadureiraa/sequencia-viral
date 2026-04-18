@@ -166,7 +166,7 @@ export default function DashboardPage() {
       >
         <Link
           href="/app/create"
-          className="card-offset-orange md:col-span-3 p-8 group relative overflow-hidden"
+          className="md:col-span-3 p-8 group relative overflow-hidden rounded-[28px] border border-[#0A0A0A] bg-gradient-to-br from-[#EC6000] to-[#FF8534] text-[#FFF8F2] shadow-[6px_6px_0_0_#0A0A0A] transition-all duration-300 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0_0_#0A0A0A]"
         >
           <div className="relative z-10">
             <span className="text-[11px] font-mono uppercase tracking-widest opacity-80">
@@ -192,7 +192,7 @@ export default function DashboardPage() {
           />
         </Link>
 
-        <Link href="/app/carousels" className="card-offset md:col-span-2 p-7 group">
+        <Link href="/app/carousels" className="card-soft md:col-span-2 p-7 group">
           <div className="flex items-start justify-between mb-6">
             <span className="text-[11px] font-mono uppercase tracking-widest text-[var(--muted)]">
               Biblioteca
@@ -317,7 +317,7 @@ export default function DashboardPage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.4 }}
-        className="mt-12 card-offset p-8 flex items-center gap-6"
+        className="mt-12 card-soft p-8 flex items-center gap-6"
       >
         <div className="w-14 h-14 rounded-2xl bg-[var(--accent-muted)] flex items-center justify-center text-[var(--accent)] flex-shrink-0">
           <TrendingUp size={22} />
@@ -349,7 +349,7 @@ function RecentCarouselCard({ carousel }: { carousel: SavedCarousel }) {
   });
 
   return (
-    <Link href={`/app/create?draft=${carousel.id}`} className="card-offset p-6 group">
+    <Link href={`/app/create?draft=${carousel.id}`} className="card-soft p-6 group">
       <div className="flex items-start gap-5">
         {/* Thumbnail */}
         <div
@@ -392,7 +392,7 @@ function DashboardMetricTeaser({
   value: string;
 }) {
   return (
-    <div className="card-offset p-4 md:p-5 opacity-95">
+    <div className="card-soft p-4 md:p-5 opacity-95">
       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent-muted)] text-[var(--accent)]">
         {icon}
       </div>
@@ -420,7 +420,13 @@ function StatCard({
   highlight?: boolean;
 }) {
   return (
-    <div className={`p-6 ${highlight ? "card-offset-orange" : "card-offset"}`}>
+    <div
+      className={`p-6 rounded-[28px] overflow-hidden transition-all duration-300 ${
+        highlight
+          ? "border border-[#0A0A0A] bg-gradient-to-br from-[#EC6000] to-[#FF8534] text-[#FFF8F2] shadow-[6px_6px_0_0_#0A0A0A]"
+          : "card-soft"
+      }`}
+    >
       <div className="flex items-center justify-between mb-6">
         <span
           className={`text-[10px] font-mono uppercase tracking-widest ${
@@ -473,7 +479,7 @@ function StatCard({
 
 function EmptyState() {
   return (
-    <div className="card-offset p-12 flex flex-col md:flex-row items-center gap-10">
+    <div className="card-soft p-12 flex flex-col md:flex-row items-center gap-10">
       <div className="relative w-48 h-48 md:w-56 md:h-56 flex-shrink-0">
         <Image
           src="/brand/empty-carousels.png"

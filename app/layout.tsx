@@ -70,7 +70,7 @@ const literata = Literata({
 export const metadata: Metadata = {
   title: "Sequência Viral — Carrosséis com IA para Instagram, LinkedIn e X",
   description:
-    "Cinco conceitos, três variações por tema, layouts Editorial e Spotlight, modo rápido ou Content Machine. Export PNG num fluxo só.",
+    "Cinco conceitos, três variações por tema, formato thread (Twitter/X), modo rápido ou Content Machine. Export PNG num fluxo só.",
   metadataBase: new URL("https://sequencia-viral.app"),
   keywords: [
     "gerador de carrossel",
@@ -89,7 +89,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Sequência Viral — Carrosséis com IA em um fluxo só",
     description:
-      "Conceitos, variações, dois layouts visuais e edição completa antes do export. Instagram, LinkedIn e X.",
+      "Conceitos, variações, preview estilo thread e edição completa antes do export. Instagram, LinkedIn e X.",
     type: "website",
     url: "https://sequencia-viral.app",
     siteName: "Sequência Viral",
@@ -99,7 +99,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Sequência Viral — Carrosséis com IA",
     description:
-      "Cinco conceitos e três variações por tema, Editorial ou Spotlight, export PNG. Para quem publica em escala.",
+      "Cinco conceitos e três variações por tema, formato thread, export PNG. Para quem publica em escala.",
     site: "@sequencia-viral",
     creator: "@sequencia-viral",
   },
@@ -121,7 +121,7 @@ const jsonLd = {
   "@type": "SoftwareApplication",
   name: "Sequência Viral",
   description:
-    "Geração de carrosséis com IA para Instagram, X e LinkedIn. Cinco conceitos, três variações, layouts Editorial e Spotlight, modo rápido ou Content Machine.",
+    "Geração de carrosséis com IA para Instagram, X e LinkedIn. Cinco conceitos, três variações, formato thread, modo rápido ou Content Machine.",
   url: "https://sequencia-viral.app",
   applicationCategory: "DesignApplication",
   operatingSystem: "Web",
@@ -152,11 +152,11 @@ const jsonLd = {
   ],
   featureList: [
     "5 conceitos e até 3 variações de carrossel por tema (dados, narrativa, provocação)",
-    "Dois layouts visuais: Editorial e Spotlight",
+    "Preview no formato thread (Twitter/X)",
     "Modo rápido ou modo avançado (Content Machine) para a copy",
     "Branding com foto de perfil e @handle",
     "Entrada por URL, vídeo (YouTube), Instagram ou texto",
-    "Imagens por busca ou geração com IA alinhadas ao layout",
+    "Imagens por busca ou geração com IA alinhadas ao tema do slide",
     "Export em PNG otimizado para redes (PDF em roadmap)",
   ],
 };

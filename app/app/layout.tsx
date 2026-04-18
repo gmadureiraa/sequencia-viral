@@ -27,8 +27,16 @@ type NavItem = {
   badge?: string;
 };
 
+function planShortLabel(plan: string | undefined): string {
+  const p = plan ?? "free";
+  if (p === "free") return "Grátis";
+  if (p === "pro") return "Pro";
+  if (p === "business") return "Business";
+  return p;
+}
+
 const NAV_ITEMS: NavItem[] = [
-  { href: "/app", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/app", label: "Início", icon: LayoutDashboard },
   { href: "/app/create", label: "Criar", icon: PlusCircle },
   // create-v2 unified into /app/create with template picker
   { href: "/app/help", label: "Guia", icon: BookOpen },
@@ -198,9 +206,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Plan card */}
         {(!profile?.plan || profile.plan === "free") && (
-          <div className="mx-4 mb-4 p-5 card-offset-orange">
+          <div className="mx-4 mb-4 p-5 card-soft border border-[#0A0A0A]/8">
             <p className="text-[10px] font-mono uppercase tracking-widest opacity-80 mb-2">
-              Plano {profile?.plan ?? "free"}
+              Plano {planShortLabel(profile?.plan)}
             </p>
             <p className="editorial-serif text-xl leading-tight mb-3">
               Upgrade pra Pro
@@ -214,9 +222,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
         {profile?.plan && profile.plan !== "free" && (
-          <div className="mx-4 mb-4 p-4 rounded-2xl border border-[#0A0A0A]/10 bg-[#FFFDF9]">
+          <div className="mx-4 mb-4 p-4 card-soft border border-[#0A0A0A]/8">
             <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mb-1">
-              Plano {profile.plan}
+              Plano {planShortLabel(profile.plan)}
             </p>
             <p className="text-sm font-bold text-[#0A0A0A]">
               {profile.plan === "pro" ? "Pro ativo" : "Business ativo"}
@@ -243,7 +251,11 @@ function AppShell({ children }: { children: React.ReactNode }) {
                 {profile?.name || "Conta"}
               </p>
               <p className="text-[11px] font-mono uppercase tracking-wider text-[var(--muted)] truncate">
-                {profile?.plan === "free" ? "Plano Free" : profile?.plan === "pro" ? "Plano Pro" : "Business"}
+                {profile?.plan === "free"
+                  ? "Plano grátis"
+                  : profile?.plan === "pro"
+                    ? "Plano Pro"
+                    : "Plano Business"}
               </p>
             </div>
           </div>

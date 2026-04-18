@@ -15,12 +15,10 @@ import { useAuth, type UserProfile } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import {
   buildContentMachinePluginExport,
-  DESIGN_TEMPLATES,
-  getDesignTemplateMeta,
-  normalizeDesignTemplate,
+  DEFAULT_DESIGN_TEMPLATE,
+  EDITORIAL_ACCENT,
   normalizeImagePeopleMode,
   type CreationMode,
-  type DesignTemplateId,
   type ImagePeopleMode,
   pluginExportToPrettyText,
 } from "@/lib/carousel-templates";
@@ -33,16 +31,6 @@ import {
   upsertUserCarousel,
 } from "@/lib/carousel-storage";
 import CarouselFeedbackPanel from "@/components/app/carousel-feedback";
-import {
-  EDITORIAL_BODY_FONTS,
-  EDITORIAL_TITLE_FONTS,
-  DEFAULT_BODY_FONT_ID,
-  DEFAULT_TITLE_FONT_ID,
-  normalizeBodyFontId,
-  normalizeTitleFontId,
-  type EditorialBodyFontId,
-  type EditorialTitleFontId,
-} from "@/lib/editorial-fonts";
 
 /** Aguarda <img> dentro do nó carregarem (evita PNG em branco). */
 async function waitForImagesInElement(el: HTMLElement): Promise<void> {
@@ -219,33 +207,21 @@ function hydrateFromSavedCarousel(
     setCarouselRecordId: (id: string | null) => void;
     setEditSlides: (slides: Slide[]) => void;
     setSlideStyle: (s: "white" | "dark") => void;
-    setTitleFontId: (id: EditorialTitleFontId) => void;
-    setBodyFontId: (id: EditorialBodyFontId) => void;
     setVariations: (v: Variation[]) => void;
     setSelectedVariation: (n: number) => void;
     setStep: (s: Step) => void;
-    setDesignTemplate: (t: DesignTemplateId) => void;
     setCreationMode: (m: CreationMode) => void;
     setV2EditedBlocks: (b: string[]) => void;
     setV2SubStep: (s: V2SubStep) => void;
     setCarouselFeedback: (f: CarouselFeedback | null) => void;
     setImagePeopleMode: (m: ImagePeopleMode) => void;
-  },
-  options?: { profileSpotlightDefault?: string | null }
+  }
 ) {
   setters.setCarouselRecordId(c.id);
   setters.setEditSlides(c.slides);
   setters.setSlideStyle(c.style === "dark" ? "dark" : "white");
-  setters.setTitleFontId(normalizeTitleFontId(c.titleFontId));
-  setters.setBodyFontId(normalizeBodyFontId(c.bodyFontId));
-  const dt = normalizeDesignTemplate(c.designTemplate);
-  setters.setDesignTemplate(dt);
   if (c.imagePeopleMode) {
     setters.setImagePeopleMode(normalizeImagePeopleMode(c.imagePeopleMode));
-  } else if (dt === "spotlight" && options?.profileSpotlightDefault) {
-    setters.setImagePeopleMode(
-      normalizeImagePeopleMode(options.profileSpotlightDefault)
-    );
   } else {
     setters.setImagePeopleMode("auto");
   }
@@ -469,7 +445,7 @@ export default function CreatePage() {
 
 function CreatePageContent() {
   const searchParams = useSearchParams();
-  const { profile, user, session, refreshProfile, updateProfile } = useAuth();
+  const { profile, user, session, refreshProfile } = useAuth();
   const previewProfile = useMemo(() => buildPreviewProfile(profile), [profile]);
 
   const [step, setStep] = useState<Step>("input");
@@ -479,8 +455,6 @@ function CreatePageContent() {
   const [niche, setNiche] = useState("marketing");
   const [tone, setTone] = useState("casual");
   const [language, setLanguage] = useState("pt-br");
-  /** Visual / Figma template — independent from creation pipeline. */
-  const [designTemplate, setDesignTemplate] = useState<DesignTemplateId>("editorial");
   /** quick = conceitos v1 + /api/generate; guided = modo avançado Content Machine (etapas). */
   const [creationMode, setCreationMode] = useState<CreationMode>("quick");
 
@@ -499,8 +473,6 @@ function CreatePageContent() {
   const [selectedVariation, setSelectedVariation] = useState<number>(0);
   const [editSlides, setEditSlides] = useState<Slide[]>([]);
   const [slideStyle, setSlideStyle] = useState<"white" | "dark">("white");
-  const [titleFontId, setTitleFontId] = useState<EditorialTitleFontId>(DEFAULT_TITLE_FONT_ID);
-  const [bodyFontId, setBodyFontId] = useState<EditorialBodyFontId>(DEFAULT_BODY_FONT_ID);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [isExporting, setIsExporting] = useState(false);
@@ -536,40 +508,6 @@ function CreatePageContent() {
     const cs = profile.carousel_style;
     if (cs === "dark" || cs === "white") setSlideStyle(cs);
   }, [profile]);
-
-  const handlePickDesignTemplate = useCallback(
-    (t: DesignTemplateId) => {
-      setDesignTemplate(t);
-      if (t === "spotlight") {
-        setImagePeopleMode(
-          normalizeImagePeopleMode(profile?.spotlight_image_people_mode ?? "auto")
-        );
-      }
-    },
-    [profile?.spotlight_image_people_mode]
-  );
-
-  useEffect(() => {
-    if (designTemplate !== "spotlight" || !user) return;
-    const stored = profile?.spotlight_image_people_mode
-      ? normalizeImagePeopleMode(profile.spotlight_image_people_mode)
-      : "auto";
-    if (stored === imagePeopleMode) return;
-    const timer = window.setTimeout(() => {
-      void updateProfile({ spotlight_image_people_mode: imagePeopleMode }).catch(
-        () => {
-          /* ignore */
-        }
-      );
-    }, 450);
-    return () => clearTimeout(timer);
-  }, [
-    designTemplate,
-    imagePeopleMode,
-    user,
-    profile?.spotlight_image_people_mode,
-    updateProfile,
-  ]);
 
   useEffect(() => {
     if (!notice) return;
@@ -607,26 +545,19 @@ function CreatePageContent() {
           setError("Rascunho nao encontrado.");
           return;
         }
-        hydrateFromSavedCarousel(
-          c,
-          {
-            setCarouselRecordId,
-            setEditSlides,
-            setSlideStyle,
-            setTitleFontId,
-            setBodyFontId,
-            setVariations,
-            setSelectedVariation,
-            setStep,
-            setDesignTemplate,
-            setCreationMode,
-            setV2EditedBlocks,
-            setV2SubStep,
-            setCarouselFeedback,
-            setImagePeopleMode,
-          },
-          { profileSpotlightDefault: profile?.spotlight_image_people_mode }
-        );
+        hydrateFromSavedCarousel(c, {
+          setCarouselRecordId,
+          setEditSlides,
+          setSlideStyle,
+          setVariations,
+          setSelectedVariation,
+          setStep,
+          setCreationMode,
+          setV2EditedBlocks,
+          setV2SubStep,
+          setCarouselFeedback,
+          setImagePeopleMode,
+        });
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Erro ao carregar rascunho.");
@@ -639,7 +570,7 @@ function CreatePageContent() {
     return () => {
       cancelled = true;
     };
-  }, [searchParams, user, profile?.spotlight_image_people_mode]);
+  }, [searchParams, user]);
 
   // ─── Keyboard navigation (slides rápidos; modo guiado usa editor de blocos) ──
   useEffect(() => {
@@ -692,7 +623,7 @@ function CreatePageContent() {
           mode: "search",
           niche,
           tone,
-          designTemplate,
+          designTemplate: DEFAULT_DESIGN_TEMPLATE,
           peopleMode: imagePeopleMode,
           contextHeading: slide.heading?.slice(0, 400),
           contextBody: slide.body?.slice(0, 500),
@@ -739,7 +670,7 @@ function CreatePageContent() {
           body: JSON.stringify({
             step: apiStep,
             topic: effectiveTopic,
-            template: designTemplate,
+            template: DEFAULT_DESIGN_TEMPLATE,
             niche: niche || "geral",
             tone: tone || "informal",
             language,
@@ -762,7 +693,7 @@ function CreatePageContent() {
         setV2Loading(false);
       }
     },
-    [session, topic, designTemplate, niche, tone, language, v2Context]
+    [session, topic, niche, tone, language, v2Context]
   );
 
   const handleV2StartTriagem = useCallback(async () => {
@@ -843,12 +774,10 @@ function CreatePageContent() {
             title,
             slides,
             slideStyle,
-            variation: { title, style: designTemplate },
+            variation: { title, style: "data" },
             status: "draft",
-            designTemplate,
+            designTemplate: DEFAULT_DESIGN_TEMPLATE,
             creationMode: "guided",
-            titleFontId,
-            bodyFontId,
             imagePeopleMode,
           });
           setCarouselRecordId(row.id);
@@ -864,7 +793,7 @@ function CreatePageContent() {
     } else {
       setV2SubStep("backbone");
     }
-  }, [callV2API, v2Context, user, supabase, carouselRecordId, slideStyle, refreshProfile, designTemplate, titleFontId, bodyFontId, imagePeopleMode]);
+  }, [callV2API, v2Context, user, supabase, carouselRecordId, slideStyle, refreshProfile, imagePeopleMode]);
 
   // Reset v2 state when going back to input
   const resetV2State = useCallback(() => {
@@ -1022,7 +951,7 @@ function CreatePageContent() {
           niche,
           tone,
           language,
-          designTemplate,
+          designTemplate: DEFAULT_DESIGN_TEMPLATE,
         }),
       });
 
@@ -1059,10 +988,8 @@ function CreatePageContent() {
               slideStyle,
               variation: variationMeta,
               status: "draft",
-              designTemplate,
+              designTemplate: DEFAULT_DESIGN_TEMPLATE,
               creationMode: "quick",
-              titleFontId,
-              bodyFontId,
               imagePeopleMode,
             });
             setCarouselRecordId(row.id);
@@ -1070,7 +997,7 @@ function CreatePageContent() {
               await bumpCarouselUsage(supabase, user.id);
               await refreshProfile();
             }
-            lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle, titleFontId, bodyFontId });
+            lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle });
             toast.success("Carrossel salvo automaticamente.");
           }
         } catch (e) {
@@ -1085,7 +1012,7 @@ function CreatePageContent() {
       setError(err instanceof Error ? err.message : "Falha ao gerar carrossel.");
       setStep("pick"); // Go back to concept picker
     }
-  }, [concepts, session, niche, tone, language, user, supabase, carouselRecordId, slideStyle, refreshProfile, sourceType, sourceUrl, designTemplate, titleFontId, bodyFontId]);
+  }, [concepts, session, niche, tone, language, user, supabase, carouselRecordId, slideStyle, refreshProfile, sourceType, sourceUrl]);
 
   const handleSelectVariation = async (index: number) => {
     setSelectedVariation(index);
@@ -1106,10 +1033,8 @@ function CreatePageContent() {
           slideStyle: slideStyle,
           variation: variationMeta,
           status: "draft",
-          designTemplate,
+          designTemplate: DEFAULT_DESIGN_TEMPLATE,
           creationMode: "quick",
-          titleFontId,
-          bodyFontId,
           imagePeopleMode,
         });
         setCarouselRecordId(row.id);
@@ -1117,7 +1042,7 @@ function CreatePageContent() {
           await bumpCarouselUsage(supabase, user.id);
           await refreshProfile();
         }
-        lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle, titleFontId, bodyFontId });
+        lastSerializedSlidesRef.current = JSON.stringify({ editSlides: slides, slideStyle });
         toast.success("Carrossel salvo automaticamente.");
       }
     } catch (e) {
@@ -1232,7 +1157,7 @@ function CreatePageContent() {
           mode: currentMode,
           niche,
           tone,
-          designTemplate,
+          designTemplate: DEFAULT_DESIGN_TEMPLATE,
           peopleMode: imagePeopleMode,
           contextHeading: slide.heading?.slice(0, 400),
           contextBody: slide.body?.slice(0, 500),
@@ -1317,7 +1242,7 @@ function CreatePageContent() {
 
   useEffect(() => {
     if (step !== "edit" || editSlides.length === 0) return;
-    const serialized = JSON.stringify({ editSlides, slideStyle, titleFontId, bodyFontId });
+    const serialized = JSON.stringify({ editSlides, slideStyle });
     if (serialized === lastSerializedSlidesRef.current) return;
 
     const handle = window.setTimeout(async () => {
@@ -1334,7 +1259,7 @@ function CreatePageContent() {
 
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editSlides, slideStyle, titleFontId, bodyFontId, step]);
+  }, [editSlides, slideStyle, step]);
 
   /**
    * Captura um slide do container de export (scale=1) como PNG 1080x1350.
@@ -1509,10 +1434,8 @@ function CreatePageContent() {
         slideStyle: slideStyle,
         variation: variationMeta,
         status: "draft",
-        designTemplate,
+        designTemplate: DEFAULT_DESIGN_TEMPLATE,
         creationMode,
-        titleFontId,
-        bodyFontId,
         imagePeopleMode,
       });
       setCarouselRecordId(row.id);
@@ -2054,40 +1977,6 @@ function CreatePageContent() {
                 </div>
               </div>
 
-              {/* Dois templates visuais — mesmo pipeline de conceitos + /api/generate no modo rápido */}
-              <div>
-                <label className="block text-xs font-medium mb-2 text-[var(--muted)]">
-                  Template visual
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {DESIGN_TEMPLATES.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => handlePickDesignTemplate(t.id)}
-                      className={`relative rounded-xl border-2 p-4 text-left transition-all ${
-                        designTemplate === t.id
-                          ? "border-[var(--accent)] bg-[var(--accent)]/[0.04]"
-                          : "border-[var(--border)] bg-[var(--card)] hover:border-zinc-300"
-                      }`}
-                    >
-                      {designTemplate === t.id && (
-                        <div
-                          className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px]"
-                          style={{ background: "var(--accent)" }}
-                        >
-                          <Icon name="check" size={10} />
-                        </div>
-                      )}
-                      <p className="text-sm font-bold text-[var(--foreground)] flex items-center gap-2">
-                        <span>{t.emoji}</span> {t.name}
-                      </p>
-                      <p className="text-[11px] text-[var(--muted)] mt-1 leading-relaxed">{t.desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Generate button */}
               <button
                 onClick={handleGenerate}
@@ -2493,7 +2382,7 @@ function CreatePageContent() {
                       Editar blocos
                     </h2>
                     <p className="text-sm text-[var(--muted)] mt-1">
-                      Template {designTemplate} &middot; {v2EditedBlocks.length} blocos
+                      Formato thread (Twitter/X) &middot; {v2EditedBlocks.length} blocos
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -2514,7 +2403,7 @@ function CreatePageContent() {
                           b.replace(/^texto\s+\d+\s*[-\u2013\u2014]\s*/i, "").trim()
                         );
                         const payload = buildContentMachinePluginExport({
-                          designTemplate,
+                          designTemplate: DEFAULT_DESIGN_TEMPLATE,
                           creationMode: "guided",
                           blocks: raw,
                         });
@@ -2534,7 +2423,7 @@ function CreatePageContent() {
                           const content = block.replace(/^texto\s+\d+\s*[-\u2013\u2014]\s*/i, "");
                           return { heading: i === 0 ? title : `Slide ${i + 1}`, body: content, imageQuery: "" };
                         });
-                        const variationMeta = { title, style: designTemplate };
+                        const variationMeta = { title, style: "data" as const };
                         try {
                           if (!user || !supabase) {
                             toast.error("Sessão inválida. Faça login novamente.");
@@ -2547,10 +2436,8 @@ function CreatePageContent() {
                             slideStyle: "dark",
                             variation: variationMeta,
                             status: "draft",
-                            designTemplate,
+                            designTemplate: DEFAULT_DESIGN_TEMPLATE,
                             creationMode: "guided",
-                            titleFontId,
-                            bodyFontId,
                             imagePeopleMode,
                           });
                           setCarouselRecordId(row.id);
@@ -2580,7 +2467,7 @@ function CreatePageContent() {
                       key={i}
                       index={i}
                       text={block}
-                      templateColor={getDesignTemplateMeta(designTemplate).color}
+                      templateColor={EDITORIAL_ACCENT}
                       onChange={(val) => {
                         const next = [...v2EditedBlocks];
                         next[i] = val;
@@ -2854,11 +2741,6 @@ function CreatePageContent() {
                                     <option value="no_people">Sem pessoas</option>
                                   </select>
                                 </div>
-                                {designTemplate === "spotlight" && (
-                                  <p className="text-[9px] text-zinc-400 mb-1.5 leading-snug">
-                                    No Spotlight, esta escolha também vira padrão na sua conta.
-                                  </p>
-                                )}
                                 <div className="flex flex-wrap items-center gap-1.5 mb-1">
                                   <button
                                     type="button"
@@ -3001,47 +2883,10 @@ function CreatePageContent() {
                   </div>
                 </div>
 
-                <div className="mb-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-sm">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-2">
-                    Título
+                <div className="mb-3 rounded-xl border border-[var(--border)] bg-zinc-50/80 p-3 shadow-sm">
+                  <p className="text-[10px] text-zinc-500 leading-relaxed">
+                    Formato <strong className="text-zinc-700">thread (Twitter/X)</strong>: tipografia fixa estilo screenshot — sem opções de layout extra.
                   </p>
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {EDITORIAL_TITLE_FONTS.map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setTitleFontId(f.id)}
-                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold border transition-all ${
-                          titleFontId === f.id
-                            ? "border-[var(--accent)] bg-orange-50 text-[#c2410c]"
-                            : "border-[var(--border)] text-[var(--muted)] hover:border-zinc-300"
-                        }`}
-                        style={{ fontFamily: f.stack }}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-2">
-                    Texto
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {EDITORIAL_BODY_FONTS.map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setBodyFontId(f.id)}
-                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold border transition-all ${
-                          bodyFontId === f.id
-                            ? "border-[var(--accent)] bg-orange-50 text-[#c2410c]"
-                            : "border-[var(--border)] text-[var(--muted)] hover:border-zinc-300"
-                        }`}
-                        style={{ fontFamily: f.stack }}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
@@ -3053,9 +2898,6 @@ function CreatePageContent() {
                     activeSlideIndex={activeSlideIndex}
                     onSlideSelect={setActiveSlideIndex}
                     showThumbnails
-                    titleFontId={titleFontId}
-                    bodyFontId={bodyFontId}
-                    designTemplate={designTemplate}
                   />
                 </div>
 
@@ -3086,7 +2928,7 @@ function CreatePageContent() {
                           [s.heading, s.body].filter(Boolean).join("\n\n").trim()
                         );
                         const payload = buildContentMachinePluginExport({
-                          designTemplate,
+                          designTemplate: DEFAULT_DESIGN_TEMPLATE,
                           creationMode: "quick",
                           blocks,
                         });
@@ -3105,7 +2947,7 @@ function CreatePageContent() {
                         );
                         const text = pluginExportToPrettyText(
                           buildContentMachinePluginExport({
-                            designTemplate,
+                            designTemplate: DEFAULT_DESIGN_TEMPLATE,
                             creationMode: "quick",
                             blocks,
                           })
@@ -3177,9 +3019,6 @@ function CreatePageContent() {
               isLastSlide={i === exportRenderSlides.length - 1}
               showFooter={i === 0}
               scale={1}
-              titleFontId={titleFontId}
-              bodyFontId={bodyFontId}
-              designTemplate={designTemplate}
             />
           ))}
         </div>

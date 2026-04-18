@@ -1268,12 +1268,13 @@ function CreatePageContent() {
   const captureExportSlideAsPng = async (index: number): Promise<string> => {
     const el = exportSlideRefs.current[index];
     if (!el) throw new Error(`Export slide ref ${index} not found`);
+    // cacheBust=false + proxy same-origin evita canvas tainted por CORS.
+    // Imagens externas já vêm pelo /api/img-proxy via exportMode do slide.
     return toPng(el, {
       width: 1080,
       height: 1350,
       pixelRatio: 1,
-      cacheBust: true,
-      fetchRequestInit: { mode: "cors" } as RequestInit,
+      cacheBust: false,
     });
   };
 
@@ -3016,6 +3017,7 @@ function CreatePageContent() {
               isLastSlide={i === exportRenderSlides.length - 1}
               showFooter={i === 0}
               scale={1}
+              exportMode={true}
             />
           ))}
         </div>

@@ -29,6 +29,29 @@ export interface SlideProps {
   showFooter?: boolean;
   /** Tamanho da escala visual. 1 = full 1080×1350. 0.5 = 540×675. Default: 0.34 ≈ 367×459. */
   scale?: number;
+  /** Modo export (PNG/PDF): rota imagens externas pelo /api/img-proxy pra evitar
+   * canvas tainted de CORS. Nunca habilite em preview — quebra cache de imagem. */
+  exportMode?: boolean;
+}
+
+/**
+ * Retorna a URL que o `<img>` deve usar no modo export.
+ * Imagens same-origin e data/blob URIs passam direto. Qualquer http(s)
+ * externo é roteado pelo proxy same-origin com CORS `*`.
+ */
+function resolveImgSrc(url: string | undefined, exportMode: boolean): string | undefined {
+  if (!url) return undefined;
+  if (!exportMode) return url;
+  if (url.startsWith("data:") || url.startsWith("blob:") || url.startsWith("/")) return url;
+  try {
+    const u = new URL(url);
+    if (typeof window !== "undefined" && u.origin === window.location.origin) {
+      return url;
+    }
+    return `/api/img-proxy?url=${encodeURIComponent(url)}`;
+  } catch {
+    return url;
+  }
 }
 
 /**
@@ -75,9 +98,12 @@ const CarouselSlide = forwardRef<HTMLDivElement, SlideProps>(
       isLastSlide,
       showFooter = true,
       scale = 0.38,
+      exportMode = false,
     },
     ref
   ) {
+    const avatarSrc = resolveImgSrc(profile.photoUrl, exportMode);
+    const bodyImgSrc = resolveImgSrc(imageUrl, exportMode);
     const isDark = style === "dark";
     const bg = isDark ? "#0A0A0A" : "#ffffff";
     const fg = isDark ? "#f5f5f5" : "#0A0A0A";
@@ -156,10 +182,11 @@ const CarouselSlide = forwardRef<HTMLDivElement, SlideProps>(
                   : "0 4px 20px rgba(236, 96, 0, 0.25)",
               }}
             >
-              {profile.photoUrl ? (
+              {avatarSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={profile.photoUrl}
+                  src={avatarSrc}
+                  crossOrigin="anonymous"
                   alt={profile.name}
                   style={{
                     width: "100%",
@@ -334,7 +361,8 @@ const CarouselSlide = forwardRef<HTMLDivElement, SlideProps>(
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={imageUrl}
+                      src={bodyImgSrc}
+                      crossOrigin="anonymous"
                       alt={heading}
                       style={{
                         maxWidth: "100%",

@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Privacidade — Sequência Viral",
   description: "Como tratamos dados no Sequência Viral.",
-  alternates: { canonical: "https://sequencia-viral.app/privacy" },
+  alternates: { canonical: "https://viral.kaleidos.com.br/privacy" },
 };
 
 export default function PrivacyPage() {
@@ -18,8 +18,8 @@ export default function PrivacyPage() {
         <p className="mt-6 text-sm leading-relaxed text-[var(--muted)]">
           Esta página resume o compromisso do Sequência Viral com a privacidade. Para detalhes contratuais
           completos, entre em contato em{" "}
-          <a href="mailto:hi@sequencia-viral.app" className="font-semibold text-[var(--accent)] underline">
-            hi@sequencia-viral.app
+          <a href="mailto:madureira@kaleidosdigital.com" className="font-semibold text-[var(--accent)] underline">
+            madureira@kaleidosdigital.com
           </a>
           .
         </p>

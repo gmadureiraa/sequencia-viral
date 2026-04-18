@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const ALLOWED_ORIGINS = new Set([
-  "https://sequencia-viral.app",
-  "https://www.sequencia-viral.app",
+  "https://viral.kaleidos.com.br",
+  "https://www.viral.kaleidos.com.br",
+  "https://sequencia-viral.vercel.app",
   "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:3002",

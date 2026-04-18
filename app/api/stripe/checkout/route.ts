@@ -3,12 +3,14 @@ import { getAuthenticatedUser } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 
 const ALLOWED_ORIGINS = [
-  "https://sequencia-viral.app",
-  "https://www.sequencia-viral.app",
+  "https://viral.kaleidos.com.br",
+  "https://www.viral.kaleidos.com.br",
+  "https://sequencia-viral.vercel.app",
   "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:3002",
 ];
+const DEFAULT_ORIGIN = "https://viral.kaleidos.com.br";
 
 export async function POST(request: Request) {
   try {
@@ -81,8 +83,8 @@ export async function POST(request: Request) {
         bump: includeBump ? "autopublish" : "none",
       },
       line_items: lineItems,
-      success_url: `${ALLOWED_ORIGINS.includes(request.headers.get("origin") || "") ? request.headers.get("origin") : "https://sequencia-viral.app"}/app/settings?payment=success&plan=${planId}${includeBump ? "&bump=1" : ""}`,
-      cancel_url: `${ALLOWED_ORIGINS.includes(request.headers.get("origin") || "") ? request.headers.get("origin") : "https://sequencia-viral.app"}/app/checkout?plan=${planId}&payment=cancelled`,
+      success_url: `${ALLOWED_ORIGINS.includes(request.headers.get("origin") || "") ? request.headers.get("origin") : DEFAULT_ORIGIN}/app/settings?payment=success&plan=${planId}${includeBump ? "&bump=1" : ""}`,
+      cancel_url: `${ALLOWED_ORIGINS.includes(request.headers.get("origin") || "") ? request.headers.get("origin") : DEFAULT_ORIGIN}/app/checkout?plan=${planId}&payment=cancelled`,
       allow_promotion_codes: true,
     });
 

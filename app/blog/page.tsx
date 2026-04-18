@@ -6,14 +6,14 @@ export const metadata: Metadata = {
   description:
     "Aprenda a criar carrosseis virais, dominar o algoritmo do Instagram em 2026, usar IA para conteudo e tecnicas de copywriting para redes sociais. Guias praticos do Sequência Viral.",
   alternates: {
-    canonical: "https://sequencia-viral.app/blog",
+    canonical: "https://viral.kaleidos.com.br/blog",
   },
   openGraph: {
     title: "Blog Sequência Viral — Carrosseis com IA, Estrategias de Conteudo e Instagram",
     description:
       "Guias praticos sobre carrosseis, IA, copywriting e algoritmo do Instagram. Tudo que voce precisa pra criar conteudo de alto engajamento.",
     type: "website",
-    url: "https://sequencia-viral.app/blog",
+    url: "https://viral.kaleidos.com.br/blog",
   },
   twitter: {
     card: "summary_large_image",

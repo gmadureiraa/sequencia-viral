@@ -5,13 +5,13 @@ export const metadata: Metadata = {
   title: "Roadmap | Sequência Viral — O que vem por aí",
   description:
     "O caminho do Sequência Viral: do MVP de geração manual até automações com RSS, publicação multi-rede, brand kits e repurpose com IA.",
-  alternates: { canonical: "https://sequencia-viral.app/roadmap" },
+  alternates: { canonical: "https://viral.kaleidos.com.br/roadmap" },
   openGraph: {
     title: "Roadmap | Sequência Viral",
     description:
       "Do MVP ao motor de conteúdo autônomo — veja o que estamos construindo no Sequência Viral.",
     type: "website",
-    url: "https://sequencia-viral.app/roadmap",
+    url: "https://viral.kaleidos.com.br/roadmap",
   },
 };
 
@@ -261,7 +261,7 @@ export default function RoadmapPage() {
             Começar agora →
           </Link>
           <a
-            href="mailto:hi@sequencia-viral.app?subject=Roadmap%20feedback"
+            href="mailto:madureira@kaleidosdigital.com?subject=Roadmap%20feedback"
             className="btn-secondary"
           >
             Mandar sugestão

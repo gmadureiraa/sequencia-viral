@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Termos de uso — Sequência Viral",
   description: "Termos de uso do Sequência Viral.",
-  alternates: { canonical: "https://sequencia-viral.app/terms" },
+  alternates: { canonical: "https://viral.kaleidos.com.br/terms" },
 };
 
 export default function TermsPage() {

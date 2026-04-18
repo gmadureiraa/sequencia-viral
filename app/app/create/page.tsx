@@ -445,8 +445,9 @@ export default function CreatePage() {
 
 function CreatePageContent() {
   const searchParams = useSearchParams();
-  const { profile, user, session, refreshProfile } = useAuth();
+  const { profile, user, session, refreshProfile, loading: authLoading } = useAuth();
   const previewProfile = useMemo(() => buildPreviewProfile(profile), [profile]);
+  const profileReady = !authLoading && !!profile;
 
   const [step, setStep] = useState<Step>("input");
   const [sourceType, setSourceType] = useState<SourceType>("idea");
@@ -1332,6 +1333,12 @@ function CreatePageContent() {
   };
 
   const handleExportPng = async () => {
+    if (!profileReady) {
+      setError(
+        "Carregando seu perfil… tenta de novo em 1 segundo pro nome/foto sair certo no PNG."
+      );
+      return;
+    }
     setIsExporting(true);
     setError("");
     setExportProgress("Preparando export...");
@@ -1376,6 +1383,12 @@ function CreatePageContent() {
   };
 
   const handleExportPdf = async () => {
+    if (!profileReady) {
+      setError(
+        "Carregando seu perfil… tenta de novo em 1 segundo pro nome/foto sair certo no PDF."
+      );
+      return;
+    }
     setIsExporting(true);
     setError("");
     setExportProgress("Preparando PDF...");

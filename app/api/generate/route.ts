@@ -3,6 +3,7 @@ import { extractContentFromUrl } from "@/lib/url-extractor";
 import { getYouTubeTranscript } from "@/lib/youtube-transcript";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { getPostHogClient } from "@/lib/posthog-server";
 import { GoogleGenAI } from "@google/genai";
 
 export const maxDuration = 60;
@@ -385,6 +386,21 @@ Each slides array must have 6-10 items.`;
         console.warn("[generate] Failed to record generation:", e);
       }
     }
+
+    getPostHogClient().capture({
+      distinctId: user.id,
+      event: "carousel_generated",
+      properties: {
+        source_type: sourceType,
+        niche,
+        tone,
+        language,
+        slide_count: result.variations?.[0]?.slides?.length ?? 0,
+        variation_count: result.variations?.length ?? 0,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+      },
+    });
 
     return Response.json(result);
   } catch (error) {

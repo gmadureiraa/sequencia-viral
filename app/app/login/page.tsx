@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import EditorialSlide from "@/components/app/editorial-slide";
+import posthog from "posthog-js";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -57,6 +58,8 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
+      posthog.identify(email, { email });
+      posthog.capture("user_signed_in", { method: "email" });
       router.push("/app");
       return;
     }
@@ -68,10 +71,14 @@ export default function LoginPage() {
       return;
     }
     if (result.needsEmailConfirmation) {
+      posthog.identify(email, { email });
+      posthog.capture("user_signed_up", { method: "email", needs_confirmation: true });
       setSuccess("Conta criada! Verifique seu email pra confirmar antes de entrar.");
       setLoading(false);
       return;
     }
+    posthog.identify(email, { email });
+    posthog.capture("user_signed_up", { method: "email", needs_confirmation: false });
     router.push("/app");
   }
 
@@ -149,7 +156,7 @@ export default function LoginPage() {
                     </label>
                     {isSignin && (
                       <a
-                        href="mailto:hi@sequencia-viral.app?subject=Esqueci%20minha%20senha"
+                        href="mailto:madureira@kaleidosdigital.com?subject=Esqueci%20minha%20senha"
                         className="text-xs font-semibold text-zinc-500 underline-offset-2 hover:text-zinc-900 hover:underline"
                       >
                         Esqueceu a senha?
@@ -223,7 +230,7 @@ export default function LoginPage() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={signInWithGoogle}
+                  onClick={() => { posthog.capture("user_signed_in_with_google"); signInWithGoogle(); }}
                   className="flex items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white py-2.5 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50"
                   aria-label="Entrar com Google"
                 >
@@ -249,7 +256,7 @@ export default function LoginPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={signInWithTwitter}
+                  onClick={() => { posthog.capture("user_signed_in_with_twitter"); signInWithTwitter(); }}
                   className="flex items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white py-2.5 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50"
                   aria-label="Entrar com X"
                 >

@@ -23,7 +23,12 @@ import {
   Loader2,
   Sparkles,
   Check,
+  ExternalLink,
+  CreditCard,
 } from "lucide-react";
+import { toast } from "sonner";
+import { jsonWithAuth } from "@/lib/api-auth-headers";
+import posthog from "posthog-js";
 
 function isPaidPlanParam(id: string): id is PlanId {
   return id === "pro" || id === "business";
@@ -121,6 +126,15 @@ function SettingsPageContent() {
         language,
         carousel_style: carouselStyle,
       });
+      posthog.capture("settings_saved", {
+        has_twitter: !!twitterHandle,
+        has_instagram: !!instagramHandle,
+        has_linkedin: !!linkedinUrl,
+        niche_count: niche.length,
+        tone,
+        language,
+        carousel_style: carouselStyle,
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -134,11 +148,27 @@ function SettingsPageContent() {
 
   async function handleDeleteAccount() {
     try {
-      localStorage.removeItem("sequencia-viral_onboarding");
-    } catch {
-      /* ignore */
+      const res = await fetch("/api/auth/delete", {
+        method: "DELETE",
+        headers: jsonWithAuth(session),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(data.error || "Não foi possível excluir a conta.");
+        return;
+      }
+      try {
+        localStorage.removeItem("sequencia-viral_onboarding");
+      } catch {
+        /* ignore */
+      }
+      await signOut();
+      window.location.href = "/";
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Erro inesperado ao excluir conta."
+      );
     }
-    await signOut();
   }
 
   const plan = profile?.plan ?? "free";
@@ -460,7 +490,7 @@ function SettingsPageContent() {
                 </Link>
               </p>
             </div>
-            {plan === "free" && (
+            {plan === "free" ? (
               <div className="flex flex-col sm:flex-row flex-wrap gap-3">
                 <button
                   type="button"
@@ -481,6 +511,8 @@ function SettingsPageContent() {
                   Assinar Business — US$29,99/mês
                 </button>
               </div>
+            ) : (
+              <ManageBillingButton />
             )}
           </div>
         </motion.section>
@@ -597,5 +629,45 @@ export default function SettingsPage() {
     >
       <SettingsPageContent />
     </Suspense>
+  );
+}
+
+function ManageBillingButton() {
+  const { session } = useAuth();
+  const [opening, setOpening] = useState(false);
+
+  async function openPortal() {
+    if (opening) return;
+    setOpening(true);
+    try {
+      const res = await fetch("/api/stripe/portal", {
+        method: "POST",
+        headers: jsonWithAuth(session),
+      });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        toast.error(data.error || "Não foi possível abrir o portal. Tente novamente.");
+        return;
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao abrir portal.");
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={openPortal}
+      disabled={opening}
+      className="inline-flex items-center justify-center gap-2 bg-[#FFFDF9] text-[#0A0A0A] px-6 py-3 rounded-xl text-sm font-bold border border-[#0A0A0A] hover:bg-white transition-colors disabled:opacity-60"
+      style={{ boxShadow: "4px 4px 0 0 #0A0A0A" }}
+    >
+      {opening ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
+      Gerenciar assinatura
+      <ExternalLink size={12} />
+    </button>
   );
 }

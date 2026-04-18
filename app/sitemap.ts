@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const BASE_URL = "https://sequencia-viral.app";
+const BASE_URL = "https://viral.kaleidos.com.br";
 
 const blogSlugs = [
   "sequencia-viral-novidades-abril-2026-image-picker-pdf-export",

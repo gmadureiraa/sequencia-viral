@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import posthog from "posthog-js";
 
 type PlanKey = "pro" | "business";
 
@@ -102,6 +103,13 @@ function CheckoutContent() {
       setError("Faça login ou crie uma conta antes de assinar.");
       return;
     }
+
+    posthog.capture("checkout_initiated", {
+      plan: planParam,
+      price_cents: plan.price,
+      bump_added: bump,
+      total_cents: subtotal,
+    });
 
     setLoading(true);
     try {
@@ -211,7 +219,7 @@ function CheckoutContent() {
               <div className="flex items-start gap-4">
                 <button
                   type="button"
-                  onClick={() => setBump((v) => !v)}
+                  onClick={() => { const next = !bump; posthog.capture("order_bump_toggled", { added: next, plan: planParam }); setBump(next); }}
                   aria-pressed={bump}
                   className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition ${
                     bump

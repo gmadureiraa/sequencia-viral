@@ -37,6 +37,7 @@
     "node_modules",
     "packages/brillance-landing",
     "packages/nexus-landing",
-    "packages/optimus-landing"
+    "packages/optimus-landing",
+    "scripts"
   ]
 }

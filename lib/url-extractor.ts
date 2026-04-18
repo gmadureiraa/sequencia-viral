@@ -9,7 +9,7 @@ export async function extractContentFromUrl(url: string): Promise<string> {
     const response = await fetch(parsedUrl.toString(), {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (compatible; Sequência Viral/1.0; +https://sequencia-viral.app)",
+          "Mozilla/5.0 (compatible; Sequência Viral/1.0; +https://viral.kaleidos.com.br)",
         Accept: "text/html,application/xhtml+xml",
       },
       signal: AbortSignal.timeout(10_000),

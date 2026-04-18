@@ -1,11 +1,16 @@
 /**
  * Extractor de post/reel/carrossel do Instagram.
  *
- * Instagram bloqueia scrapers simples, então usamos Apify (já temos API key)
- * com o actor `apify/instagram-scraper` que lida com autenticação, rotação de
- * proxy, etc. Em caso de falha, retornamos erro claro orientando o usuário a
- * colar a legenda manualmente no modo "Minha ideia".
+ * Fluxo:
+ *   1. Apify (`apify~instagram-scraper`) → caption + metadados (likes, hashtags, owner).
+ *   2. Supadata (`/v1/transcript`) → ASR do áudio do reel/vídeo.
+ *   3. Compõe um contexto rico combinando caption + transcript + metadados.
+ *
+ * Se o post é puramente imagem sem caption, retorna erro instruindo o usuário
+ * a colar a ideia manualmente.
  */
+
+import { fetchSupadataTranscript, isSupadataConfigured } from "./supadata";
 
 const APIFY_BASE = "https://api.apify.com/v2";
 const APIFY_TIMEOUT_SECS = 45;
@@ -87,6 +92,8 @@ export async function extractInstagramContent(url: string): Promise<string> {
     text?: string;
     ownerUsername?: string;
     videoViewCount?: number;
+    videoPlayCount?: number;
+    videoDuration?: number;
     likesCount?: number;
     commentsCount?: number;
     type?: string;
@@ -94,12 +101,33 @@ export async function extractInstagramContent(url: string): Promise<string> {
     mentions?: string[];
     images?: Array<{ displayUrl?: string }>;
     childPosts?: Array<{ caption?: string; displayUrl?: string }>;
+    videoUrl?: string;
   };
 
-  const caption = first.caption || first.text || "";
-  if (!caption.trim()) {
+  const caption = (first.caption || first.text || "").trim();
+  const isVideo =
+    first.type === "Video" ||
+    parsed.kind === "reel" ||
+    Boolean(first.videoUrl) ||
+    typeof first.videoDuration === "number";
+
+  // Se não tem caption E é vídeo → tenta Supadata (áudio → texto).
+  let supadataTranscript: string | null = null;
+  if (isVideo && isSupadataConfigured()) {
+    try {
+      const sup = await fetchSupadataTranscript(url, { mode: "auto" });
+      supadataTranscript = sup?.content || null;
+    } catch (err) {
+      console.warn(
+        "[ig] Supadata fallback falhou:",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+
+  if (!caption && !supadataTranscript) {
     throw new Error(
-      "Post sem legenda. Não deu pra extrair conteúdo textual — cole a ideia no modo 'Minha ideia'."
+      "Post sem legenda e sem áudio transcrevível. Cole a ideia no modo 'Minha ideia'."
     );
   }
 
@@ -109,21 +137,39 @@ export async function extractInstagramContent(url: string): Promise<string> {
   if (first.type) lines.push(`Tipo: ${first.type}`);
   if (first.likesCount) lines.push(`Curtidas: ${first.likesCount}`);
   if (first.commentsCount) lines.push(`Comentários: ${first.commentsCount}`);
-  if (first.videoViewCount) lines.push(`Views: ${first.videoViewCount}`);
+  const views = first.videoViewCount ?? first.videoPlayCount;
+  if (views) lines.push(`Views: ${views}`);
+  if (first.videoDuration) lines.push(`Duração: ${Math.round(first.videoDuration)}s`);
   if (first.hashtags && first.hashtags.length > 0) {
     lines.push(`Hashtags: ${first.hashtags.slice(0, 10).join(", ")}`);
   }
-  lines.push("");
-  lines.push("Legenda original:");
-  lines.push(caption);
+
+  if (caption) {
+    lines.push("");
+    lines.push("Legenda original:");
+    lines.push(caption);
+  }
+
+  if (supadataTranscript) {
+    lines.push("");
+    lines.push("Transcrição do áudio:");
+    lines.push(
+      supadataTranscript.length > 4000
+        ? supadataTranscript.slice(0, 4000) + "…"
+        : supadataTranscript
+    );
+  }
 
   // Se for carrossel, adiciona as legendas dos child posts
   if (first.childPosts && first.childPosts.length > 0) {
-    lines.push("");
-    lines.push("Slides do carrossel:");
-    first.childPosts.forEach((child, i) => {
-      if (child.caption) lines.push(`${i + 1}. ${child.caption}`);
-    });
+    const childCaptions = first.childPosts
+      .map((child, i) => (child.caption ? `${i + 1}. ${child.caption}` : null))
+      .filter((x): x is string => Boolean(x));
+    if (childCaptions.length > 0) {
+      lines.push("");
+      lines.push("Slides do carrossel:");
+      lines.push(...childCaptions);
+    }
   }
 
   return lines.join("\n");

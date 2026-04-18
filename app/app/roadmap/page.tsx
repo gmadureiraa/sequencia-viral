@@ -59,7 +59,7 @@ export default function AppRoadmapPage() {
         </p>
         <div className="mt-6">
           <a
-            href="mailto:hi@sequencia-viral.app?subject=Roadmap%20feedback"
+            href="mailto:madureira@kaleidosdigital.com?subject=Roadmap%20feedback"
             className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-6 py-3 text-sm font-bold text-white transition hover:bg-[var(--accent-dark)]"
           >
             Mandar sugestão →

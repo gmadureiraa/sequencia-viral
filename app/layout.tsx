@@ -10,8 +10,13 @@ import {
   Source_Sans_3,
   Literata,
 } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { LANDING_FAQ } from "@/lib/landing-faq";
 import "./globals.css";
+
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-sans",
@@ -71,7 +76,7 @@ export const metadata: Metadata = {
   title: "Sequência Viral — Carrosséis com IA para Instagram, LinkedIn e X",
   description:
     "Cinco conceitos, três variações por tema, formato thread (Twitter/X), modo rápido ou Content Machine. Export PNG num fluxo só.",
-  metadataBase: new URL("https://sequencia-viral.app"),
+  metadataBase: new URL("https://viral.kaleidos.com.br"),
   keywords: [
     "gerador de carrossel",
     "carrossel instagram ia",
@@ -84,14 +89,14 @@ export const metadata: Metadata = {
     "export png carrossel",
   ],
   alternates: {
-    canonical: "https://sequencia-viral.app",
+    canonical: "https://viral.kaleidos.com.br",
   },
   openGraph: {
     title: "Sequência Viral — Carrosséis com IA em um fluxo só",
     description:
       "Conceitos, variações, preview estilo thread e edição completa antes do export. Instagram, LinkedIn e X.",
     type: "website",
-    url: "https://sequencia-viral.app",
+    url: "https://viral.kaleidos.com.br",
     siteName: "Sequência Viral",
     locale: "pt_BR",
   },
@@ -122,7 +127,7 @@ const jsonLd = {
   name: "Sequência Viral",
   description:
     "Geração de carrosséis com IA para Instagram, X e LinkedIn. Cinco conceitos, três variações, formato thread, modo rápido ou Content Machine.",
-  url: "https://sequencia-viral.app",
+  url: "https://viral.kaleidos.com.br",
   applicationCategory: "DesignApplication",
   operatingSystem: "Web",
   offers: [
@@ -195,7 +200,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen font-[family-name:var(--font-sans)]">
         {children}
+        <Analytics />
+        <SpeedInsights />
       </body>
+      {GA_MEASUREMENT_ID ? <GoogleAnalytics gaId={GA_MEASUREMENT_ID} /> : null}
     </html>
   );
 }

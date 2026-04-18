@@ -1,5 +1,6 @@
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export const maxDuration = 60;
 
@@ -168,6 +169,16 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    getPostHogClient().capture({
+      distinctId: user.id,
+      event: "carousel_exported",
+      properties: {
+        carousel_id: carouselId,
+        slide_count: pngUrls.length,
+        has_pdf: !!pdfUrl,
+      },
+    });
 
     return Response.json({
       ok: true,

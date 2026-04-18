@@ -130,6 +130,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearLegacyGuestStorage();
         const p = await fetchProfile(s.user.id);
         if (p) setProfile(p);
+        // Dispara welcome email (idempotente no backend — 1x por user).
+        if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+          try {
+            await fetch("/api/email/welcome", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${s.access_token}`,
+              },
+            });
+          } catch {
+            /* não bloqueia auth */
+          }
+        }
       } else {
         setProfile(null);
         if (event === "SIGNED_OUT") {

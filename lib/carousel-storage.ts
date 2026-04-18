@@ -160,14 +160,35 @@ export function rowToSavedCarousel(row: CarouselRow): SavedCarousel {
 
 const CAROUSEL_LIST_FIELDS =
   "id,title,slides,style,status,created_at,updated_at,export_assets,thumbnail_url";
+const CAROUSEL_LIST_FIELDS_FALLBACK =
+  "id,title,slides,style,status,created_at,updated_at,thumbnail_url";
+
+function isMissingColumnError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const code = (err as { code?: string }).code;
+  const message = (err as { message?: string }).message ?? "";
+  return code === "42703" || /column .* does not exist/i.test(message);
+}
 
 export async function fetchUserCarousels(
   client: SupabaseClient
 ): Promise<SavedCarousel[]> {
-  const { data, error } = await client
+  let { data, error } = await client
     .from("carousels")
     .select(CAROUSEL_LIST_FIELDS)
     .order("updated_at", { ascending: false });
+
+  if (error && isMissingColumnError(error)) {
+    console.warn(
+      "[fetchUserCarousels] export_assets column missing — falling back to base fields. Apply migration 20260415120000_carousel_export_assets.sql to restore cloud-export metadata."
+    );
+    const retry = await client
+      .from("carousels")
+      .select(CAROUSEL_LIST_FIELDS_FALLBACK)
+      .order("updated_at", { ascending: false });
+    data = (retry.data as unknown) as typeof data;
+    error = retry.error;
+  }
 
   if (error) {
     console.error("[fetchUserCarousels] error:", error.message, error.details, error.hint);
@@ -180,11 +201,21 @@ export async function fetchUserCarousel(
   client: SupabaseClient,
   id: string
 ): Promise<SavedCarousel | null> {
-  const { data, error } = await client
+  let { data, error } = await client
     .from("carousels")
     .select(CAROUSEL_LIST_FIELDS)
     .eq("id", id)
     .maybeSingle();
+
+  if (error && isMissingColumnError(error)) {
+    const retry = await client
+      .from("carousels")
+      .select(CAROUSEL_LIST_FIELDS_FALLBACK)
+      .eq("id", id)
+      .maybeSingle();
+    data = (retry.data as unknown) as typeof data;
+    error = retry.error;
+  }
 
   if (error || !data) return null;
   return rowToSavedCarousel(data as CarouselRow);
@@ -249,7 +280,7 @@ export async function upsertUserCarousel(
       style.image_people_mode = ipm;
     }
 
-    const { data, error } = await client
+    let { data, error } = await client
       .from("carousels")
       .update({
         title: payload.title,
@@ -262,6 +293,23 @@ export async function upsertUserCarousel(
       .select(CAROUSEL_LIST_FIELDS)
       .single();
 
+    if (error && isMissingColumnError(error)) {
+      const retry = await client
+        .from("carousels")
+        .update({
+          title: payload.title,
+          slides: payload.slides,
+          style,
+          status: payload.status,
+        })
+        .eq("id", payload.id)
+        .eq("user_id", userId)
+        .select(CAROUSEL_LIST_FIELDS_FALLBACK)
+        .single();
+      data = (retry.data as unknown) as typeof data;
+      error = retry.error;
+    }
+
     if (error) {
       console.error("[upsertUserCarousel] update error:", error.message, error.details, error.hint);
       throw error;
@@ -273,7 +321,7 @@ export async function upsertUserCarousel(
     style.image_people_mode = payload.imagePeopleMode;
   }
 
-  const { data, error } = await client
+  let { data, error } = await client
     .from("carousels")
     .insert({
       user_id: userId,
@@ -284,6 +332,22 @@ export async function upsertUserCarousel(
     })
     .select(CAROUSEL_LIST_FIELDS)
     .single();
+
+  if (error && isMissingColumnError(error)) {
+    const retry = await client
+      .from("carousels")
+      .insert({
+        user_id: userId,
+        title: payload.title,
+        slides: payload.slides,
+        style,
+        status: payload.status,
+      })
+      .select(CAROUSEL_LIST_FIELDS_FALLBACK)
+      .single();
+    data = (retry.data as unknown) as typeof data;
+    error = retry.error;
+  }
 
   if (error) {
     console.error("[upsertUserCarousel] insert error:", error.message, error.details, error.hint);

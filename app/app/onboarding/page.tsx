@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import Loader from "@/components/kokonutui/loader";
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
+import posthog from "posthog-js";
+import { toast } from "sonner";
 
 // ──────────────────────────────────────────────────────────────────
 // Constants
@@ -345,9 +347,27 @@ export default function OnboardingPage() {
       });
     } catch (err) {
       console.error("[onboarding] Failed to save profile:", err);
+      toast.error(
+        err instanceof Error
+          ? `Falha ao salvar perfil: ${err.message}`
+          : "Falha ao salvar perfil. Tente novamente."
+      );
+      posthog.capture("onboarding_save_failed", {
+        mode,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      // Não navega se falhou — usuário pode retry sem perder os dados do localStorage
+      return;
     }
+    posthog.capture("onboarding_completed", {
+      mode,
+      has_twitter: !!data.twitter_handle,
+      has_instagram: !!data.instagram_handle,
+      niche_count: data.niche.length,
+      tone: data.tone,
+      language: data.language,
+    });
     localStorage.removeItem("sequencia-viral_onboarding");
-    // Always navigate, even if profile save fails
     window.location.href = `/app/create?source=${mode}`;
   }
 

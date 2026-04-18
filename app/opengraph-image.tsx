@@ -88,7 +88,7 @@ export default function OpenGraphImage() {
               boxShadow: "4px 4px 0 #0A0A0A",
             }}
           >
-            sequencia-viral.app
+            viral.kaleidos.com.br
           </span>
         </div>
       </div>

@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: ["/app/", "/api/"],
     },
-    sitemap: "https://sequencia-viral.app/sitemap.xml",
+    sitemap: "https://viral.kaleidos.com.br/sitemap.xml",
   };
 }

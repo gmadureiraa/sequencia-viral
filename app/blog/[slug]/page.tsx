@@ -929,11 +929,11 @@ Estamos trabalhando em:
 - **Colaboracao em tempo real** para times no plano Business
 - **Analytics de performance** pra saber quais carrosseis performaram melhor
 
-Acompanhe o roadmap completo em sequencia-viral.app/roadmap.
+Acompanhe o roadmap completo em viral.kaleidos.com.br/roadmap.
 
 ## Feedback?
 
-Se encontrar algum bug ou tiver sugestao, envie pra hi@sequencia-viral.app. Cada mensagem e lida pela equipe.`,
+Se encontrar algum bug ou tiver sugestao, envie pra madureira@kaleidosdigital.com. Cada mensagem e lida pela equipe.`,
   },
 
   "copywriting-para-redes-sociais-guia-definitivo-2026": {
@@ -1240,13 +1240,13 @@ export async function generateMetadata(props: {
     title: `${post.title} | Sequência Viral Blog`,
     description: post.description,
     alternates: {
-      canonical: `https://sequencia-viral.app/blog/${post.slug}`,
+      canonical: `https://viral.kaleidos.com.br/blog/${post.slug}`,
     },
     openGraph: {
       title: post.title,
       description: post.description,
       type: "article",
-      url: `https://sequencia-viral.app/blog/${post.slug}`,
+      url: `https://viral.kaleidos.com.br/blog/${post.slug}`,
       publishedTime: post.date,
       authors: ["Sequência Viral"],
     },
@@ -1465,7 +1465,7 @@ export default async function BlogPost(props: {
             Gratis. Sem cartao de credito. Pronto em 30 segundos.
           </p>
           <a
-            href="https://sequencia-viral.app"
+            href="https://viral.kaleidos.com.br"
             className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[var(--accent)] text-white font-medium hover:bg-[var(--accent-dark)] transition-colors text-sm"
           >
             Criar carrossel gratis

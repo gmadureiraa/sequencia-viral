@@ -33,6 +33,7 @@ import {
   upsertUserCarousel,
 } from "@/lib/carousel-storage";
 import { DEFAULT_DESIGN_TEMPLATE } from "@/lib/carousel-templates";
+import posthog from "posthog-js";
 
 const LIBRARY_SLIDE_PREVIEW_SCALE = 0.14;
 
@@ -120,6 +121,7 @@ export default function CarouselsPage() {
     try {
       if (user && supabase && isCarouselUuid(id)) {
         await deleteUserCarousel(supabase, user.id, id);
+        posthog.capture("carousel_deleted", { carousel_id: id });
         await loadCarousels();
         toast.success("Carrossel removido.");
       } else {

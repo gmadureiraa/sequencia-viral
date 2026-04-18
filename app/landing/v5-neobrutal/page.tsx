@@ -64,7 +64,7 @@ const FEATURES = [
   {
     icon: Workflow,
     tag: "Fluxo",
-    title: "Rápido ou avançado (Content Machine)",
+    title: "Rápido ou avançado (modo avançado)",
     description:
       "Modo rápido: conceitos → carrossel em minutos. Modo avançado: triagem, headlines e espinha dorsal para quem quer mais controle na copy. O formato do slide (thread) é o mesmo nos dois.",
     accent: "#60a5fa",
@@ -335,7 +335,7 @@ function Hero() {
           className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-[var(--muted)]"
         >
           Cinco conceitos por tema, depois três variações de carrossel. Preview no formato thread,
-          modo rápido ou Content Machine para copy mais profunda — tudo com a voz da sua marca.
+          modo rápido ou modo avançado para copy mais profunda — tudo com a voz da sua marca.
         </motion.p>
 
         {/* CTA buttons */}
@@ -502,7 +502,7 @@ function Processo() {
         },
         {
           title: "Estrutura",
-          desc: "Modo rápido: a partir do conceito escolhido, a IA monta o carrossel. Modo avançado: triagem e espinha dorsal no Content Machine.",
+          desc: "Modo rápido: a partir do conceito escolhido, a IA monta o carrossel. Modo avançado: triagem e espinha dorsal no modo avançado.",
           icon: Brain,
         },
         {

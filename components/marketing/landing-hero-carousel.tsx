@@ -28,7 +28,7 @@ const DEMO_SLIDES = [
   {
     heading: "3. Modo avançado (opcional)",
     body:
-      "Quer mais controle na copy? Use o Content Machine: triagem, headlines e espinha dorsal — sem misturar isso com o tipo de layout.",
+      "Quer mais controle na copy? Use o modo avançado: triagem, headlines e espinha dorsal — sem misturar isso com o tipo de layout.",
     imageUrl: "",
   },
   {

@@ -1981,7 +1981,7 @@ function CreatePageContent() {
                     )}
                     <p className="text-sm font-bold text-[var(--foreground)] flex items-center gap-1">
                       <Icon name="sparkles" size={14} />
-                      Avançado (Content Machine)
+                      Modo avançado
                     </p>
                     <p className="text-[11px] text-[var(--muted)] mt-1 leading-relaxed">
                       Triagem, headlines e espinha — copy mais controlada, fluxo diferente do rápido.

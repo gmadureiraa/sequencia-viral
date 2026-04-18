@@ -75,7 +75,7 @@ const literata = Literata({
 export const metadata: Metadata = {
   title: "Sequência Viral — Carrosséis com IA para Instagram, LinkedIn e X",
   description:
-    "Cinco conceitos, três variações por tema, formato thread (Twitter/X), modo rápido ou Content Machine. Export PNG num fluxo só.",
+    "Cinco conceitos, três variações por tema, formato thread (Twitter/X), modo rápido ou avançado. Export PNG num fluxo só.",
   metadataBase: new URL("https://viral.kaleidos.com.br"),
   keywords: [
     "gerador de carrossel",
@@ -126,7 +126,7 @@ const jsonLd = {
   "@type": "SoftwareApplication",
   name: "Sequência Viral",
   description:
-    "Geração de carrosséis com IA para Instagram, X e LinkedIn. Cinco conceitos, três variações, formato thread, modo rápido ou Content Machine.",
+    "Geração de carrosséis com IA para Instagram, X e LinkedIn. Cinco conceitos, três variações, formato thread, modo rápido ou avançado.",
   url: "https://viral.kaleidos.com.br",
   applicationCategory: "DesignApplication",
   operatingSystem: "Web",
@@ -158,7 +158,7 @@ const jsonLd = {
   featureList: [
     "5 conceitos e até 3 variações de carrossel por tema (dados, narrativa, provocação)",
     "Preview no formato thread (Twitter/X)",
-    "Modo rápido ou modo avançado (Content Machine) para a copy",
+    "Modo rápido ou modo avançado para a copy",
     "Branding com foto de perfil e @handle",
     "Entrada por URL, vídeo (YouTube), Instagram ou texto",
     "Imagens por busca ou geração com IA alinhadas ao tema do slide",

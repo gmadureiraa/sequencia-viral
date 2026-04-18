@@ -792,8 +792,8 @@ const BENTO: BentoCell[] = [
     children: <BentoTemplates />,
   },
   {
-    title: "Content Machine 5.4",
-    desc: "O framework do BrandsDecoded embutido: triagem → headline → espinha → copy.",
+    title: "Modo avançado",
+    desc: "Fluxo guiado em etapas: triagem do tema → 3 headlines → espinha dorsal → copy final.",
     icon: Grid3x3,
     accent: "#0A0A0A",
     className: "md:col-span-2 bg-[#FFFDF9]",
@@ -1097,7 +1097,7 @@ const PRICING_PLANS: Plan[] = [
     bullets: [
       `${FREE_PLAN_USAGE_LIMIT} carrosséis/mês`,
       "Export PNG em alta",
-      "Modo rápido + Content Machine",
+      "Modo rápido + modo avançado",
       "4 templates editoriais",
       "1 perfil de marca",
     ],

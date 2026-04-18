@@ -481,7 +481,7 @@ function SettingsPageContent() {
               <p className="text-xs text-[var(--muted)] mt-1">{planBlurb}</p>
               <p className="text-xs text-[var(--muted)] mt-2 font-medium">{usageLabel}</p>
               <p className="text-xs text-[var(--muted)] mt-2 leading-relaxed">
-                Os dois templates visuais e os modos rápido e avançado estão disponíveis em qualquer plano. O limite mensal conta gerações de carrossel com IA (conceitos, texto e Content Machine).
+                Os dois modos (rápido e avançado) estão disponíveis em qualquer plano. O limite mensal conta gerações de carrossel com IA.
               </p>
               <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mt-2">
                 Novidades:{" "}

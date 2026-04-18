@@ -84,7 +84,7 @@ export default function PlansPage() {
         </h1>
         <p className="mt-4 text-lg text-[var(--muted)] max-w-2xl">
           Todos os planos têm acesso a todas as origens (YouTube, blog, Instagram,
-          ideia), Content Machine e export em PNG/PDF. A diferença é quantos
+          ideia), modo avançado e export em PNG/PDF. A diferença é quantos
           carrosséis por mês e marca d&apos;água.
         </p>
       </motion.div>

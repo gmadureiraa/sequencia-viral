@@ -2,15 +2,15 @@
 export const LANDING_FAQ = [
   {
     q: "Quanto tempo leva pra gerar um carrossel?",
-    a: "De 20 a 40 segundos do input até os conceitos; depois você escolhe um ângulo e recebe até três variações (dados, narrativa, provocação). No modo avançado (Content Machine), cada etapa leva um pouco mais porque você controla triagem e espinha dorsal.",
+    a: "De 20 a 40 segundos do input até os conceitos; depois você escolhe um ângulo e recebe até três variações (dados, narrativa, provocação). No modo avançado, cada etapa leva um pouco mais porque você controla triagem e espinha dorsal.",
   },
   {
     q: "Qual é o formato visual do carrossel?",
-    a: "Hoje o app usa um único layout: thread estilo Twitter/X (avatar, nome, texto e imagem), com tipografia fixa. O modo rápido e o Content Machine mudam a copy, não o desenho do slide.",
+    a: "Hoje o app usa um único layout: thread estilo Twitter/X (avatar, nome, texto e imagem), com tipografia fixa. O modo rápido e o modo avançado mudam a copy, não o desenho do slide.",
   },
   {
     q: "O que é modo rápido e modo avançado?",
-    a: "Modo rápido: a IA gera cinco conceitos, você escolhe um e recebe o carrossel completo. Modo avançado: Content Machine com triagem, headlines e espinha dorsal — ideal quando você quer mais controle na copy. O formato do slide (thread) é sempre o mesmo.",
+    a: "Modo rápido: a IA gera cinco conceitos, você escolhe um e recebe o carrossel completo. Modo avançado: fluxo guiado com triagem, headlines e espinha dorsal — ideal quando você quer mais controle na copy. O formato do slide (thread) é sempre o mesmo.",
   },
   {
     q: "Os carrosséis saem cheirando a IA genérica?",

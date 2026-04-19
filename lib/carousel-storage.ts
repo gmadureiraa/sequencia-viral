@@ -75,6 +75,10 @@ export type SavedCarousel = {
   textScale?: number;
   /** Tags livres (nicho, tema, campanha). Persistido em `style.tags[]`. */
   tags?: string[];
+  /** Legenda gerada (ou editada) pro post final. Persistido em `style.caption`. */
+  caption?: string;
+  /** Hashtags sugeridas pela IA. Persistido em `style.caption_hashtags[]`. */
+  captionHashtags?: string[];
 };
 
 export function isCarouselUuid(id: string) {
@@ -184,6 +188,17 @@ export function rowToSavedCarousel(row: CarouselRow): SavedCarousel {
         .slice(0, 20)
     : undefined;
 
+  const caption =
+    typeof styleObj.caption === "string" ? styleObj.caption : undefined;
+  const rawCaptionHashtags = styleObj.caption_hashtags;
+  const captionHashtags = Array.isArray(rawCaptionHashtags)
+    ? rawCaptionHashtags
+        .filter((t): t is string => typeof t === "string")
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0)
+        .slice(0, 12)
+    : undefined;
+
   return {
     id: row.id,
     title: row.title || slides[0]?.heading || "Sem título",
@@ -205,6 +220,8 @@ export function rowToSavedCarousel(row: CarouselRow): SavedCarousel {
     displayFont,
     textScale,
     tags,
+    caption,
+    captionHashtags,
   };
 }
 
@@ -331,6 +348,8 @@ export async function upsertUserCarousel(
     accentOverride?: string;
     displayFont?: string;
     textScale?: number;
+    caption?: string;
+    captionHashtags?: string[];
   }
 ): Promise<{ row: CarouselRow; inserted: boolean }> {
   const style: Record<string, unknown> = {
@@ -362,6 +381,16 @@ export async function upsertUserCarousel(
   }
   if (typeof payload.textScale === "number") {
     style.text_scale = payload.textScale;
+  }
+  if (typeof payload.caption === "string") {
+    style.caption = payload.caption;
+  }
+  if (Array.isArray(payload.captionHashtags)) {
+    style.caption_hashtags = payload.captionHashtags
+      .filter((t) => typeof t === "string")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0)
+      .slice(0, 12);
   }
 
   if (payload.id) {
@@ -403,6 +432,17 @@ export async function upsertUserCarousel(
       typeof prev.text_scale === "number"
     ) {
       style.text_scale = prev.text_scale;
+    }
+    // Preservar caption / caption_hashtags se não foram enviados neste update.
+    if (typeof payload.caption !== "string" && typeof prev.caption === "string") {
+      style.caption = prev.caption;
+    }
+    if (!Array.isArray(payload.captionHashtags) && Array.isArray(prev.caption_hashtags)) {
+      style.caption_hashtags = prev.caption_hashtags;
+    }
+    // Preservar tags se não foram enviadas.
+    if (Array.isArray(prev.tags) && style.tags === undefined) {
+      style.tags = prev.tags;
     }
 
     let { data, error } = await client

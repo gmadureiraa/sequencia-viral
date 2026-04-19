@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -8,6 +8,9 @@ import { TemplateRenderer, type TemplateId } from "@/components/app/templates";
 import { useAuth } from "@/lib/auth-context";
 import { useDraft } from "@/lib/create/use-draft";
 import { useExport } from "@/lib/create/use-export";
+import { useCaption } from "@/lib/create/use-caption";
+import { supabase } from "@/lib/supabase";
+import { upsertUserCarousel } from "@/lib/carousel-storage";
 
 // Mesmo injector que o edit usa — garante que a fonte display escolhida
 // esteja disponível no momento do export PNG/PDF.
@@ -24,6 +27,19 @@ function useInjectDisplayFonts() {
     link.rel = "stylesheet";
     link.href = DISPLAY_FONTS_HREF;
     document.head.appendChild(link);
+  }, []);
+}
+
+/** Injeta keyframe local pro shimmer do loader de legenda. Não mexe no globals.css. */
+function useInjectCaptionShimmerKeyframe() {
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const id = "sv-caption-shimmer-keyframe";
+    if (document.getElementById(id)) return;
+    const el = document.createElement("style");
+    el.id = id;
+    el.textContent = `@keyframes sv-caption-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`;
+    document.head.appendChild(el);
   }, []);
 }
 
@@ -55,9 +71,10 @@ export default function PreviewPage(props: {
   params: Promise<{ id: string }>;
 }) {
   useInjectDisplayFonts();
+  useInjectCaptionShimmerKeyframe();
   const { id } = use(props.params);
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, session, user } = useAuth();
   const { draft, loading, error } = useDraft(id);
 
   const slides = draft?.slides ?? [];
@@ -83,15 +100,149 @@ export default function PreviewPage(props: {
 
   const [currentSlide, setCurrentSlide] = useState(0);
   const [caption, setCaption] = useState("");
+  const [hashtags, setHashtags] = useState<string[]>([]);
   const [scheduleOn, setScheduleOn] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("09:30");
+  const [captionMissingKey, setCaptionMissingKey] = useState(false);
 
   const slideStyle = draft?.style === "dark" ? "dark" : "white";
 
   const { exportRefs, exportPng, exportPdf, isExporting, progress } = useExport(
     slides.length
   );
+
+  const {
+    generate: generateCaption,
+    loading: captionLoading,
+    error: captionError,
+  } = useCaption(session);
+
+  // Hidrata legenda e hashtags salvos no draft quando ele carregar.
+  const hydratedDraftIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!draft) return;
+    if (hydratedDraftIdRef.current === draft.id) return;
+    hydratedDraftIdRef.current = draft.id;
+    if (typeof draft.caption === "string" && draft.caption.trim()) {
+      setCaption(draft.caption);
+    }
+    if (Array.isArray(draft.captionHashtags) && draft.captionHashtags.length > 0) {
+      setHashtags(draft.captionHashtags);
+    }
+  }, [draft]);
+
+  // Persiste legenda + hashtags no Supabase preservando todo o resto do draft.
+  const persistCaption = useCallback(
+    async (newCaption: string, newHashtags: string[]) => {
+      if (!user || !draft || !supabase) return;
+      try {
+        await upsertUserCarousel(supabase, user.id, {
+          id: draft.id,
+          title: draft.title,
+          slides: draft.slides,
+          slideStyle: slideStyle,
+          status: (draft.status as "draft" | "published" | "archived") ?? "draft",
+          visualTemplate: draft.visualTemplate,
+          accentOverride: draft.accentOverride,
+          displayFont: draft.displayFont,
+          textScale: draft.textScale,
+          caption: newCaption,
+          captionHashtags: newHashtags,
+        });
+      } catch (err) {
+        console.warn("[preview] Falha ao salvar legenda:", err);
+      }
+    },
+    [user, draft, slideStyle]
+  );
+
+  // Dispara geração automática ao abrir a página quando não há legenda salva.
+  const autoTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (autoTriggeredRef.current) return;
+    if (!draft) return;
+    if (loading) return;
+    if (draft.caption && draft.caption.trim()) return;
+    if (slides.length === 0) return;
+    autoTriggeredRef.current = true;
+    void (async () => {
+      try {
+        const result = await generateCaption({
+          slides: slides.map((s) => ({
+            heading: s.heading ?? "",
+            body: s.body ?? "",
+          })),
+          title: draft.title,
+          niche: profile?.niche?.[0] || undefined,
+          tone: profile?.tone || undefined,
+          language: profile?.language || "pt-BR",
+        });
+        setCaption(result.caption);
+        setHashtags(result.hashtags);
+        void persistCaption(result.caption, result.hashtags);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        if (/GEMINI_API_KEY|GEMINI_MISSING|não está configurada/i.test(msg)) {
+          setCaptionMissingKey(true);
+        }
+      }
+    })();
+  }, [draft, loading, slides, profile, generateCaption, persistCaption]);
+
+  async function handleRegenerate() {
+    if (!draft || slides.length === 0) return;
+    try {
+      const result = await generateCaption({
+        slides: slides.map((s) => ({
+          heading: s.heading ?? "",
+          body: s.body ?? "",
+        })),
+        title: draft.title,
+        niche: profile?.niche?.[0] || undefined,
+        tone: profile?.tone || undefined,
+        language: profile?.language || "pt-BR",
+      });
+      setCaption(result.caption);
+      setHashtags(result.hashtags);
+      void persistCaption(result.caption, result.hashtags);
+      toast.success("Nova legenda gerada.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha ao gerar legenda.";
+      if (/GEMINI_API_KEY|GEMINI_MISSING|não está configurada/i.test(msg)) {
+        setCaptionMissingKey(true);
+      }
+      toast.error(msg);
+    }
+  }
+
+  function handleCaptionChange(value: string) {
+    const trimmed = value.slice(0, 4000);
+    setCaption(trimmed);
+    // Persistência oportunista: salva só quando o usuário para de digitar
+    // (debounce simples via state + effect abaixo).
+    setDirtyCaption(true);
+  }
+
+  function handleCopyHashtag(tag: string) {
+    try {
+      void navigator.clipboard.writeText(tag);
+      toast.success(`Copiado ${tag}`);
+    } catch {
+      toast.error("Falha ao copiar.");
+    }
+  }
+
+  async function handleCopyAll() {
+    const tagsLine = hashtags.join(" ");
+    const full = hashtags.length > 0 ? `${caption}\n\n${tagsLine}` : caption;
+    try {
+      await navigator.clipboard.writeText(full);
+      toast.success("Legenda + hashtags copiadas.");
+    } catch {
+      toast.error("Falha ao copiar.");
+    }
+  }
 
   async function handleClipboard() {
     const full = [
@@ -106,6 +257,17 @@ export default function PreviewPage(props: {
       toast.error("Falha ao copiar.");
     }
   }
+
+  // Debounce pra salvar caption editado manualmente (1500ms)
+  const [dirtyCaption, setDirtyCaption] = useState(false);
+  useEffect(() => {
+    if (!dirtyCaption) return;
+    const t = window.setTimeout(() => {
+      setDirtyCaption(false);
+      void persistCaption(caption, hashtags);
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }, [dirtyCaption, caption, hashtags, persistCaption]);
 
   function handleSchedule() {
     if (!scheduleOn) {
@@ -439,7 +601,7 @@ export default function PreviewPage(props: {
                 fontWeight: 700,
               }}
             >
-              ✦ Exportar
+              Nº 01 · Exportar
             </div>
             <h4
               className="sv-display"
@@ -449,10 +611,10 @@ export default function PreviewPage(props: {
             </h4>
             <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
               {[
-                { label: "📦 Baixar .zip", hi: true, onClick: () => void exportPng() },
-                { label: `🖼 PNG × ${slides.length}`, onClick: () => void exportPng() },
-                { label: "📄 PDF", onClick: () => void exportPdf(draft.title) },
-                { label: "✂ Copiar", onClick: () => void handleClipboard() },
+                { label: "Baixar .zip", hi: true, onClick: () => void exportPng() },
+                { label: `PNG × ${slides.length}`, onClick: () => void exportPng() },
+                { label: "PDF", onClick: () => void exportPdf(draft.title) },
+                { label: "Copiar", onClick: () => void handleClipboard() },
               ].map((btn, i) => (
                 <button
                   key={i}
@@ -504,40 +666,129 @@ export default function PreviewPage(props: {
               boxShadow: "3px 3px 0 0 var(--sv-ink)",
             }}
           >
-            <label
-              style={{
-                fontFamily: "var(--sv-mono)",
-                fontSize: 9,
-                letterSpacing: "0.2em",
-                textTransform: "uppercase",
-                color: "var(--sv-muted)",
-                marginBottom: 8,
-                display: "block",
-                fontWeight: 700,
-              }}
-            >
-              Legenda · Instagram
-            </label>
-            <textarea
-              value={caption}
-              onChange={(e) => setCaption(e.target.value.slice(0, 4000))}
-              style={{
-                width: "100%",
-                minHeight: 120,
-                border: "1.5px solid var(--sv-ink)",
-                padding: 12,
-                fontFamily: "var(--sv-sans)",
-                fontSize: 13,
-                lineHeight: 1.5,
-                outline: 0,
-                resize: "vertical",
-                background: "var(--sv-paper)",
-                color: "var(--sv-ink)",
-              }}
-              placeholder="Conte a história do carrossel..."
-            />
+            <div className="flex items-start justify-between gap-3">
+              <label
+                style={{
+                  fontFamily: "var(--sv-mono)",
+                  fontSize: 9,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  color: "var(--sv-muted)",
+                  fontWeight: 700,
+                  display: "block",
+                }}
+              >
+                Nº 02 · Legenda
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleRegenerate()}
+                  disabled={captionLoading || slides.length === 0}
+                  className="sv-btn sv-btn-outline"
+                  style={{
+                    padding: "6px 10px",
+                    fontSize: 9,
+                    letterSpacing: "0.14em",
+                    opacity: captionLoading ? 0.6 : 1,
+                    cursor: captionLoading ? "wait" : "pointer",
+                  }}
+                  aria-label="Gerar nova legenda"
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: "inline-block",
+                      marginRight: 6,
+                      transition: "transform .4s",
+                      transform: captionLoading
+                        ? "rotate(360deg)"
+                        : "rotate(0deg)",
+                    }}
+                  >
+                    ↻
+                  </span>
+                  {captionLoading ? "Gerando..." : "Nova legenda"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyAll()}
+                  disabled={!caption}
+                  className="sv-btn sv-btn-outline"
+                  style={{
+                    padding: "6px 10px",
+                    fontSize: 9,
+                    letterSpacing: "0.14em",
+                    opacity: caption ? 1 : 0.4,
+                  }}
+                >
+                  Copiar tudo
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3" style={{ position: "relative" }}>
+              <textarea
+                value={caption}
+                onChange={(e) => handleCaptionChange(e.target.value)}
+                disabled={captionLoading}
+                style={{
+                  width: "100%",
+                  minHeight: 180,
+                  border: "1.5px solid var(--sv-ink)",
+                  padding: 14,
+                  fontFamily: "var(--sv-sans)",
+                  fontSize: 13,
+                  lineHeight: 1.55,
+                  outline: 0,
+                  resize: "vertical",
+                  background: captionLoading
+                    ? "var(--sv-paper)"
+                    : "var(--sv-paper)",
+                  color: "var(--sv-ink)",
+                  opacity: captionLoading ? 0.5 : 1,
+                }}
+                placeholder={
+                  captionMissingKey
+                    ? "Configure GEMINI_API_KEY pra gerar automaticamente, ou escreva a legenda aqui."
+                    : "Escrevendo legenda..."
+                }
+              />
+              {captionLoading && (
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    pointerEvents: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background:
+                      "linear-gradient(90deg, rgba(247,245,239,0) 0%, rgba(247,245,239,.6) 50%, rgba(247,245,239,0) 100%)",
+                    backgroundSize: "200% 100%",
+                    animation: "sv-caption-shimmer 1.4s linear infinite",
+                  }}
+                >
+                  <em
+                    style={{
+                      fontFamily: "var(--sv-serif, ui-serif, Georgia, serif)",
+                      fontStyle: "italic",
+                      fontSize: 14,
+                      color: "var(--sv-ink)",
+                      background: "var(--sv-paper)",
+                      padding: "4px 10px",
+                      border: "1.5px solid var(--sv-ink)",
+                    }}
+                  >
+                    Escrevendo legenda...
+                  </em>
+                </div>
+              )}
+            </div>
+
             <div
-              className="mt-2"
+              className="mt-2 flex items-center justify-between"
               style={{
                 fontFamily: "var(--sv-mono)",
                 fontSize: 9,
@@ -546,27 +797,44 @@ export default function PreviewPage(props: {
                 textTransform: "uppercase",
               }}
             >
-              {caption.length} / 4000
-            </div>
-            <div className="flex flex-wrap gap-1.5 mt-2.5">
-              {["#marketing", "#carrossel", "#estrategia", "#+5"].map((h) => (
-                <span
-                  key={h}
-                  style={{
-                    padding: "4px 9px",
-                    background: "var(--sv-paper)",
-                    border: "1.5px solid var(--sv-ink)",
-                    fontFamily: "var(--sv-mono)",
-                    fontSize: 9,
-                    letterSpacing: "0.12em",
-                    textTransform: "uppercase",
-                    fontWeight: 700,
-                  }}
-                >
-                  {h}
+              <span>{caption.length} / 4000</span>
+              {captionError && !captionLoading && (
+                <span style={{ color: "#b5230f" }}>
+                  Erro: tente novamente.
                 </span>
-              ))}
+              )}
+              {captionMissingKey && (
+                <span>IA desativada · edite manualmente</span>
+              )}
             </div>
+
+            {hashtags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {hashtags.map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={() => handleCopyHashtag(h)}
+                    className="sv-chip"
+                    style={{
+                      padding: "4px 9px",
+                      background: "var(--sv-paper)",
+                      border: "1.5px solid var(--sv-ink)",
+                      fontFamily: "var(--sv-mono)",
+                      fontSize: 9,
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      color: "var(--sv-ink)",
+                    }}
+                    title={`Copiar ${h}`}
+                  >
+                    {h}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Agendamento */}
@@ -590,7 +858,7 @@ export default function PreviewPage(props: {
                 marginBottom: 8,
               }}
             >
-              Publicação
+              Nº 03 · Publicação
             </label>
             <div className="flex items-center gap-3 mt-3.5">
               <button

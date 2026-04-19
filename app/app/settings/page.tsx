@@ -212,6 +212,20 @@ function SettingsPageContent() {
   const [footerDefault, setFooterDefault] = useState("");
   const [accentColor, setAccentColor] = useState(ACCENT_SWATCHES[0].value);
   const [fontChoice, setFontChoice] = useState<string>(FONT_OPTIONS[0].value);
+  const [brandColors, setBrandColors] = useState<string[]>([]);
+  const [newColorInput, setNewColorInput] = useState("");
+
+  // Voz da IA — campos detalhados persistidos em brand_analysis.
+  const [contentPillars, setContentPillars] = useState<string[]>([]);
+  const [pillarInput, setPillarInput] = useState("");
+  const [audienceDesc, setAudienceDesc] = useState("");
+  const [voiceSamples, setVoiceSamples] = useState<string[]>([]);
+  const [voiceSamplesText, setVoiceSamplesText] = useState("");
+  const [tabus, setTabus] = useState<string[]>([]);
+  const [tabuInput, setTabuInput] = useState("");
+  const [contentRules, setContentRules] = useState<string[]>([]);
+  const [rulesText, setRulesText] = useState("");
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   // Notifications
   const [notifs, setNotifs] = useState<NotifPrefs>(DEFAULT_NOTIFS);
@@ -228,6 +242,7 @@ function SettingsPageContent() {
     setLanguage(profile.language || "pt-br");
     setCarouselStyle(profile.carousel_style || "white");
     setNotifs(readNotifsFromProfile(profile.brand_analysis));
+    setBrandColors(Array.isArray(profile.brand_colors) ? profile.brand_colors : []);
 
     const branding = (profile.brand_analysis as unknown as
       | Record<string, unknown>
@@ -238,6 +253,18 @@ function SettingsPageContent() {
       if (typeof branding.accent === "string") setAccentColor(branding.accent);
       if (typeof branding.font === "string") setFontChoice(branding.font);
     }
+
+    // Hidrata campos de voz a partir do brand_analysis.
+    const ba = profile.brand_analysis as BrandAnalysis | undefined;
+    setContentPillars(Array.isArray(ba?.content_pillars) ? ba!.content_pillars : []);
+    setAudienceDesc(ba?.audience_description || "");
+    const samples = Array.isArray(ba?.voice_samples) ? ba!.voice_samples! : [];
+    setVoiceSamples(samples);
+    setVoiceSamplesText(samples.join("\n\n---\n\n"));
+    setTabus(Array.isArray(ba?.tabus) ? ba!.tabus! : []);
+    const rules = Array.isArray(ba?.content_rules) ? ba!.content_rules! : [];
+    setContentRules(rules);
+    setRulesText(rules.join("\n"));
   }, [profile]);
 
   useEffect(() => {
@@ -290,8 +317,84 @@ function SettingsPageContent() {
         accent: accentColor,
         font: fontChoice,
       },
+      // Voz da IA — campos editáveis em /settings?tab=voice
+      content_pillars: contentPillars,
+      audience_description: audienceDesc,
+      voice_samples: voiceSamples,
+      tabus,
+      content_rules: contentRules,
     };
     return merged as unknown as BrandAnalysis;
+  }
+
+  /**
+   * Re-analisa posts das redes sociais conectadas pra atualizar
+   * brand_analysis (tom, tópicos, audiência sugerida). Usa o handle do
+   * Twitter/Instagram persistido. Se não tiver nenhum conectado, avisa.
+   */
+  async function handleReanalyze() {
+    if (!session) {
+      toast.error("Sessão expirada. Faça login novamente.");
+      return;
+    }
+    const platform = instagramHandle
+      ? "instagram"
+      : twitterHandle
+        ? "twitter"
+        : null;
+    if (!platform) {
+      toast.error(
+        "Conecte um handle do Twitter ou Instagram em Perfil antes de re-analisar."
+      );
+      return;
+    }
+    const handle = platform === "instagram" ? instagramHandle : twitterHandle;
+    setReanalyzing(true);
+    try {
+      const scrapeRes = await fetch("/api/profile-scraper", {
+        method: "POST",
+        headers: jsonWithAuth(session),
+        body: JSON.stringify({ platform, handle: handle.replace(/^@/, "") }),
+      });
+      if (!scrapeRes.ok) {
+        const body = await scrapeRes.json().catch(() => null);
+        throw new Error(body?.error || "Falha ao buscar perfil.");
+      }
+      const scraped = await scrapeRes.json();
+      if (!scraped.recentPosts || scraped.recentPosts.length === 0) {
+        throw new Error("Nenhum post recente encontrado pra analisar.");
+      }
+      const analysisRes = await fetch("/api/brand-analysis", {
+        method: "POST",
+        headers: jsonWithAuth(session),
+        body: JSON.stringify({
+          bio: scraped.bio,
+          recentPosts: scraped.recentPosts,
+          handle: handle.replace(/^@/, ""),
+          platform,
+          followers: scraped.followers,
+        }),
+      });
+      if (!analysisRes.ok) {
+        throw new Error("Falha ao analisar marca.");
+      }
+      const analysis = await analysisRes.json();
+      if (Array.isArray(analysis.suggested_pillars)) {
+        setContentPillars(analysis.suggested_pillars);
+      }
+      if (typeof analysis.suggested_audience === "string") {
+        setAudienceDesc(analysis.suggested_audience);
+      }
+      toast.success(
+        "Marca re-analisada. Clica em Salvar pra persistir as sugestões."
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Erro ao re-analisar marca."
+      );
+    } finally {
+      setReanalyzing(false);
+    }
   }
 
   async function handleSave() {
@@ -309,6 +412,7 @@ function SettingsPageContent() {
         language,
         carousel_style: carouselStyle,
         brand_analysis: buildBrandAnalysisUpdate(),
+        brand_colors: brandColors,
       });
       posthog.capture("settings_saved", {
         has_twitter: !!twitterHandle,
@@ -817,7 +921,7 @@ function SettingsPageContent() {
               </div>
 
               <div className="mt-6">
-                <Label>Cor de destaque</Label>
+                <Label>Cor de destaque padrão</Label>
                 <div className="flex flex-wrap gap-3">
                   {ACCENT_SWATCHES.map((sw) => {
                     const on = accentColor === sw.value;
@@ -847,6 +951,146 @@ function SettingsPageContent() {
                     );
                   })}
                 </div>
+              </div>
+
+              <div className="mt-6">
+                <Label>Paleta da sua marca</Label>
+                <p
+                  style={{
+                    fontFamily: "var(--sv-sans)",
+                    fontSize: 12,
+                    color: "var(--sv-muted)",
+                    marginTop: -4,
+                    marginBottom: 10,
+                  }}
+                >
+                  Adicione até 8 cores (hex). No editor elas aparecem como
+                  swatches pra você trocar a cor de destaque de cada carrossel
+                  sem sair do branding.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  {brandColors.map((c) => (
+                    <div
+                      key={c}
+                      className="relative group"
+                      style={{ width: 52, height: 52 }}
+                    >
+                      <div
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          background: c,
+                          border: "1.5px solid var(--sv-ink)",
+                          boxShadow: "2px 2px 0 0 var(--sv-ink)",
+                        }}
+                        title={c}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBrandColors(brandColors.filter((x) => x !== c))
+                        }
+                        className="absolute -right-2 -top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: "50%",
+                          background: "var(--sv-ink)",
+                          color: "var(--sv-paper)",
+                          fontSize: 11,
+                          border: "1.5px solid var(--sv-paper)",
+                          cursor: "pointer",
+                        }}
+                        aria-label={`Remover ${c}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {brandColors.length < 8 && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={newColorInput || "#7CF067"}
+                        onChange={(e) => setNewColorInput(e.target.value)}
+                        style={{
+                          width: 52,
+                          height: 52,
+                          border: "1.5px dashed var(--sv-ink)",
+                          cursor: "pointer",
+                          background: "transparent",
+                          padding: 0,
+                        }}
+                        title="Escolher cor"
+                      />
+                      <input
+                        type="text"
+                        value={newColorInput}
+                        onChange={(e) => setNewColorInput(e.target.value)}
+                        placeholder="#HEX"
+                        className="sv-input"
+                        style={{
+                          width: 100,
+                          padding: "8px 10px",
+                          fontSize: 12,
+                          fontFamily: "var(--sv-mono)",
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const color = newColorInput.trim();
+                            if (!color) return;
+                            if (!/^#[0-9a-fA-F]{3,8}$/.test(color)) {
+                              toast.error("Use formato hex (ex: #7CF067)");
+                              return;
+                            }
+                            if (brandColors.includes(color)) {
+                              setNewColorInput("");
+                              return;
+                            }
+                            setBrandColors([...brandColors, color]);
+                            setNewColorInput("");
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const color = newColorInput.trim();
+                          if (!color) return;
+                          if (!/^#[0-9a-fA-F]{3,8}$/.test(color)) {
+                            toast.error("Use formato hex (ex: #7CF067)");
+                            return;
+                          }
+                          if (brandColors.includes(color)) {
+                            setNewColorInput("");
+                            return;
+                          }
+                          setBrandColors([...brandColors, color]);
+                          setNewColorInput("");
+                        }}
+                        className="sv-btn-ink"
+                        style={{ padding: "8px 12px", fontSize: 11 }}
+                      >
+                        + Adicionar
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {brandColors.length === 0 && (
+                  <p
+                    className="mt-2"
+                    style={{
+                      fontFamily: "var(--sv-mono)",
+                      fontSize: 10,
+                      letterSpacing: "0.14em",
+                      textTransform: "uppercase",
+                      color: "var(--sv-muted)",
+                    }}
+                  >
+                    Nenhuma cor adicionada. O editor vai usar as cores default.
+                  </p>
+                )}
               </div>
 
               <div className="mt-6">
@@ -1250,6 +1494,272 @@ function SettingsPageContent() {
                     ))}
                 </div>
               )}
+
+              <hr className="sv-divider my-8" />
+
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <Label>Análise da sua marca</Label>
+                  <p
+                    style={{
+                      fontFamily: "var(--sv-sans)",
+                      fontSize: 12.5,
+                      color: "var(--sv-muted)",
+                      marginTop: -4,
+                    }}
+                  >
+                    Pilares, audiência, exemplos de voz, tabus e regras da IA.
+                    Tudo isso é injetado no prompt do Gemini em cada geração
+                    pra o carrossel soar como você.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleReanalyze()}
+                  disabled={reanalyzing}
+                  className="sv-btn sv-btn-outline shrink-0"
+                  style={{
+                    padding: "8px 12px",
+                    fontSize: 10.5,
+                    opacity: reanalyzing ? 0.5 : 1,
+                  }}
+                  title="Lê seus posts recentes e atualiza pilares + audiência"
+                >
+                  {reanalyzing ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={12} />
+                  )}
+                  {reanalyzing ? "Analisando..." : "Re-analisar redes"}
+                </button>
+              </div>
+
+              <Label>Pilares de conteúdo</Label>
+              <p
+                style={{
+                  fontFamily: "var(--sv-sans)",
+                  fontSize: 12,
+                  color: "var(--sv-muted)",
+                  marginTop: -6,
+                  marginBottom: 8,
+                }}
+              >
+                3 a 5 temas que você sempre volta a falar. Ex: "IA aplicada a
+                marketing", "bastidores de agência", "casos reais de cripto".
+              </p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {contentPillars.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() =>
+                      setContentPillars(contentPillars.filter((x) => x !== p))
+                    }
+                    className="sv-chip sv-chip-on"
+                    title="Clique pra remover"
+                  >
+                    {p} <X size={10} />
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={pillarInput}
+                  onChange={(e) => setPillarInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const v = pillarInput.trim();
+                      if (v && !contentPillars.includes(v) && contentPillars.length < 8) {
+                        setContentPillars([...contentPillars, v]);
+                        setPillarInput("");
+                      }
+                    }
+                  }}
+                  placeholder="Adicionar pilar (Enter pra confirmar)"
+                  className="sv-input flex-1"
+                  style={{ padding: "8px 10px", fontSize: 13 }}
+                />
+              </div>
+
+              <div className="mt-6">
+                <Label>Audiência-alvo</Label>
+                <p
+                  style={{
+                    fontFamily: "var(--sv-sans)",
+                    fontSize: 12,
+                    color: "var(--sv-muted)",
+                    marginTop: -6,
+                    marginBottom: 8,
+                  }}
+                >
+                  Descreve em 1 parágrafo pra quem você escreve. Quanto mais
+                  específico, melhor.
+                </p>
+                <textarea
+                  value={audienceDesc}
+                  onChange={(e) => setAudienceDesc(e.target.value)}
+                  placeholder="Ex: Founders de B2B early-stage que gastam muito tempo criando conteúdo no LinkedIn e querem escalar sem perder a voz."
+                  className="sv-input w-full"
+                  rows={3}
+                  style={{ padding: "10px 12px", fontSize: 13, resize: "vertical" }}
+                />
+              </div>
+
+              <div className="mt-6">
+                <Label>Exemplos de voz (1 a 3 posts)</Label>
+                <p
+                  style={{
+                    fontFamily: "var(--sv-sans)",
+                    fontSize: 12,
+                    color: "var(--sv-muted)",
+                    marginTop: -6,
+                    marginBottom: 8,
+                  }}
+                >
+                  Cola posts seus que representam bem sua voz. Separa múltiplos
+                  com uma linha contendo apenas <code>---</code>. A IA imita o
+                  ritmo sem copiar literalmente.
+                </p>
+                <textarea
+                  value={voiceSamplesText}
+                  onChange={(e) => {
+                    setVoiceSamplesText(e.target.value);
+                    const arr = e.target.value
+                      .split(/\n\s*---\s*\n/)
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                      .slice(0, 3);
+                    setVoiceSamples(arr);
+                  }}
+                  placeholder="Cola um post seu aqui.\n\n---\n\nCola outro post aqui (opcional)."
+                  className="sv-input w-full"
+                  rows={7}
+                  style={{
+                    padding: "12px 14px",
+                    fontSize: 13,
+                    resize: "vertical",
+                    fontFamily: "var(--sv-sans)",
+                  }}
+                />
+                <div
+                  className="mt-1.5 uppercase"
+                  style={{
+                    fontFamily: "var(--sv-mono)",
+                    fontSize: 9,
+                    letterSpacing: "0.14em",
+                    color: "var(--sv-muted)",
+                  }}
+                >
+                  {voiceSamples.length} / 3 exemplos detectados
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <Label>Palavras/frases banidas (tabus)</Label>
+                <p
+                  style={{
+                    fontFamily: "var(--sv-sans)",
+                    fontSize: 12,
+                    color: "var(--sv-muted)",
+                    marginTop: -6,
+                    marginBottom: 8,
+                  }}
+                >
+                  Termos que a IA deve evitar. Ex: "ninja", "hack",
+                  "game-changer", "mindset".
+                </p>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {tabus.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTabus(tabus.filter((x) => x !== t))}
+                      style={{
+                        padding: "5px 10px",
+                        fontFamily: "var(--sv-mono)",
+                        fontSize: 11,
+                        border: "1.5px solid var(--sv-ink)",
+                        background: "var(--sv-pink)",
+                        color: "var(--sv-ink)",
+                        cursor: "pointer",
+                      }}
+                      title="Clique pra remover"
+                    >
+                      {t} <span style={{ marginLeft: 4, opacity: 0.6 }}>×</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={tabuInput}
+                    onChange={(e) => setTabuInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const v = tabuInput.trim();
+                        if (v && !tabus.includes(v) && tabus.length < 20) {
+                          setTabus([...tabus, v]);
+                          setTabuInput("");
+                        }
+                      }
+                    }}
+                    placeholder="Adicionar tabu (Enter pra confirmar)"
+                    className="sv-input flex-1"
+                    style={{ padding: "8px 10px", fontSize: 13 }}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <Label>Regras narrativas</Label>
+                <p
+                  style={{
+                    fontFamily: "var(--sv-sans)",
+                    fontSize: 12,
+                    color: "var(--sv-muted)",
+                    marginTop: -6,
+                    marginBottom: 8,
+                  }}
+                >
+                  Uma regra por linha. Ex: "sempre citar fonte no último slide",
+                  "sem emojis em títulos", "frases curtas, uma ideia por slide".
+                </p>
+                <textarea
+                  value={rulesText}
+                  onChange={(e) => {
+                    setRulesText(e.target.value);
+                    const arr = e.target.value
+                      .split(/\n+/)
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                      .slice(0, 10);
+                    setContentRules(arr);
+                  }}
+                  placeholder={"Sempre citar fonte no último slide.\nSem emojis em títulos.\nFrases curtas, uma ideia por slide."}
+                  className="sv-input w-full"
+                  rows={5}
+                  style={{
+                    padding: "10px 12px",
+                    fontSize: 13,
+                    resize: "vertical",
+                    fontFamily: "var(--sv-sans)",
+                  }}
+                />
+                <div
+                  className="mt-1.5 uppercase"
+                  style={{
+                    fontFamily: "var(--sv-mono)",
+                    fontSize: 9,
+                    letterSpacing: "0.14em",
+                    color: "var(--sv-muted)",
+                  }}
+                >
+                  {contentRules.length} / 10 regras
+                </div>
+              </div>
             </Section>
           )}
 

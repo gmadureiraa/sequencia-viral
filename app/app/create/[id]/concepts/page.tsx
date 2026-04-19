@@ -83,6 +83,10 @@ export default function ConceptsPage() {
   const [tone, setTone] = useState<string>("editorial");
   const [language, setLanguage] = useState<string>("pt-br");
   const [niche, setNiche] = useState<string>("marketing");
+  const [sourceType, setSourceType] = useState<
+    "idea" | "video" | "link" | "instagram"
+  >("idea");
+  const [sourceUrl, setSourceUrl] = useState<string | undefined>(undefined);
   const [concepts, setConcepts] = useState<CreateConcept[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,20 +106,38 @@ export default function ConceptsPage() {
       }
       const t = draft.title || "";
       setTopic(t);
+      // variation.style formato: `${tone}|${lang}|${niche}|${jsonMeta?}`
+      // jsonMeta opcional contém { sourceType, sourceUrl } detectados em /new.
       const parts = (draft.variation?.style ?? "editorial|pt-br|marketing").split(
         "|"
       );
-      setTone(parts[0] || "editorial");
-      setLanguage(parts[1] || "pt-br");
-      setNiche(parts[2] || "marketing");
+      const parsedTone = parts[0] || "editorial";
+      const parsedLang = parts[1] || "pt-br";
+      const parsedNiche = parts[2] || "marketing";
+      let parsedSourceType: "idea" | "video" | "link" | "instagram" = "idea";
+      let parsedSourceUrl: string | undefined;
+      if (parts[3]) {
+        try {
+          const meta = JSON.parse(parts.slice(3).join("|"));
+          if (meta?.sourceType) parsedSourceType = meta.sourceType;
+          if (meta?.sourceUrl) parsedSourceUrl = meta.sourceUrl;
+        } catch {
+          // styleMeta malformado — ignora, vai como idea
+        }
+      }
+      setTone(parsedTone);
+      setLanguage(parsedLang);
+      setNiche(parsedNiche);
+      setSourceType(parsedSourceType);
+      setSourceUrl(parsedSourceUrl);
 
       setLoadingDraft(false);
 
       const result = await generateConcepts({
         topic: t,
-        niche: parts[2] || "marketing",
-        tone: parts[0] || "editorial",
-        language: parts[1] || "pt-br",
+        niche: parsedNiche,
+        tone: parsedTone,
+        language: parsedLang,
       });
       setConcepts(result);
     } catch (err) {
@@ -161,6 +183,8 @@ export default function ConceptsPage() {
           niche,
           tone,
           language,
+          sourceType,
+          sourceUrl,
         });
         const chosen = variations[0];
         if (!chosen) throw new Error("IA não devolveu slides.");
@@ -185,7 +209,7 @@ export default function ConceptsPage() {
         if (goToPlans) router.push("/app/plans");
       }
     },
-    [id, user, concepts, generateCarousel, niche, tone, language, router]
+    [id, user, concepts, generateCarousel, niche, tone, language, sourceType, sourceUrl, router]
   );
 
   const showLoader = loadingDraft || loadingConcepts;

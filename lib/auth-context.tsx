@@ -43,6 +43,8 @@ export interface UserProfile {
   usage_limit: number;
   onboarding_completed: boolean;
   brand_analysis?: BrandAnalysis;
+  /** Cores de destaque do branding (hex), usadas como swatches no editor. */
+  brand_colors?: string[];
 }
 
 interface AuthContextValue {

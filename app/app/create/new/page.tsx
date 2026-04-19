@@ -157,6 +157,34 @@ export default function NewCarouselPage() {
     return "business";
   }, [profile]);
 
+  /**
+   * Detecta se o texto tem URL e classifica o tipo pra o backend usar o
+   * extractor certo (YouTube transcript, Instagram via Apify, scrape de
+   * link). Se não tem URL, vai como "idea" (texto livre).
+   */
+  function detectSource(text: string): {
+    sourceType: "idea" | "video" | "link" | "instagram";
+    sourceUrl?: string;
+  } {
+    const urlMatch = text.match(/https?:\/\/[^\s)]+/i);
+    if (!urlMatch) return { sourceType: "idea" };
+    const url = urlMatch[0];
+    const host = (() => {
+      try {
+        return new URL(url).hostname.toLowerCase();
+      } catch {
+        return "";
+      }
+    })();
+    if (/(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(host)) {
+      return { sourceType: "video", sourceUrl: url };
+    }
+    if (/(^|\.)instagram\.com$/.test(host)) {
+      return { sourceType: "instagram", sourceUrl: url };
+    }
+    return { sourceType: "link", sourceUrl: url };
+  }
+
   async function handleSubmit() {
     if (!idea.trim()) {
       toast.error("Escreva uma ideia antes de seguir.");
@@ -168,8 +196,12 @@ export default function NewCarouselPage() {
     }
     setSubmitting(true);
     try {
-      // Persiste rascunho vazio. /concepts auto-dispara Gemini no mount e
-      // popula os slides reais — nenhum mock fica visível pro usuário.
+      // Detecta se o brief tem URL (YouTube, Instagram, artigo) pra que
+      // /concepts + /api/generate usem o extractor certo. Persistimos o
+      // sourceType/sourceUrl dentro da variation.style pra o /concepts ler
+      // depois (serializado como JSON na 4ª posição).
+      const { sourceType, sourceUrl } = detectSource(idea);
+      const styleMeta = JSON.stringify({ sourceType, sourceUrl: sourceUrl ?? null });
       const { row } = await upsertUserCarousel(supabase, user.id, {
         id: null,
         title: idea.slice(0, 80),
@@ -178,7 +210,7 @@ export default function NewCarouselPage() {
         status: "draft",
         variation: {
           title: idea.slice(0, 80),
-          style: `${tone}|${lang}|${niche}`,
+          style: `${tone}|${lang}|${niche}|${styleMeta}`,
         },
       });
       router.push(`/app/create/${row.id}/concepts`);

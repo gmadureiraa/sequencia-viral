@@ -106,7 +106,7 @@ const VARIANT_OPTS: { id: SlideVariant; label: string; ic: React.ReactNode }[] =
   },
 ];
 
-const ACCENT_SWATCHES = [
+const ACCENT_SWATCHES_DEFAULT = [
   "#7CF067",
   "#D262B2",
   "#FF4A1C",
@@ -227,7 +227,35 @@ export default function EditPage(props: {
   const { user, profile, session } = useAuth();
   const { draft, loading, error } = useDraft(id);
 
+  // Ref do textarea do corpo pra aplicar negrito no range selecionado.
+  const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Query customizada pra busca/geração de imagem (quando preenchida,
+  // sobrescreve o imageQuery padrão do slide).
+  const [customImageQuery, setCustomImageQuery] = useState("");
+
   const imagesHook = useImages(session);
+
+  // Paleta de cores de destaque: prioriza cores da marca (definidas em
+  // /app/settings?tab=branding) + defaults como fallback. Dedupes case-insens.
+  const accentSwatches = useMemo(() => {
+    const brand = Array.isArray(profile?.brand_colors)
+      ? profile!.brand_colors!.filter(
+          (c): c is string => typeof c === "string" && c.trim().length > 0
+        )
+      : [];
+    const merged = [...brand, ...ACCENT_SWATCHES_DEFAULT];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of merged) {
+      const k = c.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(c);
+      if (out.length >= 12) break;
+    }
+    return out;
+  }, [profile?.brand_colors]);
 
   const initialTemplate = (searchParams.get("template") as TemplateId | null) ?? null;
 
@@ -329,6 +357,58 @@ export default function EditPage(props: {
     });
   }
 
+  /**
+   * Envolve a seleção atual do textarea body com `**...**`. Se não houver
+   * seleção, insere `****` e posiciona o cursor entre os asteriscos.
+   * Também reverte se a seleção já está wrappada.
+   */
+  function applyBoldToBody() {
+    const ta = bodyTextareaRef.current;
+    if (!ta || !active) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const value = active.body ?? "";
+    const selected = value.slice(start, end);
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+
+    // Se a seleção já está envolta por **, remove.
+    if (
+      selected.startsWith("**") &&
+      selected.endsWith("**") &&
+      selected.length >= 4
+    ) {
+      const inner = selected.slice(2, -2);
+      const next = before + inner + after;
+      updateSlide(activeIndex, { body: next });
+      requestAnimationFrame(() => {
+        ta.focus();
+        ta.setSelectionRange(start, start + inner.length);
+      });
+      return;
+    }
+
+    // Sem seleção: insere "****" e coloca cursor no meio.
+    if (start === end) {
+      const next = before + "****" + after;
+      updateSlide(activeIndex, { body: next });
+      requestAnimationFrame(() => {
+        ta.focus();
+        ta.setSelectionRange(start + 2, start + 2);
+      });
+      return;
+    }
+
+    // Com seleção: envolve.
+    const wrapped = `**${selected}**`;
+    const next = before + wrapped + after;
+    updateSlide(activeIndex, { body: next });
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(start, start + wrapped.length);
+    });
+  }
+
   /** Toggle binário de uma camada específica do slide ativo. */
   function toggleLayer(key: keyof SlideLayers) {
     const slide = slides[activeIndex];
@@ -415,6 +495,26 @@ export default function EditPage(props: {
     }
   }
 
+  /**
+   * Prioridade da query pra busca/geração de imagem:
+   * 1. campo custom preenchido pelo usuário (override explícito)
+   * 2. imageQuery do slide (vem do Gemini, em inglês)
+   * 3. heading do slide
+   * 4. body do slide (truncado)
+   * 5. título do carrossel
+   */
+  function resolveImageQuery(s: CreateSlide): string {
+    const custom = customImageQuery.trim();
+    if (custom) return custom;
+    const iq = s.imageQuery?.trim();
+    if (iq) return iq;
+    const h = s.heading?.trim();
+    if (h) return h;
+    const b = s.body?.trim().slice(0, 60);
+    if (b) return b;
+    return title.trim();
+  }
+
   async function handleSearchImage(targetIndex: number) {
     const s = slides[targetIndex];
     if (!s) return;
@@ -423,13 +523,14 @@ export default function EditPage(props: {
       (s.heading && s.heading.trim()) ||
       (s.body && s.body.trim().slice(0, 60)) ||
       title;
-    if (!query) {
-      toast.error("Escreva um título ou corpo antes de buscar imagem.");
+    const finalQuery = customImageQuery.trim() || query;
+    if (!finalQuery) {
+      toast.error("Escreva uma descrição ou um título antes de buscar.");
       return;
     }
     try {
       const res = await imagesHook.refetchImage(targetIndex, {
-        query,
+        query: finalQuery,
         contextHeading: s.heading,
         contextBody: s.body,
         mode: "search",
@@ -447,13 +548,14 @@ export default function EditPage(props: {
       (s.imageQuery && s.imageQuery.trim()) ||
       (s.heading && s.heading.trim()) ||
       title;
-    if (!query) {
-      toast.error("Escreva um título antes de gerar imagem.");
+    const finalQuery = customImageQuery.trim() || query;
+    if (!finalQuery) {
+      toast.error("Escreva uma descrição ou um título antes de gerar.");
       return;
     }
     try {
       const res = await imagesHook.refetchImage(targetIndex, {
-        query,
+        query: finalQuery,
         contextHeading: s.heading,
         contextBody: s.body,
         mode: "generate",
@@ -812,23 +914,53 @@ export default function EditPage(props: {
           />
         </div>
         <div>
-          <label
-            style={{
-              display: "block",
-              fontFamily: "var(--sv-mono)",
-              fontSize: 8.5,
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              color: "var(--sv-muted)",
-              marginBottom: 4,
-              fontWeight: 700,
-            }}
-          >
-            Corpo (use **bold** pra destacar)
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: 8.5,
+                letterSpacing: "0.2em",
+                textTransform: "uppercase",
+                color: "var(--sv-muted)",
+                fontWeight: 700,
+              }}
+            >
+              Corpo
+            </label>
+            <button
+              type="button"
+              onClick={applyBoldToBody}
+              title="Negrito (⌘B) — selecione um trecho e clique"
+              aria-label="Aplicar negrito"
+              style={{
+                width: 26,
+                height: 22,
+                fontFamily: "var(--sv-sans)",
+                fontWeight: 900,
+                fontSize: 12,
+                color: "var(--sv-ink)",
+                background: "var(--sv-white)",
+                border: "1.5px solid var(--sv-ink)",
+                cursor: "pointer",
+                lineHeight: 1,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              B
+            </button>
+          </div>
           <textarea
+            ref={bodyTextareaRef}
             value={active?.body ?? ""}
             onChange={(e) => updateSlide(activeIndex, { body: e.target.value })}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+                e.preventDefault();
+                applyBoldToBody();
+              }
+            }}
             className="sv-input"
             style={{ width: "100%", minHeight: 72, fontSize: 12.5, padding: "8px 10px" }}
           />
@@ -1096,7 +1228,7 @@ export default function EditPage(props: {
         Cor de destaque
       </h4>
       <div className="flex flex-wrap gap-1.5">
-        {ACCENT_SWATCHES.map((color) => (
+        {accentSwatches.map((color) => (
           <button
             key={color}
             type="button"
@@ -1217,6 +1349,42 @@ export default function EditPage(props: {
           e.target.value = "";
         }}
       />
+
+      {/* Campo custom: sobrescreve o imageQuery do slide pro próximo
+           Buscar/Gerar. Ideal pra refinar ("close-up de mãos digitando",
+           "gráfico azul com tendência de alta"). Vazio = usa query padrão. */}
+      <input
+        type="text"
+        value={customImageQuery}
+        onChange={(e) => setCustomImageQuery(e.target.value)}
+        placeholder="Descreva a imagem (opcional — em PT ou EN)"
+        className="sv-input"
+        style={{
+          width: "100%",
+          padding: "8px 10px",
+          fontSize: 12,
+          fontFamily: "var(--sv-sans)",
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            if (e.shiftKey) void handleGenerateImage(activeIndex);
+            else void handleSearchImage(activeIndex);
+          }
+        }}
+      />
+      <div
+        style={{
+          fontFamily: "var(--sv-mono)",
+          fontSize: 8.5,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "var(--sv-muted)",
+          marginTop: -2,
+        }}
+      >
+        ⏎ busca · shift+⏎ gera IA
+      </div>
 
       <div className="grid gap-1.5" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <button

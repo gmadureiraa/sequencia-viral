@@ -307,7 +307,7 @@ export default function DashboardPage() {
             num piscar de olhos.
           </p>
           <Link
-            href="/app/create"
+            href="/app/create/new"
             className="sv-btn sv-btn-ink"
             style={{ marginTop: 6 }}
           >
@@ -429,7 +429,7 @@ export default function DashboardPage() {
               <EmptyInline
                 title="Nenhum rascunho em aberto."
                 cta={
-                  <Link href="/app/create" className="sv-btn sv-btn-primary">
+                  <Link href="/app/create/new" className="sv-btn sv-btn-primary">
                     + Novo carrossel
                   </Link>
                 }
@@ -438,7 +438,7 @@ export default function DashboardPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
                   gap: 20,
                 }}
               >
@@ -486,7 +486,7 @@ export default function DashboardPage() {
               <EmptyInline
                 title="Você ainda não publicou nenhum carrossel."
                 cta={
-                  <Link href="/app/create" className="sv-btn sv-btn-ink">
+                  <Link href="/app/create/new" className="sv-btn sv-btn-ink">
                     Criar e publicar →
                   </Link>
                 }
@@ -495,7 +495,7 @@ export default function DashboardPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
                   gap: 20,
                 }}
               >
@@ -777,7 +777,7 @@ function CarouselTile({
       transition={{ duration: 0.45, delay: index * 0.05 }}
     >
       <Link
-        href={`/app/create?draft=${carousel.id}`}
+        href={`/app/create/${carousel.id}/edit`}
         className="sv-card"
         style={{
           padding: 0,
@@ -786,7 +786,8 @@ function CarouselTile({
           overflow: "hidden",
         }}
       >
-        {/* Preview 4:5 do primeiro slide */}
+        {/* Preview 4:5 do primeiro slide — slide escalado pra ocupar
+             ~94% do container e deixar o card apertado em volta. */}
         <div
           style={{
             position: "relative",
@@ -798,30 +799,41 @@ function CarouselTile({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            padding: 8,
           }}
         >
           {firstSlide ? (
             <div
               style={{
-                width: 1080 * 0.16,
-                height: 1350 * 0.16,
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 pointerEvents: "none",
               }}
             >
-              <EditorialSlide
-                heading={firstSlide.heading}
-                body={firstSlide.body}
-                imageUrl={firstSlide.imageUrl}
-                slideNumber={1}
-                totalSlides={carousel.slides.length}
-                profile={{
-                  name: "Sequência Viral",
-                  handle: "@sequenciaviral",
-                  photoUrl: "",
+              <div
+                style={{
+                  width: 1080 * 0.22,
+                  height: 1350 * 0.22,
                 }}
-                style={isDark ? "dark" : "white"}
-                scale={0.16}
-              />
+              >
+                <EditorialSlide
+                  heading={firstSlide.heading}
+                  body={firstSlide.body}
+                  imageUrl={firstSlide.imageUrl}
+                  slideNumber={1}
+                  totalSlides={carousel.slides.length}
+                  profile={{
+                    name: "Sequência Viral",
+                    handle: "@sequenciaviral",
+                    photoUrl: "",
+                  }}
+                  style={isDark ? "dark" : "white"}
+                  scale={0.22}
+                />
+              </div>
             </div>
           ) : (
             <span
@@ -834,7 +846,7 @@ function CarouselTile({
         </div>
 
         {/* Meta */}
-        <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
           <h3
             style={{
               fontFamily: "var(--sv-display)",

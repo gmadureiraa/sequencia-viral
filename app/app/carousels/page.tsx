@@ -38,7 +38,7 @@ import {
 import { DEFAULT_DESIGN_TEMPLATE } from "@/lib/carousel-templates";
 import posthog from "posthog-js";
 
-const LIBRARY_SLIDE_PREVIEW_SCALE = 0.14;
+const LIBRARY_SLIDE_PREVIEW_SCALE = 0.22;
 
 function buildLibraryPreviewProfile(profile: UserProfile | null): {
   name: string;
@@ -373,7 +373,7 @@ export default function CarouselsPage() {
               {total} {total === 1 ? "peça salva" : "peças salvas"}. Filtre, duplique, exporte.
             </p>
           </div>
-          <Link href="/app/create" className="sv-btn-primary self-start">
+          <Link href="/app/create/new" className="sv-btn-primary self-start">
             + Novo carrossel
           </Link>
         </div>
@@ -743,7 +743,7 @@ function CarouselCard({
           }}
         >
           <Link
-            href={`/app/create?draft=${carousel.id}`}
+            href={`/app/create/${carousel.id}/edit`}
             className="sv-btn-primary"
             style={{ padding: "7px 12px", fontSize: 9.5 }}
           >
@@ -757,7 +757,7 @@ function CarouselCard({
             <Copy size={11} /> Duplicar
           </button>
           <Link
-            href={`/app/create?draft=${carousel.id}`}
+            href={`/app/create/${carousel.id}/edit`}
             className="sv-btn-outline"
             style={{ padding: "7px 12px", fontSize: 9.5 }}
           >
@@ -979,7 +979,7 @@ function CarouselCard({
           style={{ borderTop: "1.5px solid rgba(10,10,10,0.1)" }}
         >
           <Link
-            href={`/app/create?draft=${carousel.id}`}
+            href={`/app/create/${carousel.id}/edit`}
             className="sv-btn-primary"
             style={{ padding: "7px 12px", fontSize: 9.5 }}
           >
@@ -1037,7 +1037,7 @@ function EmptyState() {
           duplicar e exportar sem perder a ordem.
         </p>
       </div>
-      <Link href="/app/create" className="sv-btn-ink self-start md:self-auto">
+      <Link href="/app/create/new" className="sv-btn-ink self-start md:self-auto">
         <PlusCircle size={13} /> Criar primeiro carrossel
       </Link>
     </section>

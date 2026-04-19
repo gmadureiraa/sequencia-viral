@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { useLandingSession } from "@/lib/use-landing-session";
 import { BASE_ASSET } from "./shared";
 
@@ -69,9 +70,19 @@ export function FinalCTA() {
         style={{ top: "18%", left: "12%", width: 48 }}
       />
 
-      <div className="relative mx-auto max-w-[1240px] px-6">
-        <span
+      <motion.div
+        className="relative mx-auto max-w-[1240px] px-6"
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-80px" }}
+        transition={{ duration: 0.7, ease: "easeOut" }}
+      >
+        <motion.span
           className="inline-flex items-center gap-2"
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.1 }}
           style={{
             padding: "5px 12px",
             border: "1px solid rgba(245,243,236,.25)",
@@ -92,9 +103,13 @@ export function FinalCTA() {
             }}
           />
           Pronto pro primeiro post?
-        </span>
-        <h2
+        </motion.span>
+        <motion.h2
           className="relative mt-5"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.2 }}
           style={{
             fontFamily: "var(--sv-display)",
             fontSize: "clamp(40px, 5.6vw, 80px)",
@@ -106,9 +121,13 @@ export function FinalCTA() {
           Seu primeiro carrossel
           <br />
           <em style={{ color: "var(--sv-green)" }}>em 30 segundos.</em>
-        </h2>
-        <p
+        </motion.h2>
+        <motion.p
           className="relative"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.35 }}
           style={{
             margin: "20px auto 0",
             maxWidth: 500,
@@ -117,8 +136,14 @@ export function FinalCTA() {
           }}
         >
           Cole um link, um texto ou uma ideia. A IA faz o resto, com a sua voz.
-        </p>
-        <div className="relative mt-7 flex flex-wrap justify-center gap-[10px]">
+        </motion.p>
+        <motion.div
+          className="relative mt-7 flex flex-wrap justify-center gap-[10px]"
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.45 }}
+        >
           <Link
             href={primaryHref}
             className="sv-btn sv-btn-primary"
@@ -139,9 +164,13 @@ export function FinalCTA() {
           >
             Ver roadmap
           </Link>
-        </div>
-        <div
+        </motion.div>
+        <motion.div
           className="relative mt-6 flex flex-wrap justify-center gap-[22px]"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.6 }}
           style={{
             fontFamily: "var(--sv-mono)",
             fontSize: 9.5,
@@ -153,8 +182,8 @@ export function FinalCTA() {
           <span>✦ Sem cartão</span>
           <span>✦ 5 carrosséis grátis</span>
           <span>✦ Cancele quando quiser</span>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </section>
   );
 }

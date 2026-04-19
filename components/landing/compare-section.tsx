@@ -63,7 +63,13 @@ export function CompareSection() {
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={i}>
+                <motion.tr
+                  key={i}
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true, margin: "-60px" }}
+                  transition={{ duration: 0.4, delay: 0.05 * i, ease: "easeOut" }}
+                >
                   {r.map((c, j) => {
                     const isFirst = j === 0;
                     const isSV = j === 1;
@@ -90,7 +96,7 @@ export function CompareSection() {
                       </td>
                     );
                   })}
-                </tr>
+                </motion.tr>
               ))}
             </tbody>
           </table>

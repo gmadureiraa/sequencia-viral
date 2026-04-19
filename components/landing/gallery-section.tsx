@@ -246,15 +246,30 @@ function GallerySlide({
     variant === "ink" ? "rgba(247,245,239,.7)" : "rgba(10,10,10,.7)";
 
   return (
-    <div
-      className="relative flex flex-col justify-between overflow-hidden"
+    <motion.div
+      whileHover={{
+        y: -3,
+        transition: { duration: 0.2, ease: "easeOut" },
+      }}
+      className="relative flex flex-col justify-between overflow-hidden cursor-pointer"
       style={{
         border: "1.5px solid var(--sv-ink)",
         boxShadow: main ? "4px 4px 0 0 var(--sv-ink)" : "3px 3px 0 0 var(--sv-ink)",
         padding: main ? "16px 14px 14px" : "14px 12px 12px",
         aspectRatio: "4/5",
         minHeight: 0,
+        transition: "box-shadow 0.2s ease-out",
         ...bg,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = main
+          ? "6px 6px 0 0 var(--sv-ink)"
+          : "5px 5px 0 0 var(--sv-ink)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = main
+          ? "4px 4px 0 0 var(--sv-ink)"
+          : "3px 3px 0 0 var(--sv-ink)";
       }}
     >
       <span
@@ -289,7 +304,7 @@ function GallerySlide({
       >
         {body}
       </p>
-    </div>
+    </motion.div>
   );
 }
 
@@ -481,19 +496,74 @@ export function GallerySection() {
           ))}
         </div>
 
-        <motion.p
+        <motion.div
           {...REVEAL}
-          className="mt-12 text-center"
-          style={{
-            fontFamily: "var(--sv-mono)",
-            fontSize: 10,
-            letterSpacing: "0.22em",
-            textTransform: "uppercase",
-            color: "var(--sv-muted)",
-          }}
+          className="mt-16 flex flex-col items-center gap-5 text-center"
         >
-          ↓ Quer ver o seu nicho? Cria um grátis e a IA adapta tudo.
-        </motion.p>
+          <p
+            style={{
+              fontFamily: "var(--sv-display)",
+              fontSize: "clamp(22px, 2.6vw, 32px)",
+              lineHeight: 1.1,
+              letterSpacing: "-0.02em",
+              color: "var(--sv-ink)",
+              maxWidth: 720,
+            }}
+          >
+            Quer ver um <em>carrossel desses</em> com{" "}
+            <em>seu tema</em>?
+          </p>
+          <p
+            style={{
+              fontSize: 14,
+              lineHeight: 1.55,
+              color: "var(--sv-muted)",
+              maxWidth: 520,
+            }}
+          >
+            A IA adapta o texto, o visual e a estética à sua marca. 5 carrosséis
+            grátis, sem cartão, pra você testar antes de qualquer compromisso.
+          </p>
+          <a
+            href="/app/login"
+            className="inline-flex items-center gap-2"
+            style={{
+              padding: "13px 22px",
+              background: "var(--sv-green)",
+              border: "1.5px solid var(--sv-ink)",
+              boxShadow: "4px 4px 0 0 var(--sv-ink)",
+              fontFamily: "var(--sv-mono)",
+              fontSize: 11,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              fontWeight: 700,
+              color: "var(--sv-ink)",
+              textDecoration: "none",
+              transition: "transform 0.15s ease, box-shadow 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translate(-1.5px, -1.5px)";
+              e.currentTarget.style.boxShadow = "6px 6px 0 0 var(--sv-ink)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translate(0, 0)";
+              e.currentTarget.style.boxShadow = "4px 4px 0 0 var(--sv-ink)";
+            }}
+          >
+            ✦ Criar meu primeiro grátis →
+          </a>
+          <span
+            style={{
+              fontFamily: "var(--sv-mono)",
+              fontSize: 9.5,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              color: "var(--sv-muted)",
+            }}
+          >
+            ~15s por carrossel · sem cartão
+          </span>
+        </motion.div>
       </div>
       <style>{`
         @media (max-width: 960px) {

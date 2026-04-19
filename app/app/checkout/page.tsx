@@ -318,76 +318,10 @@ function CheckoutContent() {
               </ul>
             </article>
 
-            {/* ORDERBUMP — publicação automática */}
-            <motion.article
-              layout
-              className={`relative overflow-hidden rounded-[28px] border-2 border-dashed p-6 transition-all ${
-                bump
-                  ? "border-[var(--accent)] bg-[var(--accent-muted)]"
-                  : "border-[var(--accent)]/50 bg-[var(--accent-muted)]/50"
-              }`}
-            >
-              <div className="flex items-start gap-4">
-                <button
-                  type="button"
-                  onClick={() => { const next = !bump; posthog.capture("order_bump_toggled", { added: next, plan: planParam }); setBump(next); }}
-                  aria-pressed={bump}
-                  className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition ${
-                    bump
-                      ? "border-[var(--accent)] bg-[var(--accent)] text-white"
-                      : "border-[var(--accent)]/60 bg-white"
-                  }`}
-                >
-                  {bump && <Check size={14} strokeWidth={3.5} />}
-                </button>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--accent)] px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-white">
-                          <Star size={10} />
-                          Oferta exclusiva
-                        </span>
-                      </div>
-                      <h3 className="mt-2 text-lg font-black text-zinc-900">
-                        {BUMP_META.name}{" "}
-                        <span className="text-[var(--accent)]">+{formatPrice(BUMP_META.priceCents)}/mês</span>
-                      </h3>
-                      <p className="mt-1 text-sm text-zinc-600">{BUMP_META.tagline}</p>
-                    </div>
-                  </div>
-                  <ul className="mt-4 space-y-1.5">
-                    {BUMP_META.bullets.map((b) => (
-                      <li key={b} className="flex items-center gap-2 text-sm text-zinc-700">
-                        <ArrowRight size={13} className="shrink-0 text-[var(--accent)]" />
-                        {b}
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    type="button"
-                    onClick={() => setBump((v) => !v)}
-                    className={`mt-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition ${
-                      bump
-                        ? "bg-white text-[var(--accent)] border border-[var(--accent)]"
-                        : "bg-[var(--accent)] text-white hover:bg-[var(--accent-dark)]"
-                    }`}
-                  >
-                    {bump ? (
-                      <>
-                        <Check size={14} />
-                        Adicionado ao pedido
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={14} />
-                        Sim, quero garantir essa oferta
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </motion.article>
+            {/* Orderbump "Publicação automática" removido temporariamente —
+                 feature vai ser lançada no roadmap próximo (veja /roadmap).
+                 Código mantido em BUMP_META pra reativar quando estiver
+                 pronto. Sem orderbump, `bump` sempre false no submit. */}
 
             {/* Social proof */}
             <div className="rounded-2xl border border-black/[0.06] bg-white p-5">
@@ -441,24 +375,6 @@ function CheckoutContent() {
                     </div>
                   </div>
 
-                  <AnimatePresence>
-                    {bump && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="flex items-start justify-between gap-4 overflow-hidden text-sm"
-                      >
-                        <div>
-                          <p className="font-bold text-zinc-900">{BUMP_META.name}</p>
-                          <p className="text-xs text-zinc-500">Add-on mensal</p>
-                        </div>
-                        <p className="font-bold text-zinc-900">
-                          {formatPrice(BUMP_META.priceCents)}
-                        </p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </div>
 
                 {/* Discount line */}

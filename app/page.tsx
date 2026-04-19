@@ -443,9 +443,14 @@ function Hero() {
   const primaryLabel = isLoggedIn ? "Ir pro app →" : "Criar primeiro grátis";
 
   return (
-    <header className="relative overflow-hidden" style={{ padding: "72px 0 48px" }}>
+    // ATF 1366×768: padding e headline dimensionados para o CTA ficar visível
+    // sem scroll em laptops comuns (altura útil ≈ 704px descontando nav 64px).
+    <header
+      className="relative overflow-hidden"
+      style={{ padding: "clamp(28px, 4.2vw, 56px) 0 clamp(16px, 3vw, 40px)" }}
+    >
       <div
-        className="mx-auto grid max-w-[1240px] items-center gap-12 px-6"
+        className="mx-auto grid max-w-[1240px] items-center gap-10 px-6"
         style={{
           gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 0.95fr)",
         }}
@@ -458,9 +463,9 @@ function Hero() {
           </span>
 
           <h1
-            className="sv-display mt-5"
+            className="sv-display mt-4"
             style={{
-              fontSize: "clamp(40px, 5.6vw, 76px)",
+              fontSize: "clamp(36px, 4.8vw, 64px)",
               lineHeight: 1.02,
               letterSpacing: "-0.025em",
               fontWeight: 400,

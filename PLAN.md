@@ -21,7 +21,7 @@
 ### 1.1 Landing (`/`)
 - [x] Rebrand v3 aplicado (hero collage + manifest + bento + pricing + FAQ + footer)
 - [ ] **Hero**: reduzir texto, iPhone mockup real com carrossel rotacionando 3-4 slides de exemplo (em andamento)
-- [ ] **Above-the-fold**: garantir que o CTA principal cabe em 1 scroll no desktop comum 1366×768
+- [x] **Above-the-fold**: headline clamp reduzido (36-64px) + padding `clamp(28-56, 16-40)` garantem CTA visível em 1366×768 sem scroll
 - [ ] **Cases / Social Proof**: substituir tweet-cards fictícios por print de 3 carrosséis reais do @madureira0x (esperando Gabriel publicar)
 - [ ] **Comparativo**: validar que a tabela `SV vs Canva vs ChatGPT vs Manual` destaca o diferencial real (velocidade 15s + voz da marca)
 - [ ] **Gallery**: 4 feed posts reais renderizados via TemplateRenderer em escala pequena, não placeholder

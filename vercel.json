@@ -17,6 +17,6 @@
     { "path": "/api/cron/re-engagement", "schedule": "0 17 * * 2" },
     { "path": "/api/cron/onboarding-drip", "schedule": "0 14 * * *" },
     { "path": "/api/cron/usage-reset", "schedule": "0 0 1 * *" },
-    { "path": "/api/cron/healthcheck", "schedule": "*/15 * * * *" }
+    { "path": "/api/cron/healthcheck", "schedule": "0 12 * * *" }
   ]
 }

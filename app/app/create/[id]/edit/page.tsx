@@ -12,7 +12,11 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { useDraft, useAutoSaveDraft } from "@/lib/create/use-draft";
 import { useImages } from "@/lib/create/use-images";
-import type { CreateSlide, SlideVariant } from "@/lib/create/types";
+import type {
+  CreateSlide,
+  SlideLayers,
+  SlideVariant,
+} from "@/lib/create/types";
 
 /**
  * Tela 03 — Editor. 3 colunas (variantes/layers · canvas · branding) no
@@ -177,7 +181,41 @@ function buildPreviewProfile(profile: {
   };
 }
 
+/**
+ * Decide cor de texto contrastante pra um thumb com `bgColor` custom.
+ * Calcula luminância perceptual (ITU BT.601) do hex.
+ */
+function pickThumbFg(hex: string): string {
+  const m = hex.trim().match(/^#?([0-9a-f]{6}|[0-9a-f]{3})$/i);
+  if (!m) return "var(--sv-ink)";
+  let h = m[1];
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const l = (r * 299 + g * 587 + b * 114) / 1000;
+  return l > 140 ? "var(--sv-ink)" : "var(--sv-paper)";
+}
+
 type MobileTab = "variants" | "canvas" | "branding";
+
+/** Swatches do painel "Background". Aplicados por-slide via `slide.bgColor`. */
+const BG_SWATCHES = [
+  "#0A0A0A",
+  "#7CF067",
+  "#D262B2",
+  "#FFFFFF",
+  "#0B0F1E",
+];
+
+const DEFAULT_LAYERS: SlideLayers = { title: true, body: true, bg: true };
+
+/** "+ Adicionar camada" — opções que vão aparecer no menu (stubs por enquanto). */
+const EXTRA_LAYER_OPTIONS = [
+  { id: "quote", label: "Citação em destaque" },
+  { id: "badge", label: "Selo numerado" },
+  { id: "kicker", label: "Tag kicker" },
+] as const;
 
 export default function EditPage(props: {
   params: Promise<{ id: string }>;
@@ -213,6 +251,12 @@ export default function EditPage(props: {
   const [accentTouched, setAccentTouched] = useState(false);
   const [fontTouched, setFontTouched] = useState(false);
   const [scaleTouched, setScaleTouched] = useState(false);
+
+  // Drag-and-drop para reordenar thumbs.
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  // Menu "+ Adicionar" (camada extra) — só UI estub.
+  const [addLayerOpen, setAddLayerOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Usamos um input de upload separado por slide (via indexRef) — armazenamos
@@ -282,6 +326,67 @@ export default function EditPage(props: {
       const next = [...prev];
       next[index] = { ...next[index], ...patch };
       return next;
+    });
+  }
+
+  /** Toggle binário de uma camada específica do slide ativo. */
+  function toggleLayer(key: keyof SlideLayers) {
+    const slide = slides[activeIndex];
+    if (!slide) return;
+    const current = slide.layers ?? DEFAULT_LAYERS;
+    updateSlide(activeIndex, {
+      layers: { ...current, [key]: !current[key] },
+    });
+  }
+
+  // Drag-and-drop nos thumbs (HTML5 nativo).
+  function handleDragStart(index: number) {
+    setDragIndex(index);
+  }
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault();
+    if (dragOverIndex !== index) setDragOverIndex(index);
+  }
+  function handleDrop(targetIndex: number) {
+    if (dragIndex === null || dragIndex === targetIndex) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    setSlides((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(dragIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+    // Ajusta activeIndex pra continuar apontando pro mesmo slide.
+    setActiveIndex((prevActive) => {
+      if (prevActive === dragIndex) return targetIndex;
+      if (dragIndex < prevActive && targetIndex >= prevActive) return prevActive - 1;
+      if (dragIndex > prevActive && targetIndex <= prevActive) return prevActive + 1;
+      return prevActive;
+    });
+    setDragIndex(null);
+    setDragOverIndex(null);
+  }
+  function handleDragEnd() {
+    setDragIndex(null);
+    setDragOverIndex(null);
+  }
+  /** Reordenar via setinhas (mobile fallback). */
+  function moveSlide(fromIdx: number, dir: -1 | 1) {
+    const to = fromIdx + dir;
+    if (to < 0 || to >= slides.length) return;
+    setSlides((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    setActiveIndex((prev) => {
+      if (prev === fromIdx) return to;
+      if (prev === to) return fromIdx;
+      return prev;
     });
   }
 
@@ -468,23 +573,117 @@ export default function EditPage(props: {
         Camadas
       </h4>
       <div className="flex flex-col gap-1">
-        {["Título", "Corpo", "Fundo", "+ Adicionar"].map((layer) => (
-          <div
-            key={layer}
+        {(
+          [
+            { id: "title", label: "Título" },
+            { id: "body", label: "Corpo" },
+            { id: "bg", label: "Fundo" },
+          ] as { id: keyof SlideLayers; label: string }[]
+        ).map((layer) => {
+          const layers = active?.layers ?? DEFAULT_LAYERS;
+          const on = layers[layer.id];
+          return (
+            <button
+              key={layer.id}
+              type="button"
+              onClick={() => toggleLayer(layer.id)}
+              style={{
+                padding: "8px 10px",
+                border: "1.5px solid var(--sv-ink)",
+                background: on ? "var(--sv-white)" : "var(--sv-soft)",
+                fontFamily: "var(--sv-mono)",
+                fontSize: 9.5,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: on ? "var(--sv-ink)" : "var(--sv-muted)",
+                textAlign: "left",
+                cursor: "pointer",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                textDecoration: on ? "none" : "line-through",
+                fontWeight: 700,
+              }}
+              aria-pressed={on}
+            >
+              <span>{layer.label}</span>
+              <span
+                style={{
+                  fontSize: 8,
+                  color: on ? "var(--sv-green, #7CF067)" : "var(--sv-muted)",
+                }}
+              >
+                {on ? "ON" : "OFF"}
+              </span>
+            </button>
+          );
+        })}
+
+        {/* "+ Adicionar" — menu dropdown com camadas extras (stubs). */}
+        <div style={{ position: "relative" }}>
+          <button
+            type="button"
+            onClick={() => setAddLayerOpen((v) => !v)}
             style={{
               padding: "8px 10px",
-              border: "1.5px solid var(--sv-ink)",
-              background: "var(--sv-white)",
+              border: "1.5px dashed var(--sv-ink)",
+              background: addLayerOpen ? "var(--sv-green)" : "var(--sv-white)",
               fontFamily: "var(--sv-mono)",
               fontSize: 9.5,
               letterSpacing: "0.14em",
               textTransform: "uppercase",
               color: "var(--sv-ink)",
+              cursor: "pointer",
+              width: "100%",
+              textAlign: "left",
+              fontWeight: 700,
             }}
           >
-            {layer}
-          </div>
-        ))}
+            + Adicionar
+          </button>
+          {addLayerOpen && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 4px)",
+                left: 0,
+                right: 0,
+                zIndex: 10,
+                border: "1.5px solid var(--sv-ink)",
+                background: "var(--sv-white)",
+                boxShadow: "3px 3px 0 0 var(--sv-ink)",
+              }}
+            >
+              {EXTRA_LAYER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    toast("Em breve: " + opt.label);
+                    setAddLayerOpen(false);
+                  }}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    padding: "8px 10px",
+                    border: "none",
+                    background: "transparent",
+                    fontFamily: "var(--sv-mono)",
+                    fontSize: 9,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: "var(--sv-ink)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    borderBottom: "1px dashed var(--sv-ink)",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <h4
@@ -500,37 +699,63 @@ export default function EditPage(props: {
       >
         Background
       </h4>
-      <div className="flex gap-1.5 flex-wrap">
-        {["#0A0A0A", "#7CF067", "#D262B2", "#FFFFFF", "#0B0F1E"].map((color) => (
+      <div className="flex gap-1.5 flex-wrap items-center">
+        {BG_SWATCHES.map((color) => {
+          const selected = active?.bgColor === color;
+          return (
+            <button
+              key={color}
+              type="button"
+              onClick={() => updateSlide(activeIndex, { bgColor: color })}
+              style={{
+                width: 26,
+                height: 26,
+                background: color,
+                border: "1.5px solid var(--sv-ink)",
+                cursor: "pointer",
+                boxShadow: selected
+                  ? "0 0 0 2px var(--sv-paper) inset, 0 0 0 4px var(--sv-ink)"
+                  : "none",
+              }}
+              aria-label={`Background ${color}`}
+              aria-pressed={selected}
+            />
+          );
+        })}
+        {active?.bgColor && (
           <button
-            key={color}
             type="button"
-            onClick={() =>
-              setSlideStyle(color === "#FFFFFF" || color === "#7CF067" ? "white" : "dark")
-            }
+            onClick={() => updateSlide(activeIndex, { bgColor: undefined })}
             style={{
-              width: 26,
-              height: 26,
-              background: color,
-              border: "1.5px solid var(--sv-ink)",
+              padding: "5px 8px",
+              border: "1.5px dashed var(--sv-ink)",
+              background: "var(--sv-white)",
               cursor: "pointer",
+              fontFamily: "var(--sv-mono)",
+              fontSize: 8,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--sv-ink)",
+              fontWeight: 700,
             }}
-            aria-label={`Background ${color}`}
-          />
-        ))}
+            aria-label="Remover cor custom do slide"
+          >
+            Reset
+          </button>
+        )}
       </div>
     </div>
   );
 
   const CanvasCol = (
     <div
-      className="flex flex-col items-center gap-6"
-      style={{ padding: "28px 20px", background: "var(--sv-soft)", minHeight: 600 }}
+      className="flex flex-col items-center gap-4"
+      style={{ padding: "18px 14px", background: "var(--sv-soft)", minHeight: 480, minWidth: 0 }}
     >
       {active && (
         <div
           style={{
-            boxShadow: "6px 6px 0 0 var(--sv-ink)",
+            boxShadow: "5px 5px 0 0 var(--sv-ink)",
             border: "1.5px solid var(--sv-ink)",
           }}
         >
@@ -544,32 +769,35 @@ export default function EditPage(props: {
             profile={previewProfile}
             style={slideStyle}
             showFooter={activeIndex === 0}
-            scale={0.44}
+            scale={0.36}
             isLastSlide={activeIndex === slides.length - 1}
             accentOverride={accentTouched ? accent : undefined}
             displayFontOverride={
               fontTouched ? familyFromFontId(fontId) : undefined
             }
             textScale={scaleTouched ? textScale : undefined}
+            variant={active.variant ?? "headline"}
+            bgColor={active.bgColor}
+            layers={active.layers ?? DEFAULT_LAYERS}
           />
         </div>
       )}
 
       {/* Inputs do slide ativo */}
       <div
-        className="grid gap-3 w-full"
-        style={{ maxWidth: 720, gridTemplateColumns: "1fr" }}
+        className="grid gap-2.5 w-full"
+        style={{ maxWidth: 620, gridTemplateColumns: "1fr" }}
       >
         <div>
           <label
             style={{
               display: "block",
               fontFamily: "var(--sv-mono)",
-              fontSize: 9,
+              fontSize: 8.5,
               letterSpacing: "0.2em",
               textTransform: "uppercase",
               color: "var(--sv-muted)",
-              marginBottom: 6,
+              marginBottom: 4,
               fontWeight: 700,
             }}
           >
@@ -580,7 +808,7 @@ export default function EditPage(props: {
             value={active?.heading ?? ""}
             onChange={(e) => updateSlide(activeIndex, { heading: e.target.value })}
             className="sv-input"
-            style={{ width: "100%", fontFamily: "var(--sv-display)", fontSize: 18 }}
+            style={{ width: "100%", fontFamily: "var(--sv-display)", fontSize: 15, padding: "8px 10px" }}
           />
         </div>
         <div>
@@ -588,11 +816,11 @@ export default function EditPage(props: {
             style={{
               display: "block",
               fontFamily: "var(--sv-mono)",
-              fontSize: 9,
+              fontSize: 8.5,
               letterSpacing: "0.2em",
               textTransform: "uppercase",
               color: "var(--sv-muted)",
-              marginBottom: 6,
+              marginBottom: 4,
               fontWeight: 700,
             }}
           >
@@ -602,58 +830,128 @@ export default function EditPage(props: {
             value={active?.body ?? ""}
             onChange={(e) => updateSlide(activeIndex, { body: e.target.value })}
             className="sv-input"
-            style={{ width: "100%", minHeight: 90, fontSize: 14 }}
+            style={{ width: "100%", minHeight: 72, fontSize: 12.5, padding: "8px 10px" }}
           />
         </div>
       </div>
 
-      {/* Thumbs horizontais */}
+      {/* Thumbs horizontais com drag-and-drop */}
       <div
-        className="flex gap-2.5 overflow-x-auto py-1"
-        style={{ width: "100%", maxWidth: 720 }}
+        className="flex gap-2 overflow-x-auto py-1"
+        style={{ width: "100%", maxWidth: 620 }}
       >
         {slides.map((s, i) => {
           const on = i === activeIndex;
+          const dragging = dragIndex === i;
+          const targeted = dragOverIndex === i && dragIndex !== null && dragIndex !== i;
+          const bgAccent =
+            s.bgColor ||
+            (i % 2 === 0 ? "var(--sv-ink)" : "var(--sv-green)");
+          const fgAccent = s.bgColor
+            ? pickThumbFg(s.bgColor)
+            : i % 2 === 0
+              ? "var(--sv-paper)"
+              : "var(--sv-ink)";
           return (
-            <button
+            <div
               key={i}
-              type="button"
-              onClick={() => setActiveIndex(i)}
               style={{
+                position: "relative",
                 flexShrink: 0,
-                width: 78,
-                aspectRatio: "4/5",
-                border: "1.5px solid var(--sv-ink)",
-                padding: "7px 6px",
-                fontFamily: "var(--sv-display)",
-                fontSize: 8,
-                lineHeight: 1.05,
-                cursor: "pointer",
                 display: "flex",
                 flexDirection: "column",
-                justifyContent: "space-between",
-                transition: "transform .12s",
-                background: i % 2 === 0 ? "var(--sv-ink)" : "var(--sv-green)",
-                color: i % 2 === 0 ? "var(--sv-paper)" : "var(--sv-ink)",
-                transform: on ? "translateY(-2px)" : "translateY(0)",
-                boxShadow: on ? "3px 3px 0 0 var(--sv-green)" : "none",
+                alignItems: "center",
+                gap: 4,
               }}
             >
-              <span
+              <button
+                type="button"
+                draggable
+                onClick={() => setActiveIndex(i)}
+                onDragStart={() => handleDragStart(i)}
+                onDragOver={(e) => handleDragOver(e, i)}
+                onDrop={() => handleDrop(i)}
+                onDragEnd={handleDragEnd}
                 style={{
-                  fontFamily: "var(--sv-mono)",
-                  fontSize: 6.5,
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  opacity: 0.65,
+                  width: 64,
+                  aspectRatio: "4/5",
+                  border: targeted
+                    ? "2px solid var(--sv-green, #7CF067)"
+                    : "1.5px solid var(--sv-ink)",
+                  padding: "7px 6px",
+                  fontFamily: "var(--sv-display)",
+                  fontSize: 8,
+                  lineHeight: 1.05,
+                  cursor: dragging ? "grabbing" : "grab",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  transition: "transform .12s, opacity .12s",
+                  background: bgAccent,
+                  color: fgAccent,
+                  transform: on ? "translateY(-2px)" : "translateY(0)",
+                  boxShadow: on ? "3px 3px 0 0 var(--sv-green)" : "none",
+                  opacity: dragging ? 0.4 : 1,
                 }}
+                aria-label={`Slide ${i + 1}. Arraste pra reordenar.`}
               >
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <span style={{ fontStyle: "italic" }}>
-                {s.heading?.slice(0, 24) || "—"}
-              </span>
-            </button>
+                <span
+                  style={{
+                    fontFamily: "var(--sv-mono)",
+                    fontSize: 6.5,
+                    letterSpacing: "0.2em",
+                    textTransform: "uppercase",
+                    opacity: 0.65,
+                  }}
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span style={{ fontStyle: "italic" }}>
+                  {s.heading?.slice(0, 24) || "—"}
+                </span>
+              </button>
+              {/* Setinhas mobile: só aparecem se tiver mais de 1 slide */}
+              {slides.length > 1 && (
+                <div className="flex gap-1 lg:hidden">
+                  <button
+                    type="button"
+                    onClick={() => moveSlide(i, -1)}
+                    disabled={i === 0}
+                    style={{
+                      width: 18,
+                      height: 18,
+                      border: "1px solid var(--sv-ink)",
+                      background: "var(--sv-white)",
+                      fontSize: 10,
+                      lineHeight: 1,
+                      cursor: i === 0 ? "not-allowed" : "pointer",
+                      opacity: i === 0 ? 0.3 : 1,
+                    }}
+                    aria-label="Mover slide pra esquerda"
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveSlide(i, 1)}
+                    disabled={i === slides.length - 1}
+                    style={{
+                      width: 18,
+                      height: 18,
+                      border: "1px solid var(--sv-ink)",
+                      background: "var(--sv-white)",
+                      fontSize: 10,
+                      lineHeight: 1,
+                      cursor: i === slides.length - 1 ? "not-allowed" : "pointer",
+                      opacity: i === slides.length - 1 ? 0.3 : 1,
+                    }}
+                    aria-label="Mover slide pra direita"
+                  >
+                    →
+                  </button>
+                </div>
+              )}
+            </div>
           );
         })}
         <button
@@ -661,7 +959,7 @@ export default function EditPage(props: {
           onClick={() => addSlide(slides.length - 1)}
           style={{
             flexShrink: 0,
-            width: 78,
+            width: 64,
             aspectRatio: "4/5",
             border: "1.5px dashed var(--sv-ink)",
             background: "var(--sv-paper)",
@@ -670,7 +968,7 @@ export default function EditPage(props: {
             alignItems: "center",
             justifyContent: "center",
             fontFamily: "var(--sv-display)",
-            fontSize: 28,
+            fontSize: 24,
             fontStyle: "italic",
             cursor: "pointer",
           }}
@@ -1115,28 +1413,31 @@ export default function EditPage(props: {
       <div
         className="hidden lg:grid"
         style={{
-          gridTemplateColumns: "220px 1fr 280px",
+          gridTemplateColumns: "180px minmax(0, 1fr) 240px",
           gap: 0,
           border: "1.5px solid var(--sv-ink)",
           boxShadow: "4px 4px 0 0 var(--sv-ink)",
           background: "var(--sv-white)",
+          minWidth: 0,
         }}
       >
         <aside
           style={{
-            padding: "20px 18px",
+            padding: "14px 12px",
             borderRight: "1.5px solid var(--sv-ink)",
             background: "var(--sv-white)",
+            minWidth: 0,
           }}
         >
           {VariantsCol}
         </aside>
-        <div>{CanvasCol}</div>
+        <div style={{ minWidth: 0 }}>{CanvasCol}</div>
         <aside
           style={{
-            padding: "20px 18px",
+            padding: "14px 12px",
             borderLeft: "1.5px solid var(--sv-ink)",
             background: "var(--sv-white)",
+            minWidth: 0,
           }}
         >
           {BrandingCol}

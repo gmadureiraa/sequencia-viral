@@ -10,6 +10,24 @@ export interface CreateSlide {
   imageUrl?: string;
   /** Variante de layout escolhida para este slide (capa, headline, foto, ...). */
   variant?: SlideVariant;
+  /**
+   * Cor de fundo por-slide. Quando presente, sobrescreve o `slideStyle` global
+   * no render do template. Aceita qualquer valor CSS color (hex, rgb, var(...)).
+   */
+  bgColor?: string;
+  /**
+   * Toggle de camadas visíveis no render. Default: todas `true`.
+   * - `title` oculta o `<h1>` (heading)
+   * - `body` oculta o `<p>` (body)
+   * - `bg` oculta imagem de fundo / textura / grid decorativo
+   */
+  layers?: SlideLayers;
+}
+
+export interface SlideLayers {
+  title: boolean;
+  body: boolean;
+  bg: boolean;
 }
 
 export type SlideVariant =

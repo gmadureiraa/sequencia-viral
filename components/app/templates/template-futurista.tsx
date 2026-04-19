@@ -35,19 +35,34 @@ const TemplateFuturista = forwardRef<HTMLDivElement, SlideProps>(
       displayFontOverride,
       textScale = 1,
       style: slideStyle,
+      variant = "headline",
+      bgColor,
+      layers,
     },
     ref
   ) {
     const bodyImgSrc = resolveImgSrc(imageUrl, exportMode);
     const hasImage = Boolean(bodyImgSrc);
+    const showTitle = layers?.title !== false;
+    const showBody = layers?.body !== false;
+    const showBg = layers?.bg !== false;
 
-    const navy = slideStyle === "white" ? "#FFFFFF" : "#0B0F1E";
+    const baseNavy = slideStyle === "white" ? "#FFFFFF" : "#0B0F1E";
+    const navy = bgColor || baseNavy;
+    const isDarkBg = isColorDark(navy);
     const defaultAccent = "#00F0A0";
     const accent = accentOverride || defaultAccent;
-    const white = slideStyle === "white" ? "#0A0A0A" : "#FFFFFF";
-    const grey = slideStyle === "white" ? "#4B5563" : "#A0A8BC";
-    const gridColor =
-      slideStyle === "white" ? "rgba(10,10,10,0.06)" : "rgba(255,255,255,0.05)";
+    const white = isDarkBg ? "#FFFFFF" : "#0A0A0A";
+    const grey = isDarkBg ? "#A0A8BC" : "#4B5563";
+    const gridColor = isDarkBg
+      ? "rgba(255,255,255,0.05)"
+      : "rgba(10,10,10,0.06)";
+
+    const isCover = variant === "cover";
+    const isPhoto = variant === "photo";
+    const isSplit = variant === "split";
+    const isQuote = variant === "quote";
+    const isCta = variant === "cta";
 
     const defaultDisplayStack =
       '"Space Grotesk", "SVInter", "Inter", system-ui, sans-serif';
@@ -86,30 +101,64 @@ const TemplateFuturista = forwardRef<HTMLDivElement, SlideProps>(
           }}
         >
           {/* Grid de fundo sutil */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              backgroundImage: `linear-gradient(${gridColor} 1px, transparent 1px), linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`,
-              backgroundSize: "60px 60px",
-              zIndex: 0,
-            }}
-          />
+          {showBg && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundImage: `linear-gradient(${gridColor} 1px, transparent 1px), linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`,
+                backgroundSize: "60px 60px",
+                zIndex: 0,
+              }}
+            />
+          )}
+
+          {/* Cover: imagem de fundo ocupando todo o canvas */}
+          {showBg && isCover && hasImage && (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={bodyImgSrc}
+                crossOrigin="anonymous"
+                alt={heading}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  zIndex: 0,
+                  opacity: 0.55,
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background:
+                    "linear-gradient(180deg, rgba(11,15,30,0.35) 0%, rgba(11,15,30,0.9) 100%)",
+                  zIndex: 0,
+                }}
+              />
+            </>
+          )}
 
           {/* Halo radial accent no canto */}
-          <div
-            style={{
-              position: "absolute",
-              top: -200,
-              right: -200,
-              width: 700,
-              height: 700,
-              borderRadius: "50%",
-              background: `radial-gradient(circle, ${accent}22 0%, transparent 60%)`,
-              zIndex: 0,
-              pointerEvents: "none",
-            }}
-          />
+          {showBg && (
+            <div
+              style={{
+                position: "absolute",
+                top: -200,
+                right: -200,
+                width: 700,
+                height: 700,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${accent}22 0%, transparent 60%)`,
+                zIndex: 0,
+                pointerEvents: "none",
+              }}
+            />
+          )}
 
           {/* Kicker topo */}
           <div
@@ -174,123 +223,252 @@ const TemplateFuturista = forwardRef<HTMLDivElement, SlideProps>(
             }}
           />
 
-          {/* Main content */}
-          <div
-            style={{
-              position: "relative",
-              zIndex: 2,
-              flex: "1 1 0",
-              display: "flex",
-              flexDirection: "column",
-              gap: 32,
-              minHeight: 0,
-              overflow: "hidden",
-            }}
-          >
-            <h1
+          {/* Main content — variantes controlam layout */}
+          {isSplit ? (
+            <div
               style={{
-                fontFamily: displayStack,
-                fontSize: (hasImage ? 72 : 90) * ts,
-                fontWeight: 800,
-                lineHeight: 1,
-                letterSpacing: "-0.035em",
-                textTransform: "uppercase",
-                margin: 0,
-                color: white,
+                position: "relative",
+                zIndex: 2,
+                flex: "1 1 0",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 40,
+                minHeight: 0,
+                overflow: "hidden",
               }}
             >
-              {renderRichText(heading, accent)}
-            </h1>
-
-            <p
-              style={{
-                fontFamily: sansStack,
-                fontSize: 28 * ts,
-                lineHeight: 1.5,
-                margin: 0,
-                color: grey,
-                maxWidth: 860,
-                whiteSpace: "pre-line",
-                fontWeight: 400,
-              }}
-            >
-              {renderRichText(body, accent)}
-            </p>
-
-            {hasImage && (
               <div
                 style={{
-                  flex: "1 1 auto",
-                  minHeight: 0,
-                  border: `2px solid ${accent}`,
-                  background: `${accent}0A`,
-                  padding: 6,
                   display: "flex",
-                  alignItems: "center",
+                  flexDirection: "column",
                   justifyContent: "center",
-                  overflow: "hidden",
-                  position: "relative",
+                  gap: 24,
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={bodyImgSrc}
-                  crossOrigin="anonymous"
-                  alt={heading}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    display: "block",
-                  }}
-                />
-                {/* Corner marks */}
-                <span
-                  style={{
-                    position: "absolute",
-                    top: 16,
-                    left: 16,
-                    width: 24,
-                    height: 24,
-                    borderTop: `2px solid ${accent}`,
-                    borderLeft: `2px solid ${accent}`,
-                  }}
-                />
-                <span
-                  style={{
-                    position: "absolute",
-                    bottom: 16,
-                    right: 16,
-                    width: 24,
-                    height: 24,
-                    borderBottom: `2px solid ${accent}`,
-                    borderRight: `2px solid ${accent}`,
-                  }}
-                />
+                {showTitle && (
+                  <h1
+                    style={{
+                      fontFamily: displayStack,
+                      fontSize: 68 * ts,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      letterSpacing: "-0.035em",
+                      textTransform: "uppercase",
+                      margin: 0,
+                      color: white,
+                    }}
+                  >
+                    {renderRichText(heading, accent)}
+                  </h1>
+                )}
+                {showBody && (
+                  <p
+                    style={{
+                      fontFamily: sansStack,
+                      fontSize: 26 * ts,
+                      lineHeight: 1.5,
+                      margin: 0,
+                      color: grey,
+                      whiteSpace: "pre-line",
+                    }}
+                  >
+                    {renderRichText(body, accent)}
+                  </p>
+                )}
               </div>
-            )}
-
-            {isLastSlide && (
+              {showBg && (
+                <div
+                  style={{
+                    border: `2px solid ${accent}`,
+                    background: hasImage
+                      ? `url(${bodyImgSrc}) center/cover`
+                      : `repeating-linear-gradient(0deg, ${accent}22, ${accent}22 2px, transparent 2px, transparent 8px)`,
+                    minHeight: 0,
+                  }}
+                />
+              )}
+            </div>
+          ) : isQuote ? (
+            <div
+              style={{
+                position: "relative",
+                zIndex: 2,
+                flex: "1 1 0",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                alignItems: "center",
+                textAlign: "center",
+                gap: 28,
+                padding: "0 40px",
+              }}
+            >
               <div
                 style={{
-                  display: "inline-flex",
-                  alignSelf: "flex-start",
-                  alignItems: "center",
-                  gap: 14,
-                  background: accent,
-                  color: navy,
-                  padding: "22px 38px",
                   fontFamily: displayStack,
-                  fontSize: 28,
-                  fontWeight: 800,
-                  letterSpacing: "-0.01em",
-                  textTransform: "uppercase",
+                  fontSize: 160,
+                  color: accent,
+                  lineHeight: 0.8,
                 }}
               >
-                Seguir {profile.handle} <span>→</span>
+                &ldquo;
               </div>
-            )}
-          </div>
+              {showTitle && (
+                <h1
+                  style={{
+                    fontFamily: displayStack,
+                    fontSize: 72 * ts,
+                    fontWeight: 800,
+                    lineHeight: 1.05,
+                    letterSpacing: "-0.03em",
+                    textTransform: "uppercase",
+                    margin: 0,
+                    color: white,
+                  }}
+                >
+                  {renderRichText(heading, accent)}
+                </h1>
+              )}
+              {showBody && (
+                <p
+                  style={{
+                    fontFamily: sansStack,
+                    fontSize: 26 * ts,
+                    lineHeight: 1.5,
+                    margin: 0,
+                    color: grey,
+                    maxWidth: 780,
+                    whiteSpace: "pre-line",
+                  }}
+                >
+                  {renderRichText(body, accent)}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div
+              style={{
+                position: "relative",
+                zIndex: 2,
+                flex: "1 1 0",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: isCover ? "flex-end" : "flex-start",
+                gap: 32,
+                minHeight: 0,
+                overflow: "hidden",
+              }}
+            >
+              {showTitle && (
+                <h1
+                  style={{
+                    fontFamily: displayStack,
+                    fontSize:
+                      (isCover ? 120 : hasImage && !isPhoto ? 72 : 90) * ts,
+                    fontWeight: 800,
+                    lineHeight: 1,
+                    letterSpacing: "-0.035em",
+                    textTransform: "uppercase",
+                    margin: 0,
+                    color: white,
+                  }}
+                >
+                  {renderRichText(heading, accent)}
+                </h1>
+              )}
+
+              {showBody && !isCover && (
+                <p
+                  style={{
+                    fontFamily: sansStack,
+                    fontSize: (isPhoto ? 22 : 28) * ts,
+                    lineHeight: 1.5,
+                    margin: 0,
+                    color: grey,
+                    maxWidth: 860,
+                    whiteSpace: "pre-line",
+                    fontWeight: 400,
+                  }}
+                >
+                  {renderRichText(body, accent)}
+                </p>
+              )}
+
+              {showBg && hasImage && !isCover && (
+                <div
+                  style={{
+                    flex: "1 1 auto",
+                    minHeight: 0,
+                    border: `2px solid ${accent}`,
+                    background: `${accent}0A`,
+                    padding: 6,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                    position: "relative",
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={bodyImgSrc}
+                    crossOrigin="anonymous"
+                    alt={heading}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                  />
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 16,
+                      left: 16,
+                      width: 24,
+                      height: 24,
+                      borderTop: `2px solid ${accent}`,
+                      borderLeft: `2px solid ${accent}`,
+                    }}
+                  />
+                  <span
+                    style={{
+                      position: "absolute",
+                      bottom: 16,
+                      right: 16,
+                      width: 24,
+                      height: 24,
+                      borderBottom: `2px solid ${accent}`,
+                      borderRight: `2px solid ${accent}`,
+                    }}
+                  />
+                </div>
+              )}
+
+              {(isCta || isLastSlide) && (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignSelf: "flex-start",
+                    alignItems: "center",
+                    gap: 14,
+                    background: accent,
+                    color: "#0B0F1E",
+                    padding: "22px 38px",
+                    fontFamily: displayStack,
+                    fontSize: 28,
+                    fontWeight: 800,
+                    letterSpacing: "-0.01em",
+                    textTransform: "uppercase",
+                    boxShadow: isCta ? `0 0 30px ${accent}88` : undefined,
+                  }}
+                >
+                  Seguir {profile.handle} <span>→</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Footer */}
           <div
@@ -332,5 +510,17 @@ const TemplateFuturista = forwardRef<HTMLDivElement, SlideProps>(
     );
   }
 );
+
+function isColorDark(color: string): boolean {
+  const m = color.trim().match(/^#?([0-9a-f]{6}|[0-9a-f]{3})$/i);
+  if (!m) return true; // default dark (navy)
+  let h = m[1];
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const l = (r * 299 + g * 587 + b * 114) / 1000;
+  return l <= 140;
+}
 
 export default TemplateFuturista;

@@ -7,6 +7,20 @@
 
 export type TemplateId = "manifesto" | "futurista" | "autoral" | "twitter";
 
+export type SlideVariantName =
+  | "cover"
+  | "headline"
+  | "photo"
+  | "quote"
+  | "split"
+  | "cta";
+
+export interface SlideLayerFlags {
+  title: boolean;
+  body: boolean;
+  bg: boolean;
+}
+
 export interface SlideProps {
   heading: string;
   body: string;
@@ -31,6 +45,20 @@ export interface SlideProps {
   displayFontOverride?: string;
   /** Multiplicador do tamanho do texto (body + heading). Default: 1. Range: 0.8–1.3. */
   textScale?: number;
+  /**
+   * Variante de layout aplicada pelo template (capa / headline / foto / citação /
+   * split / cta). Cada template traduz a variante no seu próprio vocabulário.
+   */
+  variant?: SlideVariantName;
+  /**
+   * Cor de fundo por-slide. Sobrescreve `style: white/dark` quando presente.
+   * Aceita qualquer valor CSS color.
+   */
+  bgColor?: string;
+  /**
+   * Flags de visibilidade de camadas. Se `title=false` oculta heading, etc.
+   */
+  layers?: SlideLayerFlags;
 }
 
 export interface TemplateMeta {

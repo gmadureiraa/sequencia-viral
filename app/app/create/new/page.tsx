@@ -7,39 +7,55 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { upsertUserCarousel } from "@/lib/carousel-storage";
-import { useGenerate } from "@/lib/create/use-generate";
 import { makeMockSlides } from "@/lib/create/types";
 
 /**
- * Tela 01 — Nova criação (novo carrossel). Baseado em `v-new` do handoff.
- * Usuário digita ideia → gera conceitos via /api/generate-concepts →
- * persiste rascunho inicial com slides mock → navega pra /[id]/templates.
+ * Tela 01 — Nova criação. User escreve brief → persiste rascunho com
+ * topic+tone+lang → navega pra /[id]/concepts (IA gera 5 ângulos
+ * diferentes pra escolher). Só depois disso vem template e edit.
  */
 
-type SlidesCount = 6 | 8 | 10 | 12;
 type Tone = "editorial" | "informal" | "direto" | "provocativo";
-type Cta = "seguir" | "salvar" | "compartilhar" | "comentar";
 type Lang = "pt-br" | "en";
 
-const SHORTCUTS: { label: string; seed: string }[] = [
-  { label: "+ Análise de lançamento", seed: "Análise do lançamento do novo produto X" },
-  { label: "+ Case em 5 lições", seed: "5 lições do case Y para marcas pequenas" },
-  { label: "+ Opinião polêmica", seed: "Por que a estratégia Z não vai funcionar" },
-  { label: "+ Resumir link", seed: "Colar aqui o link de uma matéria" },
+const SHORTCUTS: { label: string; kicker: string; seed: string }[] = [
+  {
+    kicker: "Nº 01 · TUTORIAL",
+    label: "Como fazer X",
+    seed: "Como [ação específica] em [N passos / contexto]. Ex: como ganhar os primeiros 1.000 seguidores sem ads.",
+  },
+  {
+    kicker: "Nº 02 · CASE",
+    label: "Lições de um case",
+    seed: "O que [marca/pessoa] fez para conseguir [resultado], e as lições aplicáveis ao seu negócio.",
+  },
+  {
+    kicker: "Nº 03 · HOT TAKE",
+    label: "Opinião forte",
+    seed: "Por que [crença popular] está errada e o que você deveria fazer no lugar.",
+  },
+  {
+    kicker: "Nº 04 · DADOS",
+    label: "Dados surpreendentes",
+    seed: "X dados que [público] não sabe sobre [tema] — e o que muda quando você entende.",
+  },
+  {
+    kicker: "Nº 05 · MITOS",
+    label: "Mitos vs verdades",
+    seed: "N mitos sobre [tema] que ninguém questiona — e a verdade que contradiz cada um.",
+  },
+  {
+    kicker: "Nº 06 · PROCESSO",
+    label: "Explicador técnico",
+    seed: "Como [processo/mecanismo] realmente funciona — passo a passo sem jargão.",
+  },
 ];
 
-const SLIDES_OPTS: SlidesCount[] = [6, 8, 10, 12];
 const TONE_OPTS: { id: Tone; label: string }[] = [
   { id: "editorial", label: "Editorial" },
   { id: "informal", label: "Informal" },
   { id: "direto", label: "Direto" },
   { id: "provocativo", label: "Provocativo" },
-];
-const CTA_OPTS: { id: Cta; label: string }[] = [
-  { id: "seguir", label: "Seguir" },
-  { id: "salvar", label: "Salvar" },
-  { id: "compartilhar", label: "Compartilhar" },
-  { id: "comentar", label: "Comentar" },
 ];
 const LANG_OPTS: { id: Lang; label: string }[] = [
   { id: "pt-br", label: "PT-BR" },
@@ -112,14 +128,12 @@ function OptCycler<T extends string | number>({
 
 export default function NewCarouselPage() {
   const router = useRouter();
-  const { user, session, profile } = useAuth();
-  const { generateConcepts, loadingConcepts } = useGenerate(session);
+  const { user, profile } = useAuth();
 
   const [idea, setIdea] = useState("");
-  const [slidesCount, setSlidesCount] = useState<SlidesCount>(8);
   const [tone, setTone] = useState<Tone>("editorial");
-  const [cta, setCta] = useState<Cta>("seguir");
   const [lang, setLang] = useState<Lang>("pt-br");
+  const [submitting, setSubmitting] = useState(false);
 
   const niche = useMemo(() => {
     const blob = (profile?.niche ?? []).join(" ").toLowerCase();
@@ -129,42 +143,37 @@ export default function NewCarouselPage() {
     return "business";
   }, [profile]);
 
-  async function handleGenerate() {
+  async function handleSubmit() {
     if (!idea.trim()) {
-      toast.error("Escreva uma ideia antes de gerar.");
+      toast.error("Escreva uma ideia antes de seguir.");
       return;
     }
     if (!user || !supabase) {
       toast.error("Faça login para criar um carrossel.");
       return;
     }
+    setSubmitting(true);
     try {
-      // 1. Gera conceitos (barato, ~3s)
-      const concepts = await generateConcepts({
-        topic: idea,
-        niche,
-        tone,
-        language: lang,
-      });
-      const chosen = concepts[0];
-      const title = chosen?.title || idea.slice(0, 60);
-
-      // 2. Persiste rascunho inicial com slides mock.
-      const mockSlides = makeMockSlides(chosen?.title ?? idea, slidesCount);
-
+      // Persiste rascunho inicial com metadados (brief vai na variation.style
+      // como hint pra rota /concepts/ saber o tema, tom e idioma).
+      const mockSlides = makeMockSlides(idea, 8);
       const { row } = await upsertUserCarousel(supabase, user.id, {
         id: null,
-        title,
+        title: idea.slice(0, 80),
         slides: mockSlides,
         slideStyle: "white",
         status: "draft",
+        variation: {
+          title: idea.slice(0, 80),
+          style: `${tone}|${lang}|${niche}`,
+        },
       });
-
-      // 3. Navega pra escolha de template com o id do rascunho.
-      router.push(`/app/create/${row.id}/templates`);
+      router.push(`/app/create/${row.id}/concepts`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro ao iniciar o carrossel.";
+      const msg = err instanceof Error ? err.message : "Erro ao iniciar.";
       toast.error(msg);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -174,26 +183,26 @@ export default function NewCarouselPage() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
       className="mx-auto w-full"
-      style={{ maxWidth: 1200 }}
+      style={{ maxWidth: 1100, minWidth: 0 }}
     >
       {/* eyebrow */}
       <span className="sv-eyebrow">
-        <span className="sv-dot" /> Novo · Rascunho sem título
+        <span className="sv-dot" /> Nº 01 · Brief · Novo carrossel
       </span>
 
       <h1
-        className="sv-display mt-4"
+        className="sv-display mt-3"
         style={{
-          fontSize: "clamp(38px, 6vw, 56px)",
-          lineHeight: 1.02,
-          letterSpacing: "-0.025em",
+          fontSize: "clamp(26px, 3.6vw, 40px)",
+          lineHeight: 1.04,
+          letterSpacing: "-0.02em",
         }}
       >
         Qual é a <em>ideia</em> do{" "}
         <span
           style={{
             background: "var(--sv-green)",
-            padding: "0 10px",
+            padding: "0 8px",
             fontStyle: "italic",
           }}
         >
@@ -202,36 +211,33 @@ export default function NewCarouselPage() {
         ?
       </h1>
       <p
-        className="mt-2"
+        className="mt-1.5"
         style={{
           color: "var(--sv-muted)",
-          fontSize: 15,
-          lineHeight: 1.55,
-          maxWidth: 560,
+          fontSize: 13.5,
+          lineHeight: 1.5,
+          maxWidth: 520,
         }}
       >
-        Cole um link, escreva um tema, jogue um rascunho. A Sequência estrutura
-        em slides editoriais.
+        Escreve um tema, cola um link, joga um rascunho. Depois a IA monta
+        cinco ângulos diferentes pra você escolher o caminho.
       </p>
 
-      {/* Split */}
-      <div
-        className="mt-6 grid gap-8"
-        style={{ gridTemplateColumns: "1fr 1fr" }}
-      >
-        {/* LEFT */}
-        <div className="flex flex-col gap-5 min-w-0">
+      {/* Split: 2 cols no desktop, 1 col em mobile — min-width 0 impede overflow */}
+      <div className="mt-5 grid gap-5 lg:grid-cols-2" style={{ minWidth: 0 }}>
+        {/* LEFT — brief */}
+        <div className="flex flex-col gap-4" style={{ minWidth: 0 }}>
           <textarea
             value={idea}
             onChange={(e) => setIdea(e.target.value)}
             placeholder="Ex: A estratégia dos três zeros da Coca-Cola e por que ela redefine o mercado de bebidas..."
             style={{
-              minHeight: 220,
+              minHeight: 150,
               fontFamily: "var(--sv-display)",
-              fontSize: 28,
-              lineHeight: 1.15,
+              fontSize: 19,
+              lineHeight: 1.2,
               letterSpacing: "-0.01em",
-              padding: 20,
+              padding: 16,
               background: "var(--sv-white)",
               border: "1.5px solid var(--sv-ink)",
               outline: 0,
@@ -239,6 +245,8 @@ export default function NewCarouselPage() {
               fontWeight: 400,
               resize: "vertical",
               color: "var(--sv-ink)",
+              width: "100%",
+              boxSizing: "border-box",
             }}
             onFocus={(e) => {
               e.currentTarget.style.boxShadow = "5px 5px 0 0 var(--sv-green)";
@@ -259,17 +267,55 @@ export default function NewCarouselPage() {
                 color: "var(--sv-muted)",
               }}
             >
-              Ou comece com um atalho:
+              Atalhos · clique pra preencher o prompt
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2 sm:grid-cols-2">
               {SHORTCUTS.map((s) => (
                 <button
                   key={s.label}
                   type="button"
-                  className="sv-chip"
+                  className="text-left transition-all"
+                  style={{
+                    padding: "10px 12px",
+                    border: "1.5px solid var(--sv-ink)",
+                    background: "var(--sv-white)",
+                    boxShadow: "0 0 0 0 var(--sv-ink)",
+                  }}
                   onClick={() => setIdea(s.seed)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translate(-1px,-1px)";
+                    e.currentTarget.style.boxShadow =
+                      "3px 3px 0 0 var(--sv-ink)";
+                    e.currentTarget.style.background = "var(--sv-green)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translate(0,0)";
+                    e.currentTarget.style.boxShadow = "0 0 0 0 var(--sv-ink)";
+                    e.currentTarget.style.background = "var(--sv-white)";
+                  }}
                 >
-                  {s.label}
+                  <div
+                    style={{
+                      fontFamily: "var(--sv-mono)",
+                      fontSize: 8.5,
+                      letterSpacing: "0.18em",
+                      textTransform: "uppercase",
+                      color: "var(--sv-muted)",
+                    }}
+                  >
+                    {s.kicker}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--sv-sans)",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: "var(--sv-ink)",
+                      marginTop: 2,
+                    }}
+                  >
+                    {s.label}
+                  </div>
                 </button>
               ))}
             </div>
@@ -286,56 +332,57 @@ export default function NewCarouselPage() {
                 color: "var(--sv-muted)",
               }}
             >
-              Opções
+              Tom e idioma
             </div>
-            <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
-              <OptCycler
-                label="Nº de slides"
-                value={slidesCount}
-                options={SLIDES_OPTS}
-                onChange={(v) => setSlidesCount(v)}
-              />
+            <div className="grid gap-3 sm:grid-cols-2">
               <OptCycler
                 label="Tom"
                 value={tone}
                 options={TONE_OPTS.map((o) => o.id)}
                 onChange={(v) => setTone(v)}
-                formatter={(v) => TONE_OPTS.find((o) => o.id === v)?.label ?? String(v)}
-              />
-              <OptCycler
-                label="CTA final"
-                value={cta}
-                options={CTA_OPTS.map((o) => o.id)}
-                onChange={(v) => setCta(v)}
-                formatter={(v) => CTA_OPTS.find((o) => o.id === v)?.label ?? String(v)}
+                formatter={(v) =>
+                  TONE_OPTS.find((o) => o.id === v)?.label ?? String(v)
+                }
               />
               <OptCycler
                 label="Idioma"
                 value={lang}
                 options={LANG_OPTS.map((o) => o.id)}
                 onChange={(v) => setLang(v)}
-                formatter={(v) => LANG_OPTS.find((o) => o.id === v)?.label ?? String(v)}
+                formatter={(v) =>
+                  LANG_OPTS.find((o) => o.id === v)?.label ?? String(v)
+                }
               />
             </div>
+            <p
+              className="mt-2"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: 9.5,
+                color: "var(--sv-muted)",
+                letterSpacing: "0.08em",
+              }}
+            >
+              A IA decide a quantidade de slides e o CTA ideal pra cada ângulo.
+            </p>
           </div>
 
           <button
             type="button"
-            disabled={loadingConcepts || !idea.trim()}
-            onClick={handleGenerate}
+            disabled={submitting || !idea.trim()}
+            onClick={handleSubmit}
             className="sv-btn sv-btn-primary"
             style={{
-              padding: "14px 22px",
-              fontSize: 11.5,
+              padding: "11px 18px",
+              fontSize: 11,
               alignSelf: "flex-start",
-              opacity: loadingConcepts || !idea.trim() ? 0.55 : 1,
-              cursor:
-                loadingConcepts || !idea.trim() ? "not-allowed" : "pointer",
+              opacity: submitting || !idea.trim() ? 0.55 : 1,
+              cursor: submitting || !idea.trim() ? "not-allowed" : "pointer",
             }}
           >
             <svg
-              width={14}
-              height={14}
+              width={13}
+              height={13}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -344,14 +391,14 @@ export default function NewCarouselPage() {
             >
               <path d="M12 2l2.4 7.4H22l-6.2 4.5L18.2 22 12 17.3 5.8 22l2.4-8.1L2 9.4h7.6z" />
             </svg>
-            {loadingConcepts ? "Gerando..." : "Gerar rascunho →"}
+            {submitting ? "Preparando..." : "Ver caminhos possíveis →"}
           </button>
         </div>
 
-        {/* RIGHT (preview ao vivo) */}
-        <div
+        {/* RIGHT — preview de como vai funcionar (estático, explicativo) */}
+        <aside
           style={{
-            padding: 28,
+            padding: 18,
             background: "var(--sv-ink)",
             color: "var(--sv-paper)",
             border: "1.5px solid var(--sv-ink)",
@@ -359,118 +406,113 @@ export default function NewCarouselPage() {
             backgroundImage:
               "radial-gradient(circle at 1px 1px, rgba(255,255,255,.08) 1px, transparent 1.5px)",
             backgroundSize: "14px 14px",
-            minHeight: 520,
+            minWidth: 0,
+            height: "fit-content",
           }}
         >
           <div
             style={{
               fontFamily: "var(--sv-mono)",
-              fontSize: 9.5,
+              fontSize: 9,
               letterSpacing: "0.2em",
               textTransform: "uppercase",
               color: "var(--sv-green)",
-              marginBottom: 14,
+              marginBottom: 10,
             }}
           >
-            ✦ Preview ao vivo
+            ✦ Como funciona
           </div>
           <h3
             style={{
               fontFamily: "var(--sv-display)",
-              fontSize: 26,
-              lineHeight: 1.08,
+              fontSize: 17,
+              lineHeight: 1.15,
               letterSpacing: "-0.01em",
               fontWeight: 400,
-              marginBottom: 8,
+              marginBottom: 10,
             }}
           >
-            A Sequência <em style={{ fontStyle: "italic" }}>estrutura</em> seu
-            texto em slides editoriais — você só refina.
+            Você escreve. A IA gera <em>cinco ângulos</em>. Você escolhe{" "}
+            <em>um</em> e refina.
           </h3>
-
-          {idea.trim().length === 0 ? (
-            <div
-              className="mt-6"
-              style={{
-                padding: "40px 20px",
-                textAlign: "center",
-                color: "rgba(245,243,236,.5)",
-                fontFamily: "var(--sv-mono)",
-                fontSize: 10,
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-              }}
-            >
-              <span
+          <ol
+            style={{
+              paddingLeft: 0,
+              listStyle: "none",
+              display: "grid",
+              gap: 7,
+              marginTop: 10,
+            }}
+          >
+            {[
+              { n: "01", t: "Escreva", d: "Brief livre no box ao lado." },
+              {
+                n: "02",
+                t: "Veja caminhos",
+                d: "A IA devolve 5 ângulos (dado / história / provocação / tutorial / contrarian).",
+              },
+              {
+                n: "03",
+                t: "Escolha um",
+                d: "Clique no ângulo. A IA gera o carrossel completo.",
+              },
+              {
+                n: "04",
+                t: "Pick template",
+                d: "Escolhe o tratamento visual (4 opções).",
+              },
+              {
+                n: "05",
+                t: "Edita e exporta",
+                d: "Refina slide a slide. PNG / PDF.",
+              },
+            ].map((step) => (
+              <li
+                key={step.n}
                 style={{
-                  fontFamily: "var(--sv-display)",
-                  fontSize: 52,
-                  fontStyle: "italic",
-                  color: "var(--sv-green)",
-                  marginBottom: 12,
-                  display: "block",
-                  fontWeight: 400,
+                  display: "grid",
+                  gridTemplateColumns: "32px 1fr",
+                  gap: 8,
+                  alignItems: "start",
                 }}
               >
-                ✺
-              </span>
-              Cole uma ideia ao lado
-              <br /> pra gerar a prévia
-            </div>
-          ) : (
-            <div className="mt-5 flex gap-2.5 overflow-x-auto pb-3">
-              {makeMockSlides(idea, slidesCount).map((s, i) => {
-                const variantBg =
-                  s.variant === "cta"
-                    ? "var(--sv-pink)"
-                    : s.variant === "photo"
-                      ? "var(--sv-green)"
-                      : i % 2 === 0
-                        ? "var(--sv-ink)"
-                        : "var(--sv-green)";
-                const isDark = variantBg === "var(--sv-ink)";
-                return (
+                <span
+                  style={{
+                    fontFamily: "var(--sv-display)",
+                    fontSize: 20,
+                    lineHeight: 1,
+                    color: "var(--sv-green)",
+                  }}
+                >
+                  {step.n}
+                </span>
+                <div>
                   <div
-                    key={i}
-                    className="shrink-0"
                     style={{
-                      width: 120,
-                      aspectRatio: "4/5",
-                      border: "1.5px solid var(--sv-paper)",
-                      background: variantBg,
-                      color: isDark ? "var(--sv-paper)" : "var(--sv-ink)",
-                      padding: 10,
-                      fontFamily: "var(--sv-display)",
-                      fontSize: 11,
-                      lineHeight: 1.1,
-                      fontWeight: 400,
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      backgroundImage: isDark
-                        ? "radial-gradient(circle at 1px 1px, rgba(255,255,255,.15) 1px, transparent 1.5px)"
-                        : undefined,
-                      backgroundSize: isDark ? "5px 5px" : undefined,
+                      fontFamily: "var(--sv-sans)",
+                      fontWeight: 700,
+                      fontSize: 12,
+                      color: "var(--sv-paper)",
                     }}
                   >
-                    <div
-                      style={{
-                        fontFamily: "var(--sv-mono)",
-                        fontSize: 7,
-                        letterSpacing: "0.2em",
-                        textTransform: "uppercase",
-                        opacity: 0.7,
-                      }}
-                    >
-                      {String(i + 1).padStart(2, "0")} · {s.variant ?? "Slide"}
-                    </div>
-                    <div style={{ fontStyle: "italic" }}>{s.heading}</div>
+                    {step.t}
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--sv-sans)",
+                      fontSize: 11,
+                      color: "rgba(247,245,239,0.6)",
+                      lineHeight: 1.4,
+                      marginTop: 1,
+                    }}
+                  >
+                    {step.d}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </aside>
       </div>
     </motion.div>
   );

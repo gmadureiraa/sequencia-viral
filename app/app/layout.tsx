@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import {
@@ -12,10 +12,9 @@ import {
   Menu,
   X,
   Map,
-  BarChart3,
-  Send,
   BookOpen,
   Sparkles,
+  Search,
 } from "lucide-react";
 import Link from "next/link";
 import { Toaster } from "@/components/ui/sonner";
@@ -24,9 +23,18 @@ type NavItem = {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
-  comingSoon?: boolean;
   badge?: string;
 };
+
+const NAV_ITEMS: NavItem[] = [
+  { href: "/app", label: "Início", icon: LayoutDashboard },
+  { href: "/app/create", label: "Criar", icon: PlusCircle },
+  { href: "/app/carousels", label: "Carrosséis", icon: FolderOpen },
+  { href: "/app/plans", label: "Assinar", icon: Sparkles, badge: "Pro" },
+  { href: "/app/help", label: "Guia", icon: BookOpen },
+  { href: "/app/roadmap", label: "Roadmap", icon: Map },
+  { href: "/app/settings", label: "Ajustes", icon: Settings },
+];
 
 function planShortLabel(plan: string | undefined): string {
   const p = plan ?? "free";
@@ -36,17 +44,376 @@ function planShortLabel(plan: string | undefined): string {
   return p;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { href: "/app", label: "Início", icon: LayoutDashboard },
-  { href: "/app/create", label: "Criar", icon: PlusCircle },
-  { href: "/app/carousels", label: "Carrosséis", icon: FolderOpen },
-  { href: "/app/help", label: "Guia", icon: BookOpen },
-  { href: "/app/metrics", label: "Métricas", icon: BarChart3, comingSoon: true },
-  { href: "/app/publish", label: "Publicar", icon: Send, comingSoon: true },
-  { href: "/app/plans", label: "Assinar", icon: Sparkles, badge: "Pro" },
-  { href: "/app/roadmap", label: "Roadmap", icon: Map },
-  { href: "/app/settings", label: "Ajustes", icon: Settings },
-];
+function breadcrumbFor(pathname: string): { kicker: string; title: string } {
+  // Mapa exato
+  const map: Record<string, { kicker: string; title: string }> = {
+    "/app": { kicker: "DASHBOARD", title: "INÍCIO" },
+    "/app/create": { kicker: "NOVO", title: "CARROSSEL" },
+    "/app/carousels": { kicker: "BIBLIOTECA", title: "CARROSSÉIS" },
+    "/app/plans": { kicker: "PLANOS", title: "ASSINAR" },
+    "/app/settings": { kicker: "CONTA", title: "AJUSTES" },
+    "/app/roadmap": { kicker: "PRODUTO", title: "ROADMAP" },
+    "/app/help": { kicker: "GUIA", title: "AJUDA" },
+    "/app/onboarding": { kicker: "SETUP", title: "ONBOARDING" },
+  };
+  if (map[pathname]) return map[pathname];
+
+  // Fallbacks (rotas dinâmicas)
+  if (pathname.startsWith("/app/carousels/")) {
+    return { kicker: "BIBLIOTECA", title: "EDITAR" };
+  }
+  if (pathname.startsWith("/app/create")) {
+    return { kicker: "NOVO", title: "CARROSSEL" };
+  }
+  if (pathname.startsWith("/app/settings")) {
+    return { kicker: "CONTA", title: "AJUSTES" };
+  }
+
+  return { kicker: "SEQUÊNCIA", title: "VIRAL" };
+}
+
+function Brand({ compact = false }: { compact?: boolean }) {
+  return (
+    <Link href="/app" className="flex items-center gap-2.5 min-w-0">
+      <span
+        className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border-[1.5px]"
+        style={{
+          background: "var(--sv-green)",
+          borderColor: "var(--sv-paper)",
+        }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <circle
+            cx="12"
+            cy="12"
+            r="9"
+            stroke="#0A0A0A"
+            strokeWidth="1.5"
+          />
+          <path
+            d="M8 12l3 3 5-6"
+            stroke="#0A0A0A"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span
+          className="block truncate text-[16px] leading-none tracking-[-0.01em]"
+          style={{
+            fontFamily: "var(--sv-display)",
+            color: "var(--sv-paper)",
+          }}
+        >
+          Sequência <em className="italic">Viral</em>
+        </span>
+        {!compact && (
+          <span
+            className="mt-1 block truncate text-[7.5px] uppercase tracking-[0.14em]"
+            style={{
+              fontFamily: "var(--sv-mono)",
+              color: "rgba(247,245,239,0.5)",
+            }}
+          >
+            By Kaleidos
+          </span>
+        )}
+      </span>
+    </Link>
+  );
+}
+
+function SidebarContent({
+  pathname,
+  onNavigate,
+  profile,
+  signOut,
+  showCloseButton = false,
+  onClose,
+}: {
+  pathname: string;
+  onNavigate: () => void;
+  profile: ReturnType<typeof useAuth>["profile"];
+  signOut: () => void;
+  showCloseButton?: boolean;
+  onClose?: () => void;
+}) {
+  const planIsFree = !profile?.plan || profile.plan === "free";
+
+  return (
+    <div
+      className="flex h-full w-full flex-col gap-1.5 overflow-y-auto px-[18px] pb-5 pt-[22px]"
+      style={{ background: "var(--sv-ink)", color: "var(--sv-paper)" }}
+    >
+      {/* Brand */}
+      <div
+        className="flex items-center justify-between gap-2 border-b px-1.5 pb-[22px] mb-2.5"
+        style={{ borderColor: "rgba(255,255,255,0.1)" }}
+      >
+        <Brand />
+        {showCloseButton && (
+          <button
+            onClick={onClose}
+            className="lg:hidden text-white/70 hover:text-white shrink-0"
+            aria-label="Fechar menu lateral"
+          >
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      {/* CTA: + Novo carrossel */}
+      <Link
+        href="/app/create"
+        onClick={onNavigate}
+        className="flex items-center justify-center gap-2 rounded-full px-3.5 py-[11px] mb-3.5 transition-all"
+        style={{
+          background: "var(--sv-green)",
+          color: "var(--sv-ink)",
+          border: "1.5px solid var(--sv-paper)",
+          fontFamily: "var(--sv-mono)",
+          fontSize: "10px",
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          fontWeight: 700,
+          boxShadow: "3px 3px 0 0 rgba(255,255,255,0.15)",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = "translate(-1px,-1px)";
+          e.currentTarget.style.boxShadow =
+            "5px 5px 0 0 rgba(255,255,255,0.25)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = "translate(0,0)";
+          e.currentTarget.style.boxShadow =
+            "3px 3px 0 0 rgba(255,255,255,0.15)";
+        }}
+      >
+        <PlusCircle size={14} strokeWidth={2.4} />
+        Novo carrossel
+      </Link>
+
+      {/* Section label: Workspace */}
+      <div
+        className="px-2 pb-1.5 pt-2"
+        style={{
+          fontFamily: "var(--sv-mono)",
+          fontSize: "8.5px",
+          letterSpacing: "0.22em",
+          textTransform: "uppercase",
+          color: "rgba(247,245,239,0.4)",
+        }}
+      >
+        Workspace
+      </div>
+
+      {/* Nav */}
+      <nav className="flex flex-col gap-[2px]">
+        {NAV_ITEMS.map(({ href, label, icon: Icon, badge }) => {
+          const active =
+            href === "/app" ? pathname === "/app" : pathname.startsWith(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              onClick={onNavigate}
+              className="flex items-center gap-2.5 rounded-lg px-2.5 py-[9px] transition-all duration-150"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: "10.5px",
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                fontWeight: 600,
+                background: active ? "var(--sv-green)" : "transparent",
+                color: active ? "var(--sv-ink)" : "rgba(247,245,239,0.72)",
+                boxShadow: active ? "2px 2px 0 0 rgba(0,0,0,0.3)" : "none",
+              }}
+              onMouseEnter={(e) => {
+                if (!active) {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.06)";
+                  e.currentTarget.style.color = "var(--sv-paper)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!active) {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.color = "rgba(247,245,239,0.72)";
+                }
+              }}
+            >
+              <Icon size={15} strokeWidth={1.8} className="shrink-0" />
+              <span className="flex-1 whitespace-nowrap">{label}</span>
+              {badge && (
+                <span
+                  className="shrink-0 rounded-full px-1.5 py-[1px]"
+                  style={{
+                    fontSize: "8px",
+                    fontWeight: 800,
+                    letterSpacing: "0.1em",
+                    background: active
+                      ? "rgba(0,0,0,0.15)"
+                      : "var(--sv-green)",
+                    color: active ? "var(--sv-ink)" : "var(--sv-ink)",
+                  }}
+                >
+                  {badge}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Spacer */}
+      <div className="flex-1 min-h-[20px]" />
+
+      {/* Plan card */}
+      {planIsFree ? (
+        <Link
+          href="/app/plans"
+          onClick={onNavigate}
+          className="block rounded-lg p-3.5 mb-2 transition-all"
+          style={{
+            background: "var(--sv-green)",
+            color: "var(--sv-ink)",
+            border: "1.5px solid var(--sv-paper)",
+            boxShadow: "3px 3px 0 0 rgba(255,255,255,0.15)",
+          }}
+        >
+          <div
+            className="mb-1"
+            style={{
+              fontFamily: "var(--sv-mono)",
+              fontSize: "8.5px",
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              opacity: 0.75,
+              fontWeight: 700,
+            }}
+          >
+            Plano Grátis
+          </div>
+          <div
+            className="flex items-center justify-between gap-2"
+            style={{
+              fontFamily: "var(--sv-sans)",
+              fontSize: "13px",
+              fontWeight: 700,
+            }}
+          >
+            <span>Ver planos</span>
+            <span>→</span>
+          </div>
+        </Link>
+      ) : (
+        <div
+          className="rounded-lg p-3 mb-2"
+          style={{
+            background: "transparent",
+            border: "1.5px solid rgba(247,245,239,0.18)",
+            color: "var(--sv-paper)",
+          }}
+        >
+          <div
+            className="mb-1"
+            style={{
+              fontFamily: "var(--sv-mono)",
+              fontSize: "8.5px",
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              color: "rgba(247,245,239,0.55)",
+              fontWeight: 700,
+            }}
+          >
+            Plano {planShortLabel(profile?.plan)}
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--sv-sans)",
+              fontSize: "13px",
+              fontWeight: 700,
+            }}
+          >
+            {profile?.plan === "pro" ? "Pro ativo" : "Business ativo"}
+          </div>
+        </div>
+      )}
+
+      {/* User row */}
+      <div
+        className="flex items-center gap-2.5 border-t px-2.5 pt-3"
+        style={{ borderColor: "rgba(255,255,255,0.1)" }}
+      >
+        {profile?.avatar_url ? (
+          <img
+            src={profile.avatar_url}
+            alt={`Foto de perfil de ${profile?.name || "usuário"}`}
+            className="h-8 w-8 shrink-0 rounded-full object-cover"
+            style={{ border: "1.5px solid var(--sv-paper)" }}
+          />
+        ) : (
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+            style={{
+              background: "var(--sv-pink)",
+              border: "1.5px solid var(--sv-paper)",
+              fontFamily: "var(--sv-display)",
+              fontStyle: "italic",
+              fontSize: "14px",
+              color: "var(--sv-ink)",
+            }}
+          >
+            {profile?.name?.[0]?.toUpperCase() || "U"}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div
+            className="truncate"
+            style={{
+              fontFamily: "var(--sv-sans)",
+              fontSize: "12px",
+              fontWeight: 600,
+              color: "var(--sv-paper)",
+            }}
+          >
+            {profile?.name || "Conta"}
+          </div>
+          <div
+            className="truncate"
+            style={{
+              fontFamily: "var(--sv-mono)",
+              fontSize: "8.5px",
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: "rgba(247,245,239,0.5)",
+            }}
+          >
+            Plano {planShortLabel(profile?.plan)}
+          </div>
+        </div>
+        <button
+          onClick={signOut}
+          aria-label="Sair"
+          title="Sair"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors"
+          style={{ color: "rgba(247,245,239,0.6)" }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+            e.currentTarget.style.color = "var(--sv-paper)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.color = "rgba(247,245,239,0.6)";
+          }}
+        >
+          <LogOut size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const { profile, loading, user, session } = useAuth();
@@ -75,20 +442,72 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
     ) {
       router.replace("/app/onboarding");
     }
-  }, [loading, authenticated, profile, pathname, router, isLoginPage, isOnboardingPage]);
+  }, [
+    loading,
+    authenticated,
+    profile,
+    pathname,
+    router,
+    isLoginPage,
+    isOnboardingPage,
+  ]);
 
   if (loading && !isLoginPage) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#FAFAF8]">
-        <p className="text-sm font-semibold text-zinc-500">Carregando sessão…</p>
+      <div
+        className="flex min-h-screen flex-col items-center justify-center gap-3"
+        style={{ background: "var(--sv-paper)" }}
+      >
+        <span
+          className="inline-flex items-center gap-2"
+          style={{
+            fontFamily: "var(--sv-mono)",
+            fontSize: "10px",
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+            color: "var(--sv-muted)",
+          }}
+        >
+          <span
+            className="inline-block h-2 w-2 rounded-full animate-pulse"
+            style={{
+              background: "var(--sv-green)",
+              border: "1px solid var(--sv-ink)",
+            }}
+          />
+          Carregando sessão
+        </span>
+        <p
+          style={{
+            fontFamily: "var(--sv-display)",
+            fontSize: "28px",
+            letterSpacing: "-0.02em",
+            color: "var(--sv-ink)",
+          }}
+        >
+          Sequência <em className="italic">Viral</em>
+        </p>
       </div>
     );
   }
 
   if (!loading && !authenticated && !isLoginPage) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#FAFAF8]">
-        <p className="text-sm font-semibold text-zinc-500">Redirecionando pro login…</p>
+      <div
+        className="flex min-h-screen items-center justify-center"
+        style={{ background: "var(--sv-paper)" }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--sv-mono)",
+            fontSize: "10px",
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+            color: "var(--sv-muted)",
+          }}
+        >
+          ● Redirecionando pro login
+        </span>
       </div>
     );
   }
@@ -101,186 +520,207 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const { profile, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Don't show app shell on login/onboarding
+  // Hide shell on login/onboarding
   const isFullscreenPage =
     pathname === "/app/login" || pathname === "/app/onboarding";
 
+  const crumb = useMemo(() => breadcrumbFor(pathname), [pathname]);
+
   if (isFullscreenPage) {
-    return <>{children}</>;
+    return (
+      <>
+        {children}
+        <Toaster />
+      </>
+    );
   }
 
   return (
-    <div className="flex min-h-screen hero-kree8-bg">
+    <div
+      className="flex min-h-screen"
+      style={{ background: "var(--sv-paper)", color: "var(--sv-ink)" }}
+    >
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar desktop (static) + mobile (drawer) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r-2 border-[#0A0A0A] bg-[#FFFDF9] transition-transform duration-300 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-[240px] transition-transform duration-300 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        } lg:flex`}
+        style={{ minHeight: "100vh" }}
       >
-        {/* Logo */}
-        <div className="flex h-20 items-center justify-between border-b border-[#0A0A0A]/10 px-6">
-          <Link href="/app" className="flex items-center gap-3">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent)] border border-[#0A0A0A]"
-              style={{ boxShadow: "3px 3px 0 0 #0A0A0A" }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <span className="editorial-serif text-2xl text-[#0A0A0A]">
-              Sequência Viral<span className="text-[var(--accent)]">.</span>
-            </span>
-          </Link>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden text-zinc-400 hover:text-zinc-600"
-            aria-label="Fechar menu lateral"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Kicker */}
-        <div className="px-6 pt-6 pb-2">
-          <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)]">
-            Menu principal
-          </span>
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 px-4 space-y-1.5">
-          {NAV_ITEMS.map(({ href, label, icon: Icon, comingSoon, badge }) => {
-            const active = pathname === href;
-            if (comingSoon) {
-              return (
-                <div
-                  key={href}
-                  role="link"
-                  aria-disabled="true"
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] font-semibold border border-transparent text-[#0A0A0A]/40 cursor-not-allowed select-none"
-                  title={`${label} — Em breve`}
-                >
-                  <Icon size={17} className="shrink-0" />
-                  <span className="flex-1 whitespace-nowrap">{label}</span>
-                  <span className="shrink-0 text-[9px] font-black uppercase tracking-wider rounded-full bg-[#0A0A0A]/10 text-[#0A0A0A]/60 px-2 py-0.5">
-                    Soon
-                  </span>
-                </div>
-              );
-            }
-            return (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] font-semibold transition-all duration-200 border active:scale-[0.97] ${
-                  active
-                    ? "bg-[var(--accent)] text-white border-[#0A0A0A]"
-                    : "text-[#0A0A0A]/70 border-transparent hover:bg-white hover:border-[#0A0A0A]/10 hover:text-[#0A0A0A]"
-                }`}
-                style={active ? { boxShadow: "3px 3px 0 0 #0A0A0A" } : {}}
-              >
-                <Icon size={17} className="shrink-0" />
-                <span className="flex-1 whitespace-nowrap">{label}</span>
-                {badge && (
-                  <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider rounded-full px-2 py-0.5 ${
-                    active
-                      ? "bg-white/20 text-white"
-                      : "bg-[var(--accent)]/10 text-[var(--accent)]"
-                  }`}>
-                    {badge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Plan card */}
-        {(!profile?.plan || profile.plan === "free") && (
-          <div className="mx-4 mb-4 p-5 card-soft border border-[#0A0A0A]/8">
-            <p className="text-[10px] font-mono uppercase tracking-widest opacity-80 mb-2">
-              Plano {planShortLabel(profile?.plan)}
-            </p>
-            <p className="editorial-serif text-xl leading-tight mb-3">
-              Upgrade pra Pro
-            </p>
-            <Link
-              href="/app/plans"
-              className="inline-flex items-center gap-1.5 text-[12px] font-bold bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition"
-            >
-              Ver planos →
-            </Link>
-          </div>
-        )}
-        {profile?.plan && profile.plan !== "free" && (
-          <div className="mx-4 mb-4 p-4 card-soft border border-[#0A0A0A]/8">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--muted)] mb-1">
-              Plano {planShortLabel(profile.plan)}
-            </p>
-            <p className="text-sm font-bold text-[#0A0A0A]">
-              {profile.plan === "pro" ? "Pro ativo" : "Business ativo"}
-            </p>
-          </div>
-        )}
-
-        {/* User info */}
-        <div className="border-t border-[#0A0A0A]/10 p-4">
-          <div className="flex items-center gap-3 mb-3">
-            {profile?.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={`Foto de perfil de ${profile?.name || "usuário"}`}
-                className="h-10 w-10 rounded-full object-cover border border-[#0A0A0A]"
-              />
-            ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-white text-sm font-bold border border-[#0A0A0A]">
-                {profile?.name?.[0]?.toUpperCase() || "U"}
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-[#0A0A0A] truncate">
-                {profile?.name || "Conta"}
-              </p>
-              <p className="text-[11px] font-mono uppercase tracking-wider text-[var(--muted)] truncate">
-                {profile?.plan === "free"
-                  ? "Plano grátis"
-                  : profile?.plan === "pro"
-                    ? "Plano Pro"
-                    : "Plano Business"}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={signOut}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-[var(--muted)] transition-colors hover:bg-white hover:text-[#0A0A0A]"
-          >
-            <LogOut size={15} />
-            Sair
-          </button>
-        </div>
+        <SidebarContent
+          pathname={pathname}
+          onNavigate={() => setSidebarOpen(false)}
+          profile={profile}
+          signOut={signOut}
+          showCloseButton
+          onClose={() => setSidebarOpen(false)}
+        />
       </aside>
 
-      {/* Main content */}
-      <div className="flex flex-1 flex-col min-w-0">
-        {/* Mobile header */}
-        <header className="flex h-16 items-center justify-between border-b-2 border-[#0A0A0A] bg-[#FFFDF9] px-4 lg:hidden">
-          <button onClick={() => setSidebarOpen(true)} className="text-[#0A0A0A]" aria-label="Abrir menu lateral">
-            <Menu size={24} />
+      {/* Main */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile header (< lg) */}
+        <header
+          className="flex h-16 items-center justify-between gap-3 border-b px-4 lg:hidden"
+          style={{
+            background: "var(--sv-paper)",
+            borderColor: "var(--sv-ink)",
+            borderBottomWidth: "1.5px",
+          }}
+        >
+          <button
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Abrir menu lateral"
+            className="flex h-9 w-9 items-center justify-center rounded-md"
+            style={{
+              border: "1.5px solid var(--sv-ink)",
+              background: "var(--sv-white)",
+              boxShadow: "2px 2px 0 0 var(--sv-ink)",
+              color: "var(--sv-ink)",
+            }}
+          >
+            <Menu size={18} />
           </button>
-          <span className="editorial-serif text-xl">
-            Sequência Viral<span className="text-[var(--accent)]">.</span>
+          <span
+            className="truncate"
+            style={{
+              fontFamily: "var(--sv-display)",
+              fontSize: "18px",
+              color: "var(--sv-ink)",
+            }}
+          >
+            Sequência <em className="italic">Viral</em>
           </span>
-          <div className="w-6" />
+          <Link
+            href="/app/create"
+            aria-label="Novo carrossel"
+            className="flex h-9 w-9 items-center justify-center rounded-full"
+            style={{
+              background: "var(--sv-green)",
+              border: "1.5px solid var(--sv-ink)",
+              boxShadow: "2px 2px 0 0 var(--sv-ink)",
+              color: "var(--sv-ink)",
+            }}
+          >
+            <PlusCircle size={16} strokeWidth={2.4} />
+          </Link>
+        </header>
+
+        {/* Desktop topbar (lg+) */}
+        <header
+          className="hidden lg:flex items-center justify-between gap-5 px-8 sticky top-0 z-30"
+          style={{
+            height: "72px",
+            background: "var(--sv-paper)",
+            borderBottom: "1.5px solid var(--sv-ink)",
+          }}
+        >
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span
+              className="inline-block h-[7px] w-[7px] rounded-full shrink-0"
+              style={{
+                background: "var(--sv-green)",
+                border: "1px solid var(--sv-ink)",
+              }}
+            />
+            <span
+              className="truncate"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: "10px",
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color: "var(--sv-muted)",
+                fontWeight: 600,
+              }}
+            >
+              {crumb.kicker}
+              <span className="opacity-40 mx-2">·</span>
+              <span style={{ color: "var(--sv-ink)", fontWeight: 700 }}>
+                {crumb.title}
+              </span>
+            </span>
+          </div>
+
+          {/* Right cluster: search + CTA */}
+          <div className="flex items-center gap-2.5">
+            <div
+              className="hidden md:flex items-center gap-2 px-3.5 py-2"
+              style={{
+                background: "var(--sv-white)",
+                border: "1.5px solid var(--sv-ink)",
+                boxShadow: "2px 2px 0 0 var(--sv-ink)",
+                minWidth: "240px",
+              }}
+            >
+              <Search
+                size={14}
+                strokeWidth={2}
+                style={{ color: "var(--sv-muted)" }}
+              />
+              <input
+                type="text"
+                placeholder="Buscar carrosséis, ideias..."
+                disabled
+                className="flex-1 bg-transparent outline-none"
+                style={{
+                  fontFamily: "var(--sv-sans)",
+                  fontSize: "13px",
+                  color: "var(--sv-ink)",
+                }}
+              />
+              <span
+                style={{
+                  fontFamily: "var(--sv-mono)",
+                  fontSize: "9.5px",
+                  letterSpacing: "0.18em",
+                  textTransform: "uppercase",
+                  color: "var(--sv-muted)",
+                  opacity: 0.6,
+                }}
+              >
+                ⌘K
+              </span>
+            </div>
+
+            <Link
+              href="/app/create"
+              className="inline-flex items-center gap-2 whitespace-nowrap transition-all"
+              style={{
+                padding: "9px 16px",
+                fontFamily: "var(--sv-mono)",
+                fontSize: "10px",
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                fontWeight: 600,
+                border: "1.5px solid var(--sv-ink)",
+                background: "var(--sv-green)",
+                color: "var(--sv-ink)",
+                boxShadow: "3px 3px 0 0 var(--sv-ink)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translate(-1px,-1px)";
+                e.currentTarget.style.boxShadow = "5px 5px 0 0 var(--sv-ink)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translate(0,0)";
+                e.currentTarget.style.boxShadow = "3px 3px 0 0 var(--sv-ink)";
+              }}
+            >
+              <PlusCircle size={13} strokeWidth={2.4} />
+              Novo
+            </Link>
+          </div>
         </header>
 
         <main className="flex-1 min-w-0 overflow-x-hidden p-6 lg:p-10 xl:p-14">

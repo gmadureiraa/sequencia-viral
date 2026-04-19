@@ -47,21 +47,37 @@ function getBearerToken(request: Request) {
   return token || null;
 }
 
+/**
+ * Valida o bearer token bateando no Auth Server da Supabase via service
+ * role (auth.admin.getUser). Diferente de anon_client.auth.getUser que
+ * só valida assinatura local, isso rejeita tokens de usuários que foram
+ * DELETADOS ou BANIDOS — fundamental pra /api/auth/delete fechar o loop.
+ */
+async function validateTokenServerSide(token: string): Promise<User | null> {
+  const admin = createServiceRoleSupabaseClient();
+  if (!admin) {
+    // Fallback: se service role não estiver configurado, cai no anon.
+    // (não ideal, mas evita quebrar totalmente em ambientes dev incompletos).
+    const anon = createServerSupabaseClient();
+    if (!anon) return null;
+    const { data, error } = await anon.auth.getUser(token);
+    if (error || !data.user) return null;
+    return data.user;
+  }
+  const { data, error } = await admin.auth.getUser(token);
+  if (error || !data.user) return null;
+  return data.user;
+}
+
 export async function getAuthenticatedUser(request: Request): Promise<User | null> {
   const token = getBearerToken(request);
   if (!token) return null;
-
-  const supabase = createServerSupabaseClient();
-  if (!supabase) return null;
-
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) return null;
-
-  return data.user;
+  return validateTokenServerSide(token);
 }
 
 /**
  * APIs custosas: exigem sessão Supabase válida (Authorization: Bearer).
+ * Usa validação server-side via service role — sessão revogada é detectada.
  */
 export async function requireAuthenticatedUser(
   request: Request
@@ -79,19 +95,8 @@ export async function requireAuthenticatedUser(
     };
   }
 
-  const supabase = createServerSupabaseClient();
-  if (!supabase) {
-    return {
-      ok: false,
-      response: Response.json(
-        { error: "Configuração do servidor incompleta. Contate o suporte." },
-        { status: 503 }
-      ),
-    };
-  }
-
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) {
+  const user = await validateTokenServerSide(token);
+  if (!user) {
     return {
       ok: false,
       response: Response.json(
@@ -101,7 +106,7 @@ export async function requireAuthenticatedUser(
     };
   }
 
-  return { ok: true, user: data.user };
+  return { ok: true, user };
 }
 
 /**

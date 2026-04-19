@@ -3,6 +3,7 @@ import {
   createServiceRoleSupabaseClient,
 } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { assertSafeAndResolve } from "@/lib/server/ssrf-guard";
 import { GoogleGenAI } from "@google/genai";
 
 export const maxDuration = 45;
@@ -60,20 +61,32 @@ export async function POST(request: Request) {
       return Response.json({ error: "IA não configurada." }, { status: 503 });
     }
 
-    // Baixa cada imagem e converte pra inlineData (base64).
+    // Baixa cada imagem e converte pra inlineData (base64). URL passa por
+    // SSRF guard (protocolo + DNS resolve) antes do fetch pra impedir que
+    // um cliente malicioso transforme essa rota em um proxy pra IPs
+    // privados (AWS metadata, cluster interno etc).
     const imageParts = await Promise.all(
       urls.map(async (url) => {
+        let safeUrl: URL;
         try {
-          const res = await fetch(url, {
+          safeUrl = await assertSafeAndResolve(url);
+        } catch {
+          return null;
+        }
+        try {
+          const res = await fetch(safeUrl.toString(), {
             signal: AbortSignal.timeout(10_000),
+            redirect: "manual",
           });
           if (!res.ok) return null;
-          const buf = await res.arrayBuffer();
-          const mimeType = (
+          const ct = (
             res.headers.get("content-type") || "image/jpeg"
           ).split(";")[0];
+          if (!/^image\//i.test(ct)) return null;
+          const buf = await res.arrayBuffer();
+          if (buf.byteLength > 10 * 1024 * 1024) return null;
           const base64 = Buffer.from(buf).toString("base64");
-          return { inlineData: { data: base64, mimeType } };
+          return { inlineData: { data: base64, mimeType: ct } };
         } catch {
           return null;
         }

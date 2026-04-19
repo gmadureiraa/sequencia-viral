@@ -1,9 +1,14 @@
 /**
  * Debug endpoint — checks all critical services.
- * Access: GET /api/debug (no auth required)
- * Remove in production after debugging.
+ * Access: GET /api/debug (ADMIN ONLY — antes era público e vazava
+ * quais env vars estavam set + pingava Supabase/Gemini).
  */
-export async function GET() {
+import { requireAdmin } from "@/lib/server/auth";
+
+export async function GET(request: Request) {
+  const admin = await requireAdmin(request);
+  if (!admin.ok) return admin.response;
+
   const checks: Record<string, string> = {};
 
   // 1. Supabase URL

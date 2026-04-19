@@ -108,18 +108,25 @@ export async function POST(request: Request) {
       raw.status === "published" || raw.status === "archived" || raw.status === "draft"
         ? (raw.status as string)
         : "draft";
+    // Scheme guard: só aceita https:// em source_url/thumbnail_url pra
+    // evitar javascript:/data: URIs que depois sejam renderizados em <a>
+    // sem escape. Tudo fora disso → null (row importa, mas link some).
+    const safeHttps = (v: unknown): string | null => {
+      if (typeof v !== "string") return null;
+      const trimmed = v.trim().slice(0, 2000);
+      if (!/^https:\/\//i.test(trimmed)) return null;
+      return trimmed;
+    };
     rows.push({
       user_id: user.id,
       title,
       slides,
       style,
-      source_url:
-        typeof raw.source_url === "string" ? raw.source_url.slice(0, 2000) : null,
+      source_url: safeHttps(raw.source_url),
       source_text:
         typeof raw.source_text === "string" ? raw.source_text.slice(0, 10000) : null,
       status,
-      thumbnail_url:
-        typeof raw.thumbnail_url === "string" ? raw.thumbnail_url : null,
+      thumbnail_url: safeHttps(raw.thumbnail_url),
     });
   }
 

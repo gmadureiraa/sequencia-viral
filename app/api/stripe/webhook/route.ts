@@ -25,8 +25,22 @@ export async function POST(request: Request) {
   const body = await request.text();
   const signature = request.headers.get("stripe-signature");
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const isProd = process.env.NODE_ENV === "production";
   const allowUnverified =
-    process.env.ALLOW_UNVERIFIED_STRIPE_WEBHOOK === "true";
+    !isProd && process.env.ALLOW_UNVERIFIED_STRIPE_WEBHOOK === "true";
+
+  // Em produção: signing secret é OBRIGATÓRIO. Sem ele, falha fechada.
+  // Em dev/preview: pode rodar sem signature só se a flag explícita estiver
+  // setada (pra testes com stripe-cli offline).
+  if (isProd && !webhookSecret) {
+    console.error(
+      "[stripe webhook] STRIPE_WEBHOOK_SECRET ausente em produção — refusing all events"
+    );
+    return Response.json(
+      { error: "Webhook não configurado corretamente." },
+      { status: 503 }
+    );
+  }
 
   if (webhookSecret && signature) {
     try {
@@ -42,23 +56,28 @@ export async function POST(request: Request) {
     }
   }
 
-  if (process.env.NODE_ENV === "production" && allowUnverified) {
-    console.error("[stripe webhook] ALLOW_UNVERIFIED_STRIPE_WEBHOOK is forbidden in production");
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+  // Faltou signature/secret. Em produção, isso foi bloqueado acima pela
+  // guard de secret ausente; aqui significa que o atacante mandou uma
+  // request SEM o header `stripe-signature`. Recuse.
+  if (isProd) {
+    return Response.json(
+      { error: "Missing stripe-signature header." },
+      { status: 400 }
+    );
   }
 
   if (!allowUnverified) {
     return Response.json(
       {
         error:
-          "Missing Stripe webhook signature or secret. For local testing only, set ALLOW_UNVERIFIED_STRIPE_WEBHOOK=true",
+          "Missing Stripe webhook signature or secret. For local testing only, set ALLOW_UNVERIFIED_STRIPE_WEBHOOK=true (NON-PROD ONLY)",
       },
       { status: 400 }
     );
   }
 
   console.warn(
-    "[stripe webhook] Processing without signature verification (ALLOW_UNVERIFIED_STRIPE_WEBHOOK)"
+    "[stripe webhook] Processing without signature verification (ALLOW_UNVERIFIED_STRIPE_WEBHOOK) — dev/preview only"
   );
   let parsed: Stripe.Event;
   try {

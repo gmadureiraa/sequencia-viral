@@ -5,29 +5,66 @@
  * de domínios sem CORS. Este endpoint busca a imagem server-side e devolve
  * com `Access-Control-Allow-Origin: *`, permitindo o canvas exportar.
  *
- * Uso:
+ * Hardening pós security audit:
+ *  - Exige usuário autenticado (era rota aberta → qualquer um usava como
+ *    web proxy grátis).
+ *  - Valida URL com SSRF guard (assertSafeUrl + assertResolvedIpIsSafe)
+ *    ANTES do fetch, fechando a janela de DNS rebinding.
+ *  - Limita redirects a 3 (antes era "follow" ilimitado).
+ *  - Valida IP novamente após cada redirect.
+ *
+ * Uso no cliente (com header Authorization vindo do client-side do Supabase):
  *   <img src={`/api/img-proxy?url=${encodeURIComponent(remoteUrl)}`} />
+ *   (o cliente tem sessão via cookies do Supabase — quando a sessão cair,
+ *    a imagem simplesmente não carrega e o fallback do html-to-image roda).
  */
 
+import { requireAuthenticatedUser } from "@/lib/server/auth";
+import {
+  assertSafeUrl,
+  assertResolvedIpIsSafe,
+} from "@/lib/server/ssrf-guard";
+
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
-
-const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
+const MAX_REDIRECTS = 3;
 const ALLOWED_CONTENT_TYPE = /^image\//i;
-
-function isBlockedHost(hostname: string): boolean {
-  const h = hostname.toLowerCase();
-  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local")) return true;
-  if (h === "::1" || h === "0.0.0.0") return true;
-  if (/^(10|127)\./.test(h)) return true;
-  if (/^192\.168\./.test(h)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
-  if (/^169\.254\./.test(h)) return true;
-  return false;
-}
 
 export const runtime = "nodejs";
 
+async function fetchWithSafeRedirects(
+  initialUrl: URL,
+  depth = 0
+): Promise<Response> {
+  if (depth > MAX_REDIRECTS) {
+    throw new Error("too many redirects");
+  }
+  const response = await fetch(initialUrl.toString(), {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (compatible; Sequência Viral/1.0 img-proxy)",
+      Accept: "image/*,*/*;q=0.5",
+    },
+    signal: AbortSignal.timeout(15_000),
+    redirect: "manual",
+  });
+
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get("location");
+    if (!location) return response;
+    // Resolve relativo, valida antes de seguir.
+    const nextUrl = new URL(location, initialUrl);
+    assertSafeUrl(nextUrl.toString());
+    await assertResolvedIpIsSafe(nextUrl.hostname);
+    return fetchWithSafeRedirects(nextUrl, depth + 1);
+  }
+
+  return response;
+}
+
 export async function GET(request: Request) {
+  const auth = await requireAuthenticatedUser(request);
+  if (!auth.ok) return auth.response;
+
   const { searchParams } = new URL(request.url);
   const raw = searchParams.get("url");
   if (!raw) {
@@ -36,27 +73,20 @@ export async function GET(request: Request) {
 
   let target: URL;
   try {
-    target = new URL(raw);
-  } catch {
-    return new Response("invalid url", { status: 400 });
+    target = assertSafeUrl(raw);
+    await assertResolvedIpIsSafe(target.hostname);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "invalid url";
+    return new Response(msg, { status: 400 });
   }
 
-  if (!ALLOWED_PROTOCOLS.has(target.protocol)) {
-    return new Response("protocol not allowed", { status: 400 });
+  let upstream: Response;
+  try {
+    upstream = await fetchWithSafeRedirects(target);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "upstream error";
+    return new Response(msg.slice(0, 200), { status: 502 });
   }
-  if (isBlockedHost(target.hostname)) {
-    return new Response("host not allowed", { status: 400 });
-  }
-
-  const upstream = await fetch(target.toString(), {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (compatible; Sequência Viral/1.0 img-proxy)",
-      Accept: "image/*,*/*;q=0.5",
-    },
-    signal: AbortSignal.timeout(15_000),
-    redirect: "follow",
-  });
 
   if (!upstream.ok) {
     return new Response(`upstream ${upstream.status}`, {

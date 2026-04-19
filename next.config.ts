@@ -2,6 +2,27 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  async redirects() {
+    // Redirects no Edge (antes de qualquer prerender) — evita que o Vercel
+    // continue servindo HTML estático antigo das rotas V1 legadas.
+    return [
+      {
+        source: "/app/create",
+        destination: "/app/create/new",
+        permanent: false,
+      },
+      {
+        source: "/app/create-v2",
+        destination: "/app/create/new",
+        permanent: false,
+      },
+      {
+        source: "/app/create/legacy",
+        destination: "/app/create/new",
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

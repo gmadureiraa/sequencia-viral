@@ -1,11 +1,10 @@
+// Redirect tratado em `next.config.ts` → redirects(). Esse arquivo fica só
+// pra impedir que o Next.js gere um 404 se alguma build gerar prerender.
+// `dynamic = "force-dynamic"` impede prerender estático.
+export const dynamic = "force-dynamic";
+
 import { redirect } from "next/navigation";
 
-/**
- * V1 legado — redireciona pra v2 (`/app/create/new`).
- * O fluxo unificado vive em `/app/create/new` → `/concepts` → `/templates`
- * → `/[id]/edit` → `/[id]/preview`. A UI antiga com "Nº de slides" e
- * "CTA final" foi aposentada.
- */
-export default function CreateLegacyRedirect(): never {
+export default function Page(): never {
   redirect("/app/create/new");
 }

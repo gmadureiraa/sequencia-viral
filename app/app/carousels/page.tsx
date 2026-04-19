@@ -12,6 +12,10 @@ import {
   FileText,
   ImageIcon,
   ChevronDown,
+  Tag,
+  CheckSquare,
+  Square,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -28,6 +32,7 @@ import {
   fetchUserCarousels,
   isCarouselUuid,
   type SavedCarousel,
+  updateCarouselTags,
   upsertUserCarousel,
 } from "@/lib/carousel-storage";
 import { DEFAULT_DESIGN_TEMPLATE } from "@/lib/carousel-templates";
@@ -63,10 +68,13 @@ export default function CarouselsPage() {
   const [carousels, setCarousels] = useState<SavedCarousel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"recent" | "oldest">("recent");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const loadCarousels = useCallback(async () => {
     setLoadError(null);
@@ -104,15 +112,29 @@ export default function CarouselsPage() {
     };
   }, [carousels]);
 
+  const allTags = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of carousels) {
+      for (const t of c.tags || []) {
+        map.set(t, (map.get(t) || 0) + 1);
+      }
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20);
+  }, [carousels]);
+
   const filtered = carousels
     .filter((c) => {
       if (filter === "drafts" && c.status === "published") return false;
       if (filter === "published" && c.status !== "published") return false;
       if (filter === "archived") return false;
+      if (tagFilter && !(c.tags || []).includes(tagFilter)) return false;
       if (search) {
         const q = search.toLowerCase();
         const title = (c.title || c.slides[0]?.heading || "").toLowerCase();
-        if (!title.includes(q)) return false;
+        const tagBlob = (c.tags || []).join(" ").toLowerCase();
+        if (!title.includes(q) && !tagBlob.includes(q)) return false;
       }
       return true;
     })
@@ -121,6 +143,126 @@ export default function CarouselsPage() {
       const dateB = new Date(b.savedAt).getTime();
       return sort === "recent" ? dateB - dateA : dateA - dateB;
     });
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  function selectAllFiltered() {
+    setSelected(new Set(filtered.map((c) => c.id)));
+  }
+
+  async function handleBulkDelete() {
+    if (!user || !supabase) {
+      toast.error("Sessão inválida.");
+      return;
+    }
+    const ids = Array.from(selected).filter(isCarouselUuid);
+    if (ids.length === 0) return;
+    if (!confirm(`Excluir ${ids.length} carrossel(is)? Essa ação não pode ser desfeita.`)) {
+      return;
+    }
+    setBulkBusy(true);
+    let okCount = 0;
+    for (const id of ids) {
+      try {
+        await deleteUserCarousel(supabase, user.id, id);
+        posthog.capture("carousel_deleted", { carousel_id: id, bulk: true });
+        okCount++;
+      } catch (err) {
+        console.warn("[bulk-delete] falha em", id, err);
+      }
+    }
+    await loadCarousels();
+    clearSelection();
+    setBulkBusy(false);
+    toast.success(`${okCount} removido(s).`);
+  }
+
+  async function handleBulkDuplicate() {
+    if (!user || !supabase) {
+      toast.error("Sessão inválida.");
+      return;
+    }
+    const items = carousels.filter((c) => selected.has(c.id));
+    if (items.length === 0) return;
+    setBulkBusy(true);
+    let okCount = 0;
+    for (const carousel of items) {
+      try {
+        await upsertUserCarousel(supabase, user.id, {
+          title: `${carousel.title || "Sem título"} (cópia)`,
+          slides: carousel.slides,
+          slideStyle: carousel.style === "dark" ? "dark" : "white",
+          variation: carousel.variation ?? null,
+          status: "draft",
+          designTemplate: DEFAULT_DESIGN_TEMPLATE,
+          creationMode: carousel.creationMode ?? "quick",
+          imagePeopleMode: carousel.imagePeopleMode,
+        });
+        okCount++;
+      } catch (err) {
+        console.warn("[bulk-duplicate] falha em", carousel.id, err);
+      }
+    }
+    if (okCount > 0) {
+      await bumpCarouselUsage(supabase, user.id);
+      await refreshProfile();
+    }
+    await loadCarousels();
+    clearSelection();
+    setBulkBusy(false);
+    toast.success(`${okCount} duplicado(s).`);
+  }
+
+  function handleBulkExportJson() {
+    const items = carousels.filter((c) => selected.has(c.id));
+    if (items.length === 0) return;
+    const payload = {
+      meta: {
+        app: "sequencia-viral",
+        format_version: 1,
+        exported_at: new Date().toISOString(),
+        user_id: user?.id ?? null,
+      },
+      carousels: items,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sequencia-viral-${items.length}-carrossel${
+      items.length > 1 ? "s" : ""
+    }-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`${items.length} carrossel(is) exportado(s).`);
+  }
+
+  async function handleSaveTags(id: string, tags: string[]) {
+    if (!user || !supabase) return;
+    try {
+      await updateCarouselTags(supabase, user.id, id, tags);
+      await loadCarousels();
+      toast.success("Tags atualizadas.");
+    } catch (err) {
+      console.error("[tags] falha:", err);
+      toast.error("Não foi possível salvar as tags.");
+    }
+  }
 
   async function handleDelete(id: string) {
     if (deleteConfirm !== id) {
@@ -301,6 +443,113 @@ export default function CarouselsPage() {
               </button>
             </div>
           </div>
+
+          {/* Tag filter row */}
+          {allTags.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span
+                className="sv-kicker-sm inline-flex items-center gap-1"
+                style={{ color: "var(--sv-muted)" }}
+              >
+                <Tag size={11} /> TAGS
+              </span>
+              {tagFilter && (
+                <button
+                  type="button"
+                  className="sv-chip sv-chip-on"
+                  onClick={() => setTagFilter(null)}
+                  style={{ gap: 6 }}
+                >
+                  {tagFilter}
+                  <X size={11} />
+                </button>
+              )}
+              {allTags
+                .filter(([t]) => t !== tagFilter)
+                .map(([t, n]) => (
+                  <button
+                    key={t}
+                    type="button"
+                    className="sv-chip"
+                    onClick={() => setTagFilter(t)}
+                  >
+                    {t} · {n}
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bulk actions bar */}
+      {selected.size > 0 && (
+        <div
+          className="sticky z-20 mb-6 flex flex-wrap items-center gap-3 px-4 py-3"
+          style={{
+            top: 128,
+            background: "var(--sv-ink)",
+            color: "var(--sv-paper)",
+            border: "1.5px solid var(--sv-ink)",
+            boxShadow: "3px 3px 0 0 var(--sv-orange)",
+          }}
+        >
+          <span
+            className="sv-kicker-sm"
+            style={{ color: "var(--sv-paper)", fontSize: 11 }}
+          >
+            ● {selected.size} SELECIONADO{selected.size > 1 ? "S" : ""}
+          </span>
+          <button
+            type="button"
+            onClick={selectAllFiltered}
+            className="sv-btn-ghost"
+            style={{ color: "var(--sv-paper)", fontSize: 10 }}
+            disabled={bulkBusy}
+          >
+            Selecionar tudo
+          </button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBulkDuplicate}
+              className="sv-btn-outline"
+              style={{ color: "var(--sv-paper)", borderColor: "var(--sv-paper)", fontSize: 10 }}
+              disabled={bulkBusy}
+            >
+              <Copy size={11} /> Duplicar
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkExportJson}
+              className="sv-btn-outline"
+              style={{ color: "var(--sv-paper)", borderColor: "var(--sv-paper)", fontSize: 10 }}
+              disabled={bulkBusy}
+            >
+              <Download size={11} /> Exportar JSON
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="sv-btn-outline"
+              style={{
+                color: "var(--sv-orange)",
+                borderColor: "var(--sv-orange)",
+                fontSize: 10,
+              }}
+              disabled={bulkBusy}
+            >
+              <Trash2 size={11} /> Excluir
+            </button>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="sv-btn-ghost"
+              style={{ color: "var(--sv-paper)", fontSize: 10 }}
+              disabled={bulkBusy}
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
 
@@ -335,6 +584,10 @@ export default function CarouselsPage() {
                 onFeedbackSaved={() => void loadCarousels()}
                 onDelete={() => handleDelete(carousel.id)}
                 onDuplicate={() => handleDuplicate(carousel)}
+                selected={selected.has(carousel.id)}
+                onToggleSelect={() => toggleSelect(carousel.id)}
+                onSaveTags={(tags) => handleSaveTags(carousel.id, tags)}
+                onTagClick={(t) => setTagFilter(t)}
               />
             ))}
           </motion.div>
@@ -380,6 +633,10 @@ function CarouselCard({
   onFeedbackSaved,
   onDelete,
   onDuplicate,
+  selected,
+  onToggleSelect,
+  onSaveTags,
+  onTagClick,
 }: {
   carousel: SavedCarousel;
   index: number;
@@ -390,7 +647,13 @@ function CarouselCard({
   onFeedbackSaved: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onSaveTags: (tags: string[]) => void;
+  onTagClick: (tag: string) => void;
 }) {
+  const [editingTags, setEditingTags] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
   const date = new Date(carousel.savedAt);
   const rel = formatRelative(date);
 
@@ -408,7 +671,11 @@ function CarouselCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
       className="sv-card group flex flex-col overflow-hidden p-0"
-      style={{ padding: 0 }}
+      style={{
+        padding: 0,
+        outline: selected ? "3px solid var(--sv-orange)" : undefined,
+        outlineOffset: selected ? -3 : undefined,
+      }}
     >
       {/* Preview 4:5 */}
       <div
@@ -418,6 +685,25 @@ function CarouselCard({
           background: carousel.style === "dark" ? "var(--sv-ink)" : "var(--sv-soft)",
         }}
       >
+        {/* Select checkbox */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleSelect();
+          }}
+          className="absolute left-3 top-3 z-10 flex items-center justify-center p-1.5"
+          style={{
+            background: selected ? "var(--sv-orange)" : "var(--sv-paper)",
+            border: "1.5px solid var(--sv-ink)",
+            color: selected ? "var(--sv-paper)" : "var(--sv-ink)",
+          }}
+          aria-label={selected ? "Desmarcar" : "Selecionar"}
+          title={selected ? "Desmarcar" : "Selecionar"}
+        >
+          {selected ? <CheckSquare size={13} /> : <Square size={13} />}
+        </button>
         {first ? (
           <div className="pointer-events-none absolute inset-0 flex select-none items-center justify-center">
             <EditorialSlide
@@ -530,6 +816,97 @@ function CarouselCard({
         >
           {title}
         </h3>
+
+        {/* Tags row */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(carousel.tags || []).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => onTagClick(t)}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px]"
+              style={{
+                background: "var(--sv-soft)",
+                border: "1.5px solid var(--sv-ink)",
+                fontFamily: "var(--sv-mono)",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "var(--sv-ink)",
+              }}
+            >
+              <Tag size={9} /> {t}
+            </button>
+          ))}
+          {editingTags ? (
+            <div className="flex flex-1 flex-wrap items-center gap-1.5">
+              <input
+                type="text"
+                value={tagDraft}
+                onChange={(e) => setTagDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    const raw = tagDraft.trim().replace(/,$/, "");
+                    if (raw) {
+                      const next = Array.from(
+                        new Set([...(carousel.tags || []), raw])
+                      );
+                      onSaveTags(next);
+                    }
+                    setTagDraft("");
+                  } else if (e.key === "Escape") {
+                    setEditingTags(false);
+                    setTagDraft("");
+                  }
+                }}
+                placeholder="nova tag"
+                className="sv-input"
+                style={{
+                  fontSize: 11,
+                  padding: "4px 8px",
+                  minWidth: 120,
+                }}
+              />
+              {(carousel.tags || []).length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onSaveTags([])}
+                  className="sv-btn-ghost"
+                  style={{ padding: "4px 8px", fontSize: 9 }}
+                >
+                  Limpar
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingTags(false);
+                  setTagDraft("");
+                }}
+                className="sv-btn-ghost"
+                style={{ padding: "4px 8px", fontSize: 9 }}
+              >
+                OK
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditingTags(true)}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px]"
+              style={{
+                background: "transparent",
+                border: "1.5px dashed var(--sv-muted)",
+                fontFamily: "var(--sv-mono)",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "var(--sv-muted)",
+              }}
+            >
+              + tag
+            </button>
+          )}
+        </div>
 
         <CarouselFeedbackPanel
           carouselId={carousel.id}

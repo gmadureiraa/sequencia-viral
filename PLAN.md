@@ -87,8 +87,8 @@
 
 ### 2.6 Biblioteca (`/app/carousels`)
 - [x] Grid brutalist com filtros + search
-- [ ] **Bulk actions**: selecionar múltiplos → deletar/duplicar/exportar ZIP
-- [ ] **Pastas/tags** por carrossel (nicho, tema, campanha) — persistir em `style.tags[]`
+- [x] **Bulk actions**: checkbox por card + barra sticky com Duplicar / Exportar JSON / Excluir
+- [x] **Pastas/tags** por carrossel (nicho, tema, campanha) — persistido em `style.tags[]` via `updateCarouselTags`; UI inline no card + chips na barra de filtros
 - [ ] **Preview expandido**: hover no card mostra todos os slides (carousel embed)
 
 ### 2.7 Plans (`/app/plans`)

@@ -67,6 +67,14 @@ export type SavedCarousel = {
   feedback?: CarouselFeedback;
   /** Preferência de pessoas nas fotos (persistido em `style.image_people_mode`) */
   imagePeopleMode?: ImagePeopleMode;
+  /** Override da cor de destaque do template visual (persistido em `style.accent_override`). */
+  accentOverride?: string;
+  /** Fonte display override (CSS font-family). Persistido em `style.display_font`. */
+  displayFont?: string;
+  /** Multiplicador de tamanho do texto. Persistido em `style.text_scale`. Range 0.8–1.3. */
+  textScale?: number;
+  /** Tags livres (nicho, tema, campanha). Persistido em `style.tags[]`. */
+  tags?: string[];
 };
 
 export function isCarouselUuid(id: string) {
@@ -153,6 +161,29 @@ export function rowToSavedCarousel(row: CarouselRow): SavedCarousel {
 
   const visualTemplate = normalizeVisualTemplate(styleObj.visual_template);
 
+  const accentOverride =
+    typeof styleObj.accent_override === "string"
+      ? styleObj.accent_override
+      : undefined;
+  const displayFont =
+    typeof styleObj.display_font === "string"
+      ? styleObj.display_font
+      : undefined;
+  const rawScale = styleObj.text_scale;
+  const textScale =
+    typeof rawScale === "number" && Number.isFinite(rawScale)
+      ? Math.max(0.6, Math.min(1.6, rawScale))
+      : undefined;
+
+  const rawTags = styleObj.tags;
+  const tags = Array.isArray(rawTags)
+    ? rawTags
+        .filter((t): t is string => typeof t === "string")
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0)
+        .slice(0, 20)
+    : undefined;
+
   return {
     id: row.id,
     title: row.title || slides[0]?.heading || "Sem título",
@@ -170,7 +201,52 @@ export function rowToSavedCarousel(row: CarouselRow): SavedCarousel {
     bodyFontId,
     feedback,
     imagePeopleMode,
+    accentOverride,
+    displayFont,
+    textScale,
+    tags,
   };
+}
+
+/**
+ * Atualiza apenas as tags (`style.tags[]`) de um carrossel, preservando todo
+ * o resto do JSON `style`. Usado pela biblioteca pra adicionar/remover tags
+ * sem mexer em slides/variation/designTemplate.
+ */
+export async function updateCarouselTags(
+  client: SupabaseClient,
+  userId: string,
+  carouselId: string,
+  tags: string[]
+): Promise<void> {
+  const cleaned = Array.from(
+    new Set(
+      tags
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0 && t.length <= 32)
+    )
+  ).slice(0, 20);
+
+  const { data: current, error: fetchErr } = await client
+    .from("carousels")
+    .select("style")
+    .eq("id", carouselId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (fetchErr || !current) {
+    throw fetchErr || new Error("Carrossel não encontrado");
+  }
+  const style =
+    current.style && typeof current.style === "object"
+      ? { ...(current.style as Record<string, unknown>) }
+      : {};
+  style.tags = cleaned;
+  const { error } = await client
+    .from("carousels")
+    .update({ style })
+    .eq("id", carouselId)
+    .eq("user_id", userId);
+  if (error) throw error;
 }
 
 const CAROUSEL_LIST_FIELDS =
@@ -252,6 +328,9 @@ export async function upsertUserCarousel(
     titleFontId?: string;
     bodyFontId?: string;
     imagePeopleMode?: ImagePeopleMode;
+    accentOverride?: string;
+    displayFont?: string;
+    textScale?: number;
   }
 ): Promise<{ row: CarouselRow; inserted: boolean }> {
   const style: Record<string, unknown> = {
@@ -274,6 +353,15 @@ export async function upsertUserCarousel(
   }
   if (payload.bodyFontId) {
     style.body_font = payload.bodyFontId;
+  }
+  if (payload.accentOverride) {
+    style.accent_override = payload.accentOverride;
+  }
+  if (payload.displayFont) {
+    style.display_font = payload.displayFont;
+  }
+  if (typeof payload.textScale === "number") {
+    style.text_scale = payload.textScale;
   }
 
   if (payload.id) {
@@ -302,6 +390,19 @@ export async function upsertUserCarousel(
     if (!payload.visualTemplate) {
       const prevVt = normalizeVisualTemplate(prev.visual_template);
       if (prevVt) style.visual_template = prevVt;
+    }
+    // Preservar accent / display_font / text_scale se não foram enviados.
+    if (!payload.accentOverride && typeof prev.accent_override === "string") {
+      style.accent_override = prev.accent_override;
+    }
+    if (!payload.displayFont && typeof prev.display_font === "string") {
+      style.display_font = prev.display_font;
+    }
+    if (
+      typeof payload.textScale !== "number" &&
+      typeof prev.text_scale === "number"
+    ) {
+      style.text_scale = prev.text_scale;
     }
 
     let { data, error } = await client

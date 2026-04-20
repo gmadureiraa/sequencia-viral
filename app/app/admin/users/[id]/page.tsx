@@ -607,7 +607,26 @@ function VoiceSection({ profile }: { profile: Profile }) {
 
 // ─────────────────────────── CarouselsSection ──────────────────────
 
+interface CarouselFull {
+  id: string;
+  title: string | null;
+  status: string | null;
+  thumbnail_url: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  style: Record<string, unknown> | null;
+  slides: Array<{
+    heading?: string;
+    body?: string;
+    imageUrl?: string;
+    variant?: string;
+  }> | null;
+  source_url: string | null;
+  source_text: string | null;
+}
+
 function CarouselsSection({ carousels }: { carousels: CarouselSlim[] }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   if (carousels.length === 0) return null;
   return (
     <section className="mt-10">
@@ -619,13 +638,26 @@ function CarouselsSection({ carousels }: { carousels: CarouselSlim[] }) {
         style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}
       >
         {carousels.map((c) => (
-          <div
+          <button
             key={c.id}
+            type="button"
+            onClick={() => setOpenId(c.id)}
+            className="text-left"
             style={{
               padding: 12,
               border: "1.5px solid var(--sv-ink)",
               background: "var(--sv-white)",
               boxShadow: "2px 2px 0 0 var(--sv-ink)",
+              cursor: "pointer",
+              transition: "transform .1s, box-shadow .1s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translate(-1px,-1px)";
+              e.currentTarget.style.boxShadow = "3px 3px 0 0 var(--sv-green)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "none";
+              e.currentTarget.style.boxShadow = "2px 2px 0 0 var(--sv-ink)";
             }}
           >
             <div
@@ -663,12 +695,332 @@ function CarouselsSection({ carousels }: { carousels: CarouselSlim[] }) {
                 color: "var(--sv-muted)",
               }}
             >
-              {fmtDate(c.updated_at)}
+              {fmtDate(c.updated_at)} · Clique pra ver conteúdo
             </div>
-          </div>
+          </button>
         ))}
       </div>
+      {openId && <CarouselModal id={openId} onClose={() => setOpenId(null)} />}
     </section>
+  );
+}
+
+function CarouselModal({ id, onClose }: { id: string; onClose: () => void }) {
+  const { session } = useAuth();
+  const [data, setData] = useState<CarouselFull | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [fetching, setFetching] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!session) return;
+      try {
+        const res = await fetch(`/api/admin/carousels/${id}`, {
+          headers: jsonWithAuth(session),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok)
+          throw new Error(json?.error || `HTTP ${res.status}`);
+        if (!cancelled) setData(json.carousel as CarouselFull);
+      } catch (e) {
+        if (!cancelled)
+          setErr(e instanceof Error ? e.message : "Erro ao carregar");
+      } finally {
+        if (!cancelled) setFetching(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, session]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
+  const style = (data?.style ?? {}) as Record<string, unknown>;
+  const caption = typeof style.caption === "string" ? style.caption : null;
+  const hashtags = Array.isArray(style.caption_hashtags)
+    ? (style.caption_hashtags as string[])
+    : [];
+  const visualTemplate =
+    typeof style.visual_template === "string" ? style.visual_template : null;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(10,10,10,0.6)",
+        zIndex: 100,
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        padding: "40px 20px",
+        overflowY: "auto",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: 820,
+          background: "var(--sv-white)",
+          border: "1.5px solid var(--sv-ink)",
+          boxShadow: "6px 6px 0 0 var(--sv-ink)",
+          padding: 24,
+        }}
+      >
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <div
+              className="uppercase mb-1"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: 10,
+                letterSpacing: "0.16em",
+                color: "var(--sv-muted)",
+                fontWeight: 700,
+              }}
+            >
+              Carrossel · {data?.status || "—"}
+              {visualTemplate ? ` · ${visualTemplate}` : ""}
+            </div>
+            <h2
+              className="sv-display"
+              style={{
+                fontSize: 26,
+                lineHeight: 1.1,
+                letterSpacing: "-0.015em",
+              }}
+            >
+              {data?.title || "Sem título"}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="sv-btn sv-btn-outline"
+            style={{ padding: "6px 10px", fontSize: 10 }}
+          >
+            ✕ Fechar
+          </button>
+        </div>
+
+        {fetching && (
+          <div className="py-10 text-center">
+            <Loader2
+              size={18}
+              className="animate-spin inline-block"
+              style={{ color: "var(--sv-ink)" }}
+            />
+          </div>
+        )}
+
+        {err && (
+          <div
+            style={{
+              padding: 12,
+              border: "1.5px solid #c94f3b",
+              background: "#fdf0ed",
+              color: "#7a2a1a",
+              fontSize: 13,
+            }}
+          >
+            {err}
+          </div>
+        )}
+
+        {data && !fetching && (
+          <>
+            {data.source_url && (
+              <div
+                className="mb-3"
+                style={{
+                  padding: 10,
+                  background: "var(--sv-paper)",
+                  border: "1.5px solid var(--sv-ink)",
+                  fontFamily: "var(--sv-mono)",
+                  fontSize: 11,
+                }}
+              >
+                Fonte:{" "}
+                <a href={data.source_url} target="_blank" rel="noreferrer">
+                  {data.source_url}
+                </a>
+              </div>
+            )}
+
+            {Array.isArray(data.slides) && data.slides.length > 0 && (
+              <div className="flex flex-col gap-3 mb-5">
+                {data.slides.map((s, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: 14,
+                      border: "1.5px solid var(--sv-ink)",
+                      background: "var(--sv-paper)",
+                    }}
+                  >
+                    <div
+                      className="uppercase mb-2 flex items-center justify-between"
+                      style={{
+                        fontFamily: "var(--sv-mono)",
+                        fontSize: 9,
+                        letterSpacing: "0.18em",
+                        color: "var(--sv-muted)",
+                        fontWeight: 700,
+                      }}
+                    >
+                      <span>
+                        Slide {i + 1}/{data.slides!.length}
+                        {s.variant ? ` · ${s.variant}` : ""}
+                      </span>
+                      {s.imageUrl && (
+                        <a
+                          href={s.imageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ color: "var(--sv-muted)" }}
+                        >
+                          Imagem ↗
+                        </a>
+                      )}
+                    </div>
+                    {s.imageUrl && (
+                      <img
+                        src={s.imageUrl}
+                        alt=""
+                        style={{
+                          width: "100%",
+                          maxHeight: 200,
+                          objectFit: "cover",
+                          border: "1.5px solid var(--sv-ink)",
+                          marginBottom: 10,
+                        }}
+                      />
+                    )}
+                    {s.heading && (
+                      <div
+                        style={{
+                          fontFamily: "var(--sv-display)",
+                          fontSize: 18,
+                          lineHeight: 1.2,
+                          marginBottom: 6,
+                          color: "var(--sv-ink)",
+                        }}
+                      >
+                        {s.heading}
+                      </div>
+                    )}
+                    {s.body && (
+                      <div
+                        style={{
+                          fontFamily: "var(--sv-sans)",
+                          fontSize: 13,
+                          lineHeight: 1.55,
+                          color: "var(--sv-ink)",
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {s.body}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(caption || hashtags.length > 0) && (
+              <div
+                style={{
+                  padding: 14,
+                  border: "1.5px solid var(--sv-ink)",
+                  background: "var(--sv-green)",
+                }}
+              >
+                <div
+                  className="uppercase mb-2"
+                  style={{
+                    fontFamily: "var(--sv-mono)",
+                    fontSize: 9,
+                    letterSpacing: "0.18em",
+                    fontWeight: 700,
+                  }}
+                >
+                  Legenda + hashtags
+                </div>
+                {caption && (
+                  <div
+                    style={{
+                      fontFamily: "var(--sv-sans)",
+                      fontSize: 13,
+                      lineHeight: 1.55,
+                      whiteSpace: "pre-wrap",
+                      marginBottom: hashtags.length > 0 ? 8 : 0,
+                    }}
+                  >
+                    {caption}
+                  </div>
+                )}
+                {hashtags.length > 0 && (
+                  <div
+                    style={{
+                      fontFamily: "var(--sv-mono)",
+                      fontSize: 11,
+                    }}
+                  >
+                    {hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ")}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {data.source_text && (
+              <details className="mt-4">
+                <summary
+                  className="uppercase"
+                  style={{
+                    fontFamily: "var(--sv-mono)",
+                    fontSize: 10,
+                    letterSpacing: "0.16em",
+                    color: "var(--sv-muted)",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Texto original (source)
+                </summary>
+                <div
+                  className="mt-2"
+                  style={{
+                    padding: 12,
+                    background: "var(--sv-paper)",
+                    border: "1.5px solid var(--sv-ink)",
+                    fontFamily: "var(--sv-sans)",
+                    fontSize: 12.5,
+                    lineHeight: 1.55,
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {data.source_text}
+                </div>
+              </details>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

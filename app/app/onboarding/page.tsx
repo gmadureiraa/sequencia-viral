@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth-context";
 import type { BrandAnalysis } from "@/lib/auth-context";
+import type { Session } from "@supabase/supabase-js";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
 import { Loader2 } from "lucide-react";
 import posthog from "posthog-js";
@@ -93,6 +94,7 @@ interface OnboardingData {
   twitter_handle: string;
   instagram_handle: string;
   linkedin_url: string;
+  website_url: string;
   niche: string[];
   tone: string;
   language: string;
@@ -115,6 +117,7 @@ function initialData(): OnboardingData {
     twitter_handle: "",
     instagram_handle: "",
     linkedin_url: "",
+    website_url: "",
     niche: [],
     tone: "casual",
     language: "pt-br",
@@ -200,7 +203,10 @@ export default function OnboardingPage() {
   }, []);
 
   // ─── Scrape + brand analysis ───
-  async function pullProfile(platform: "twitter" | "instagram", handle: string) {
+  async function pullProfile(
+    platform: "twitter" | "instagram" | "linkedin" | "website",
+    handle: string
+  ) {
     if (!handle.trim()) {
       setScrapeError("Digite um handle para buscar.");
       return;
@@ -208,10 +214,14 @@ export default function OnboardingPage() {
     setScraping(true);
     setScrapeError(null);
     try {
+      const cleanHandle =
+        platform === "website" || platform === "linkedin"
+          ? handle.trim()
+          : handle.replace(/^@/, "").trim();
       const res = await fetch("/api/profile-scraper", {
         method: "POST",
         headers: jsonWithAuth(session),
-        body: JSON.stringify({ platform, handle: handle.replace(/^@/, "") }),
+        body: JSON.stringify({ platform, handle: cleanHandle }),
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => null);
@@ -240,9 +250,13 @@ export default function OnboardingPage() {
         avatar_url: p.avatarUrl || data.avatar_url,
         bio: p.bio || data.bio,
         twitter_handle:
-          platform === "twitter" ? handle.replace(/^@/, "") : data.twitter_handle,
+          platform === "twitter" ? cleanHandle : data.twitter_handle,
         instagram_handle:
-          platform === "instagram" ? handle.replace(/^@/, "") : data.instagram_handle,
+          platform === "instagram" ? cleanHandle : data.instagram_handle,
+        linkedin_url:
+          platform === "linkedin" ? cleanHandle : data.linkedin_url,
+        website_url:
+          platform === "website" ? cleanHandle : data.website_url,
         niche: niches.length
           ? Array.from(new Set([...data.niche, ...niches]))
           : data.niche,
@@ -559,6 +573,7 @@ export default function OnboardingPage() {
                   onBack={() => goStep(3)}
                   onFinish={() => finish("ideas")}
                   onSkip={() => finish("ideas")}
+                  session={session}
                 />
               )}
             </motion.div>
@@ -826,12 +841,17 @@ function StepNetworks({
   scrapeError: string | null;
   brandAnalysis: BrandAnalysisResult | null;
   scrapedProfile: ScrapedProfile | null;
-  pullProfile: (platform: "twitter" | "instagram", handle: string) => void;
+  pullProfile: (
+    platform: "twitter" | "instagram" | "linkedin" | "website",
+    handle: string
+  ) => void;
   onBack: () => void;
   onContinue: () => void;
 }) {
   const [igInput, setIgInput] = useState(data.instagram_handle || "");
   const [twInput, setTwInput] = useState(data.twitter_handle || "");
+  const [liInput, setLiInput] = useState(data.linkedin_url || "");
+  const [siteInput, setSiteInput] = useState(data.website_url || "");
   const busy = scraping || analyzingBrand;
 
   const hasAnyAnalysis = !!brandAnalysis || !!scrapedProfile;
@@ -843,8 +863,8 @@ function StepNetworks({
         Seu <em className="italic">sotaque</em> nas redes.
       </DisplayH1>
       <SubLine>
-        Cola o @ — a gente lê os últimos posts sem você precisar logar, detecta
-        nicho, tom e tópicos recorrentes.
+        Cola pelo menos um dos quatro — a gente lê os últimos posts sem você precisar
+        logar, detecta nicho, tom e tópicos recorrentes. Mais redes = DNA mais afinado.
       </SubLine>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -880,6 +900,40 @@ function StepNetworks({
           busy={scraping}
           scrapedProfile={
             scrapedProfile?.platform === "twitter" ? scrapedProfile : null
+          }
+        />
+        {/* LinkedIn card */}
+        <NetworkCard
+          platform="linkedin"
+          title="LinkedIn"
+          handle={liInput}
+          setHandle={(v) => {
+            setLiInput(v);
+            update({ linkedin_url: v.trim() });
+          }}
+          connected={!!scrapedProfile && scrapedProfile.platform === "linkedin"}
+          onConnect={() => pullProfile("linkedin", liInput)}
+          disabled={busy}
+          busy={scraping}
+          scrapedProfile={
+            scrapedProfile?.platform === "linkedin" ? scrapedProfile : null
+          }
+        />
+        {/* Website card */}
+        <NetworkCard
+          platform="website"
+          title="Site / blog"
+          handle={siteInput}
+          setHandle={(v) => {
+            setSiteInput(v);
+            update({ website_url: v.trim() });
+          }}
+          connected={!!scrapedProfile && scrapedProfile.platform === "website"}
+          onConnect={() => pullProfile("website", siteInput)}
+          disabled={busy}
+          busy={scraping}
+          scrapedProfile={
+            scrapedProfile?.platform === "website" ? scrapedProfile : null
           }
         />
       </div>
@@ -982,7 +1036,7 @@ function NetworkCard({
   busy,
   scrapedProfile,
 }: {
-  platform: "instagram" | "twitter";
+  platform: "instagram" | "twitter" | "linkedin" | "website";
   title: string;
   handle: string;
   setHandle: (v: string) => void;
@@ -993,6 +1047,21 @@ function NetworkCard({
   scrapedProfile: ScrapedProfile | null;
 }) {
   const bg = connected ? "var(--sv-green)" : "var(--sv-white)";
+  const isUrlInput = platform === "website";
+  const prefix =
+    platform === "website"
+      ? "https://"
+      : "@";
+  const iconBg =
+    platform === "instagram"
+      ? "linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)"
+      : platform === "linkedin"
+      ? "#0A66C2"
+      : platform === "website"
+      ? "var(--sv-paper)"
+      : "var(--sv-ink)";
+  const placeholder =
+    platform === "website" ? "seusite.com" : "seuhandle";
   return (
     <div
       style={{
@@ -1011,10 +1080,7 @@ function NetworkCard({
             height: 42,
             borderRadius: 12,
             border: "1.5px solid var(--sv-ink)",
-            background:
-              platform === "instagram"
-                ? "linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)"
-                : "var(--sv-ink)",
+            background: iconBg,
           }}
         >
           {platform === "instagram" ? (
@@ -1023,9 +1089,19 @@ function NetworkCard({
               <circle cx="12" cy="12" r="4" />
               <circle cx="18" cy="6" r="1" fill="#fff" />
             </svg>
-          ) : (
+          ) : platform === "twitter" ? (
             <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+          ) : platform === "linkedin" ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
+              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.063 2.063 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+            </svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--sv-ink)" strokeWidth="1.8">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20" />
+              <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
             </svg>
           )}
         </div>
@@ -1069,7 +1145,7 @@ function NetworkCard({
             fontWeight: 700,
           }}
         >
-          @{scrapedProfile.handle}
+          {platform === "website" ? scrapedProfile.handle : `@${scrapedProfile.handle}`}
           {scrapedProfile.followers
             ? ` · ${scrapedProfile.followers >= 1000 ? `${(scrapedProfile.followers / 1000).toFixed(1)}k` : scrapedProfile.followers} followers`
             : ""}
@@ -1083,23 +1159,31 @@ function NetworkCard({
             <span
               className="flex items-center justify-center"
               style={{
-                width: 34,
+                width: isUrlInput ? 64 : 34,
                 height: 38,
                 borderRight: "1.5px solid var(--sv-ink)",
-                fontFamily: "var(--sv-display)",
-                fontSize: 16,
+                fontFamily: isUrlInput ? "var(--sv-mono)" : "var(--sv-display)",
+                fontSize: isUrlInput ? 10 : 16,
                 color: "var(--sv-ink)",
                 background: "var(--sv-white)",
                 border: "1.5px solid var(--sv-ink)",
+                fontWeight: isUrlInput ? 700 : 400,
+                letterSpacing: isUrlInput ? "0.05em" : "0",
               }}
             >
-              @
+              {prefix}
             </span>
             <input
               type="text"
               value={handle}
-              onChange={(e) => setHandle(e.target.value.replace(/^@/, ""))}
-              placeholder="seuhandle"
+              onChange={(e) =>
+                setHandle(
+                  isUrlInput
+                    ? e.target.value.replace(/^https?:\/\//, "")
+                    : e.target.value.replace(/^@/, "")
+                )
+              }
+              placeholder={placeholder}
               disabled={disabled}
               className="sv-input flex-1"
               style={{ padding: "10px 12px", fontSize: 13 }}
@@ -1330,6 +1414,7 @@ function StepDetails({
   onBack,
   onFinish,
   onSkip,
+  session,
 }: {
   data: OnboardingData;
   update: (d: Partial<OnboardingData>) => void;
@@ -1337,12 +1422,67 @@ function StepDetails({
   onBack: () => void;
   onFinish: () => void;
   onSkip: () => void;
+  session: Session | null;
 }) {
   const [samplesText, setSamplesText] = useState(
     data.voice_samples.join("\n\n---\n\n")
   );
   const [tabusInput, setTabusInput] = useState("");
   const [rulesText, setRulesText] = useState(data.content_rules.join("\n"));
+  const [voiceLinks, setVoiceLinks] = useState<string[]>(["", "", ""]);
+  const [voiceKind, setVoiceKind] = useState<"self" | "reference">("self");
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceDna, setVoiceDna] = useState<{
+    summary?: string;
+    tone?: string[];
+    hook_patterns?: string[];
+    cta_style?: string;
+  } | null>(null);
+
+  async function ingestVoiceLinks() {
+    const urls = voiceLinks.map((u) => u.trim()).filter(Boolean);
+    if (urls.length === 0) {
+      setVoiceError("Cola pelo menos um link de post/reel do Instagram.");
+      return;
+    }
+    setVoiceLoading(true);
+    setVoiceError(null);
+    try {
+      const res = await fetch("/api/voice-ingest", {
+        method: "POST",
+        headers: jsonWithAuth(session),
+        body: JSON.stringify({ urls, kind: voiceKind }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(
+          typeof body?.error === "string"
+            ? body.error
+            : "Não consegui analisar os links."
+        );
+      }
+      setVoiceDna(body?.voice_dna ?? null);
+      if (Array.isArray(body?.voice_dna?.sample_captions)) {
+        const caps = (body.voice_dna.sample_captions as string[])
+          .map((s) => (typeof s === "string" ? s.trim() : ""))
+          .filter(Boolean)
+          .slice(0, 3);
+        if (caps.length > 0) {
+          const merged = Array.from(
+            new Set([...(data.voice_samples || []), ...caps])
+          ).slice(0, 3);
+          update({ voice_samples: merged });
+          setSamplesText(merged.join("\n\n---\n\n"));
+        }
+      }
+      toast.success("Voz analisada. Próximo carrossel sai com seu DNA.");
+    } catch (err) {
+      setVoiceError(err instanceof Error ? err.message : "Falha ao analisar.");
+    } finally {
+      setVoiceLoading(false);
+    }
+  }
 
   function commitSamples(v: string) {
     setSamplesText(v);
@@ -1390,7 +1530,204 @@ function StepDetails({
         mas pode pular a qualquer hora.
       </SubLine>
 
-      {/* Voice samples */}
+      {/* Voice DNA via links */}
+      <div
+        className="mb-6"
+        style={{
+          padding: 18,
+          background: "var(--sv-paper)",
+          border: "1.5px solid var(--sv-ink)",
+          boxShadow: "3px 3px 0 0 var(--sv-ink)",
+        }}
+      >
+        <div
+          className="mb-2 uppercase"
+          style={{
+            fontFamily: "var(--sv-mono)",
+            fontSize: 10,
+            letterSpacing: "0.18em",
+            color: "var(--sv-ink)",
+            fontWeight: 700,
+          }}
+        >
+          ✦ Ensine via links (recomendado)
+        </div>
+        <div
+          className="mb-3"
+          style={{
+            fontFamily: "var(--sv-sans)",
+            fontSize: 13,
+            lineHeight: 1.5,
+            color: "var(--sv-muted)",
+          }}
+        >
+          Cola até 3 links de carrosséis do Instagram (seus ou de referência). A IA
+          lê a legenda e o texto dos slides, extrai padrão de hook, estrutura e CTA.
+        </div>
+
+        <div className="mb-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setVoiceKind("self")}
+            className="uppercase"
+            style={{
+              padding: "6px 12px",
+              fontFamily: "var(--sv-mono)",
+              fontSize: 10,
+              letterSpacing: "0.15em",
+              fontWeight: 700,
+              background: voiceKind === "self" ? "var(--sv-ink)" : "var(--sv-white)",
+              color: voiceKind === "self" ? "var(--sv-white)" : "var(--sv-ink)",
+              border: "1.5px solid var(--sv-ink)",
+              cursor: "pointer",
+            }}
+          >
+            Meus posts
+          </button>
+          <button
+            type="button"
+            onClick={() => setVoiceKind("reference")}
+            className="uppercase"
+            style={{
+              padding: "6px 12px",
+              fontFamily: "var(--sv-mono)",
+              fontSize: 10,
+              letterSpacing: "0.15em",
+              fontWeight: 700,
+              background: voiceKind === "reference" ? "var(--sv-ink)" : "var(--sv-white)",
+              color: voiceKind === "reference" ? "var(--sv-white)" : "var(--sv-ink)",
+              border: "1.5px solid var(--sv-ink)",
+              cursor: "pointer",
+            }}
+          >
+            Referência
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {voiceLinks.map((url, i) => (
+            <input
+              key={i}
+              type="url"
+              value={url}
+              onChange={(e) => {
+                const next = [...voiceLinks];
+                next[i] = e.target.value;
+                setVoiceLinks(next);
+              }}
+              placeholder={`https://www.instagram.com/p/...`}
+              disabled={voiceLoading}
+              className="sv-input"
+              style={{ padding: "10px 12px", fontSize: 13 }}
+            />
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={ingestVoiceLinks}
+          disabled={voiceLoading || voiceLinks.every((u) => !u.trim())}
+          className="sv-btn sv-btn-ink mt-3"
+          style={{
+            padding: "10px 16px",
+            fontSize: 11,
+            opacity:
+              voiceLoading || voiceLinks.every((u) => !u.trim()) ? 0.5 : 1,
+          }}
+        >
+          {voiceLoading ? (
+            <>
+              <Loader2 size={12} className="animate-spin" />
+              Lendo carrosséis…
+            </>
+          ) : (
+            "Analisar DNA →"
+          )}
+        </button>
+
+        {voiceError && (
+          <div
+            className="mt-3 uppercase"
+            style={{
+              fontFamily: "var(--sv-mono)",
+              fontSize: 10,
+              letterSpacing: "0.12em",
+              color: "var(--sv-pink)",
+              fontWeight: 700,
+            }}
+          >
+            ⚠ {voiceError}
+          </div>
+        )}
+
+        {voiceDna && (
+          <div
+            className="mt-4"
+            style={{
+              padding: 14,
+              background: "var(--sv-green)",
+              border: "1.5px solid var(--sv-ink)",
+              boxShadow: "2px 2px 0 0 var(--sv-ink)",
+            }}
+          >
+            <div
+              className="mb-2 uppercase"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: 10,
+                letterSpacing: "0.15em",
+                fontWeight: 700,
+                color: "var(--sv-ink)",
+              }}
+            >
+              ✓ DNA capturado
+            </div>
+            {voiceDna.summary && (
+              <div
+                style={{
+                  fontFamily: "var(--sv-sans)",
+                  fontSize: 13,
+                  lineHeight: 1.55,
+                  color: "var(--sv-ink)",
+                  marginBottom: 8,
+                }}
+              >
+                {voiceDna.summary}
+              </div>
+            )}
+            {voiceDna.tone && voiceDna.tone.length > 0 && (
+              <div
+                className="uppercase"
+                style={{
+                  fontFamily: "var(--sv-mono)",
+                  fontSize: 10,
+                  letterSpacing: "0.12em",
+                  color: "var(--sv-ink)",
+                  fontWeight: 700,
+                }}
+              >
+                Tom: {voiceDna.tone.join(" · ")}
+              </div>
+            )}
+            {voiceDna.cta_style && (
+              <div
+                className="mt-1"
+                style={{
+                  fontFamily: "var(--sv-mono)",
+                  fontSize: 10,
+                  letterSpacing: "0.12em",
+                  color: "var(--sv-ink)",
+                  fontWeight: 700,
+                }}
+              >
+                CTA: {voiceDna.cta_style}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Voice samples (fallback manual) */}
       <div className="mb-6">
         <div
           className="mb-2 uppercase"
@@ -1401,13 +1738,13 @@ function StepDetails({
             color: "var(--sv-muted)",
           }}
         >
-          Exemplos de voz · 1 a 3 posts que representam você bem
+          Ou cole texto manual · 1 a 3 posts
         </div>
         <textarea
           value={samplesText}
           onChange={(e) => commitSamples(e.target.value)}
           placeholder="Cole um post inteiro que você curtiu de como saiu. Separe múltiplos com uma linha contendo apenas ---"
-          rows={6}
+          rows={5}
           style={{
             width: "100%",
             padding: 14,

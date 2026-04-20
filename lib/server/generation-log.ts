@@ -43,7 +43,8 @@ export type PromptType =
   | "image"
   | "brand-aesthetic"
   | "brand-analysis"
-  | "cover-scene";
+  | "cover-scene"
+  | "voice-ingest";
 
 export function costForTokens(
   model: ModelId,

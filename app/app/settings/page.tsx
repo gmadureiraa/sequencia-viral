@@ -231,6 +231,21 @@ function SettingsPageContent() {
   const [audienceDesc, setAudienceDesc] = useState("");
   const [voiceSamples, setVoiceSamples] = useState<string[]>([]);
   const [voiceSamplesText, setVoiceSamplesText] = useState("");
+  const [voiceLinks, setVoiceLinks] = useState<string[]>(["", "", ""]);
+  const [voiceKind, setVoiceKind] = useState<"self" | "reference">("self");
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceDna, setVoiceDna] = useState<{
+    summary?: string;
+    tone?: string[];
+    hook_patterns?: string[];
+    cta_style?: string;
+    structure_signature?: string;
+    vocabulary_markers?: string[];
+    dos?: string[];
+    donts?: string[];
+    sample_captions?: string[];
+  } | null>(null);
   const [tabus, setTabus] = useState<string[]>([]);
   const [tabuInput, setTabuInput] = useState("");
   const [contentRules, setContentRules] = useState<string[]>([]);
@@ -280,6 +295,12 @@ function SettingsPageContent() {
     const samples = Array.isArray(ba?.voice_samples) ? ba!.voice_samples! : [];
     setVoiceSamples(samples);
     setVoiceSamplesText(samples.join("\n\n---\n\n"));
+    const existingDna = (profile.brand_analysis as unknown as
+      | Record<string, unknown>
+      | undefined)?.["__voice_dna"] as typeof voiceDna | undefined;
+    if (existingDna && typeof existingDna === "object") {
+      setVoiceDna(existingDna);
+    }
     setTabus(Array.isArray(ba?.tabus) ? ba!.tabus! : []);
     const rules = Array.isArray(ba?.content_rules) ? ba!.content_rules! : [];
     setContentRules(rules);
@@ -501,6 +522,47 @@ function SettingsPageContent() {
       );
     } finally {
       setReanalyzing(false);
+    }
+  }
+
+  async function ingestVoiceLinks() {
+    const urls = voiceLinks.map((u) => u.trim()).filter(Boolean);
+    if (urls.length === 0) {
+      setVoiceError("Cola pelo menos um link de post/reel do Instagram.");
+      return;
+    }
+    setVoiceLoading(true);
+    setVoiceError(null);
+    try {
+      const res = await fetch("/api/voice-ingest", {
+        method: "POST",
+        headers: jsonWithAuth(session),
+        body: JSON.stringify({ urls, kind: voiceKind }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(
+          typeof body?.error === "string" ? body.error : "Não consegui analisar os links."
+        );
+      }
+      setVoiceDna(body?.voice_dna ?? null);
+      if (Array.isArray(body?.voice_dna?.sample_captions)) {
+        const caps = (body.voice_dna.sample_captions as string[])
+          .map((s) => (typeof s === "string" ? s.trim() : ""))
+          .filter(Boolean)
+          .slice(0, 3);
+        if (caps.length > 0) {
+          const merged = Array.from(new Set([...voiceSamples, ...caps])).slice(0, 3);
+          setVoiceSamples(merged);
+          setVoiceSamplesText(merged.join("\n\n---\n\n"));
+        }
+      }
+      await refreshProfile?.();
+      toast.success("Voz analisada. DNA salvo no perfil.");
+    } catch (err) {
+      setVoiceError(err instanceof Error ? err.message : "Falha ao analisar.");
+    } finally {
+      setVoiceLoading(false);
     }
   }
 
@@ -1889,6 +1951,190 @@ function SettingsPageContent() {
                   rows={3}
                   style={{ padding: "10px 12px", fontSize: 13, resize: "vertical" }}
                 />
+              </div>
+
+              <div
+                className="mt-6"
+                style={{
+                  padding: 18,
+                  background: "var(--sv-paper)",
+                  border: "1.5px solid var(--sv-ink)",
+                  boxShadow: "3px 3px 0 0 var(--sv-ink)",
+                }}
+              >
+                <Label>✦ DNA via links (recomendado)</Label>
+                <p
+                  style={{
+                    fontFamily: "var(--sv-sans)",
+                    fontSize: 12,
+                    color: "var(--sv-muted)",
+                    marginTop: -6,
+                    marginBottom: 10,
+                  }}
+                >
+                  Cola até 3 links de carrosséis do Instagram. A IA lê legenda + OCR dos
+                  slides e extrai padrão de hook, estrutura e CTA.
+                </p>
+                <div className="mb-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVoiceKind("self")}
+                    className="uppercase"
+                    style={{
+                      padding: "6px 12px",
+                      fontFamily: "var(--sv-mono)",
+                      fontSize: 10,
+                      letterSpacing: "0.15em",
+                      fontWeight: 700,
+                      background: voiceKind === "self" ? "var(--sv-ink)" : "var(--sv-white)",
+                      color: voiceKind === "self" ? "var(--sv-white)" : "var(--sv-ink)",
+                      border: "1.5px solid var(--sv-ink)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Meus posts
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVoiceKind("reference")}
+                    className="uppercase"
+                    style={{
+                      padding: "6px 12px",
+                      fontFamily: "var(--sv-mono)",
+                      fontSize: 10,
+                      letterSpacing: "0.15em",
+                      fontWeight: 700,
+                      background: voiceKind === "reference" ? "var(--sv-ink)" : "var(--sv-white)",
+                      color: voiceKind === "reference" ? "var(--sv-white)" : "var(--sv-ink)",
+                      border: "1.5px solid var(--sv-ink)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Referência
+                  </button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {voiceLinks.map((url, i) => (
+                    <input
+                      key={i}
+                      type="url"
+                      value={url}
+                      onChange={(e) => {
+                        const next = [...voiceLinks];
+                        next[i] = e.target.value;
+                        setVoiceLinks(next);
+                      }}
+                      placeholder="https://www.instagram.com/p/..."
+                      disabled={voiceLoading}
+                      className="sv-input w-full"
+                      style={{ padding: "10px 12px", fontSize: 13 }}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={ingestVoiceLinks}
+                  disabled={voiceLoading || voiceLinks.every((u) => !u.trim())}
+                  className="sv-btn sv-btn-ink mt-3"
+                  style={{
+                    padding: "10px 16px",
+                    fontSize: 11,
+                    opacity: voiceLoading || voiceLinks.every((u) => !u.trim()) ? 0.5 : 1,
+                  }}
+                >
+                  {voiceLoading ? "Lendo carrosséis…" : "Analisar DNA →"}
+                </button>
+                {voiceError && (
+                  <div
+                    className="mt-3 uppercase"
+                    style={{
+                      fontFamily: "var(--sv-mono)",
+                      fontSize: 10,
+                      letterSpacing: "0.12em",
+                      color: "var(--sv-pink)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    ⚠ {voiceError}
+                  </div>
+                )}
+                {voiceDna && (
+                  <div
+                    className="mt-4"
+                    style={{
+                      padding: 14,
+                      background: "var(--sv-green)",
+                      border: "1.5px solid var(--sv-ink)",
+                      boxShadow: "2px 2px 0 0 var(--sv-ink)",
+                    }}
+                  >
+                    <div
+                      className="mb-2 uppercase"
+                      style={{
+                        fontFamily: "var(--sv-mono)",
+                        fontSize: 10,
+                        letterSpacing: "0.15em",
+                        fontWeight: 700,
+                        color: "var(--sv-ink)",
+                      }}
+                    >
+                      ✓ DNA capturado
+                    </div>
+                    {voiceDna.summary && (
+                      <div
+                        style={{
+                          fontFamily: "var(--sv-sans)",
+                          fontSize: 13,
+                          lineHeight: 1.55,
+                          color: "var(--sv-ink)",
+                          marginBottom: 8,
+                        }}
+                      >
+                        {voiceDna.summary}
+                      </div>
+                    )}
+                    {voiceDna.tone && voiceDna.tone.length > 0 && (
+                      <div
+                        className="uppercase"
+                        style={{
+                          fontFamily: "var(--sv-mono)",
+                          fontSize: 10,
+                          letterSpacing: "0.12em",
+                          color: "var(--sv-ink)",
+                          fontWeight: 700,
+                        }}
+                      >
+                        Tom: {voiceDna.tone.join(" · ")}
+                      </div>
+                    )}
+                    {voiceDna.cta_style && (
+                      <div
+                        className="mt-1"
+                        style={{
+                          fontFamily: "var(--sv-mono)",
+                          fontSize: 10,
+                          letterSpacing: "0.12em",
+                          color: "var(--sv-ink)",
+                          fontWeight: 700,
+                        }}
+                      >
+                        CTA: {voiceDna.cta_style}
+                      </div>
+                    )}
+                    {voiceDna.structure_signature && (
+                      <div
+                        className="mt-1"
+                        style={{
+                          fontFamily: "var(--sv-sans)",
+                          fontSize: 12,
+                          color: "var(--sv-ink)",
+                        }}
+                      >
+                        Estrutura: {voiceDna.structure_signature}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="mt-6">

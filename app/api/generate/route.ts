@@ -175,7 +175,42 @@ export async function POST(request: Request) {
           const contentRules = Array.isArray(ba.content_rules)
             ? (ba.content_rules as string[]).filter(Boolean).join("; ")
             : "";
-          if (pillars || topics || tone_detected || audience || voice || voiceSamples || tabus || contentRules) {
+          const voiceDna = (ba.__voice_dna ?? null) as {
+            summary?: string;
+            tone?: string[];
+            hook_patterns?: string[];
+            cta_style?: string;
+            structure_signature?: string;
+            vocabulary_markers?: string[];
+            dos?: string[];
+            donts?: string[];
+            sample_captions?: string[];
+          } | null;
+          let voiceDnaBlock = "";
+          if (voiceDna && typeof voiceDna === "object") {
+            const dnaLines: string[] = [];
+            if (voiceDna.summary) dnaLines.push(`Resumo: ${voiceDna.summary}`);
+            if (voiceDna.tone?.length) dnaLines.push(`Tom: ${voiceDna.tone.join(", ")}`);
+            if (voiceDna.hook_patterns?.length)
+              dnaLines.push(`Padrões de hook: ${voiceDna.hook_patterns.join(" | ")}`);
+            if (voiceDna.structure_signature)
+              dnaLines.push(`Estrutura: ${voiceDna.structure_signature}`);
+            if (voiceDna.cta_style) dnaLines.push(`CTA estilo: ${voiceDna.cta_style}`);
+            if (voiceDna.vocabulary_markers?.length)
+              dnaLines.push(`Marcadores vocabulário: ${voiceDna.vocabulary_markers.join(", ")}`);
+            if (voiceDna.dos?.length)
+              dnaLines.push(`Replicar: ${voiceDna.dos.join(" | ")}`);
+            if (voiceDna.donts?.length)
+              dnaLines.push(`Evitar: ${voiceDna.donts.join(" | ")}`);
+            if (voiceDna.sample_captions?.length)
+              dnaLines.push(
+                `Trechos reais:\n${voiceDna.sample_captions.map((c) => `· ${c}`).join("\n")}`
+              );
+            if (dnaLines.length > 0) {
+              voiceDnaBlock = `\n- VOICE DNA (carrosséis reais do criador, imite ritmo e estrutura sem copiar literalmente):\n${dnaLines.join("\n")}\n`;
+            }
+          }
+          if (pillars || topics || tone_detected || audience || voice || voiceSamples || tabus || contentRules || voiceDnaBlock) {
             brandContext = `
 USER BRAND CONTEXT (use this to make content sound authentically like this creator, not generic AI):
 - Content pillars: ${pillars || "not specified"}
@@ -183,7 +218,7 @@ USER BRAND CONTEXT (use this to make content sound authentically like this creat
 - Detected writing tone: ${tone_detected || "not specified"}
 - Target audience: ${audience || "not specified"}
 - Voice preference: ${voice || "not specified"}
-${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalmente):\n${voiceSamples}\n` : ""}${tabus ? `- NEVER use these words or phrases: ${tabus}\n` : ""}${contentRules ? `- Rules to follow strictly: ${contentRules}\n` : ""}`;
+${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalmente):\n${voiceSamples}\n` : ""}${voiceDnaBlock}${tabus ? `- NEVER use these words or phrases: ${tabus}\n` : ""}${contentRules ? `- Rules to follow strictly: ${contentRules}\n` : ""}`;
           }
         }
       }

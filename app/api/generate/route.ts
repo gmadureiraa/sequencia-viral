@@ -1,4 +1,58 @@
 import type { DesignTemplateId } from "@/lib/carousel-templates";
+
+/**
+ * Extrai "ordens diretas" do briefing do usuário — título fixo entre aspas,
+ * pedido de fidelidade literal (siga EXATAMENTE), modo "referência solta"
+ * (use como exemplo mas foque em X). Essas diretivas passam como bloco de
+ * alta prioridade antes do prompt principal, porque o Writer tinha tendência
+ * de parafrasear/ignorar instruções literais.
+ */
+function parseBriefingOverrides(topic: string): {
+  requiredTitle: string | null;
+  strictFidelity: boolean;
+  referenceWithTwist: boolean;
+  literalQuotes: string[];
+} {
+  const text = topic || "";
+
+  // Aspas unicode + ascii — usuário copia/cola de tudo quanto é lugar.
+  // Regex case-insensitive captura o conteúdo dentro das aspas logo após
+  // marcadores como "o título deve ser", "título:", "titulo tem que ser".
+  const titlePatterns = [
+    /(?:o\s+)?t[ií]tulo\s+(?:deve\s+ser|tem\s+que\s+ser|precisa\s+ser|ser[áa])\s*:?\s*["“”'‘’]{1,2}([^"“”'‘’]{3,200})["“”'‘’]{1,2}/i,
+    /(?:o\s+)?t[ií]tulo\s*:\s*["“”'‘’]{1,2}([^"“”'‘’]{3,200})["“”'‘’]{1,2}/i,
+    /(?:the\s+)?title\s+(?:should\s+be|must\s+be|has\s+to\s+be)\s*:?\s*["“”'‘’]{1,2}([^"“”'‘’]{3,200})["“”'‘’]{1,2}/i,
+  ];
+  let requiredTitle: string | null = null;
+  for (const p of titlePatterns) {
+    const m = text.match(p);
+    if (m && m[1]) {
+      requiredTitle = m[1].trim();
+      break;
+    }
+  }
+
+  const strictFidelity =
+    /siga\s+exat(a|amente)|reproduz(a|ir)\s+(o|esse|este)\s+conte[úu]do|copie\s+(o|esse|este)\s+conte[úu]do|use\s+o\s+mesmo\s+texto|exatamente\s+o\s+mesmo|palavra\s+por\s+palavra|verbatim/i.test(
+      text
+    );
+  const referenceWithTwist =
+    !strictFidelity &&
+    /use\s+como\s+(refer[êe]ncia|inspira[çc][ãa]o|exemplo|base)|baseado\s+em|inspir(ado|ada|e-se)|no\s+estilo\s+de/i.test(
+      text
+    );
+
+  // Coleta frases curtas entre aspas (≠ título) pra usar como "texto literal
+  // que o user quer ver em algum slide ou CTA". Limita a 5 pra não poluir.
+  const quoteMatches = Array.from(
+    text.matchAll(/["“”'‘’]{1,2}([^"“”'‘’]{4,180})["“”'‘’]{1,2}/g)
+  )
+    .map((m) => m[1].trim())
+    .filter((q) => !!q && q !== requiredTitle);
+  const literalQuotes = Array.from(new Set(quoteMatches)).slice(0, 5);
+
+  return { requiredTitle, strictFidelity, referenceWithTwist, literalQuotes };
+}
 import { extractContentFromUrl } from "@/lib/url-extractor";
 import { getYouTubeTranscript } from "@/lib/youtube-transcript";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
@@ -762,10 +816,6 @@ Shape:
 }
 Each slides array must have 6-10 items. Every slide MUST include a valid "variant".`;
 
-    // Escolhe o prompt baseado no modo explícito do usuário (UI toggle).
-    const systemPrompt =
-      mode === "layout-only" ? layoutOnlyPrompt : writerPrompt;
-
     // Source content (transcrição YouTube, scrape de link, legenda de Instagram):
     // antes fatiava em 3000 chars — transcript de vídeo longo perdia metade.
     // Raise pra 6000 (custa ~1.5k tokens extras, vale a pena pra fidelidade).
@@ -779,16 +829,62 @@ Each slides array must have 6-10 items. Every slide MUST include a valid "varian
       );
     }
 
+    // Parse ORDENS DIRETAS do briefing (título fixo, fidelidade literal,
+    // modo "referência+twist"). Esse bloco vai PRIMEIRO no userMessage e é
+    // marcado como prioridade máxima — o writer tinha hábito de parafrasear
+    // instruções literais como "o título deve ser X".
+    const overrides = parseBriefingOverrides(topic);
+    const overrideLines: string[] = [];
+    if (overrides.requiredTitle) {
+      overrideLines.push(
+        `• TÍTULO OBRIGATÓRIO (slide 1 / capa): use EXATAMENTE "${overrides.requiredTitle}" — não parafraseie, não encurte, não mude caixa. Se pedir CAPS no template, aplicar só na renderização; a string em si fica idêntica.`
+      );
+    }
+    if (overrides.strictFidelity) {
+      overrideLines.push(
+        `• FIDELIDADE LITERAL: o usuário pediu pra SEGUIR EXATAMENTE a fonte/conteúdo. Reproduza wording, ordem e exemplos do source. Não reinvente ângulo, não "melhore" a voz. Mudanças só em quebra de slide.`
+      );
+    }
+    if (overrides.referenceWithTwist) {
+      overrideLines.push(
+        `• REFERÊNCIA + TWIST: usuário quer USAR a fonte como base/inspiração mas adicionar um ângulo próprio. Respeite estrutura e fatos da fonte; só reescreva a voz se o briefing disser pra focar em outro ponto.`
+      );
+    }
+    if (overrides.literalQuotes.length > 0) {
+      overrideLines.push(
+        `• TEXTOS ENTRE ASPAS NO BRIEFING (use como literal em algum slide ou CTA):\n${overrides.literalQuotes.map((q) => `  - "${q}"`).join("\n")}`
+      );
+    }
+    const overridesBlock =
+      overrideLines.length > 0
+        ? `# ORDENS DIRETAS DO USUÁRIO (PRIORIDADE MÁXIMA — obedeça antes de qualquer regra estética ou de estilo do prompt)\n${overrideLines.join("\n")}\n\n`
+        : "";
+
     const userMessage =
       mode === "layout-only"
         ? // Em layout-only + source: o transcript/scrape VIRA o texto a ser formatado
           // (não é "fonte adicional", é O conteúdo). Topic do user é só hint/contexto.
           sourceContent
-          ? `TEXTO PRA FORMATAR EM SLIDES — extraído da fonte (${sourceType}). Preserve wording, ordem, dados, fale da cabeça do autor quando fizer sentido:\n\n"""\n${sourceContent.slice(0, SOURCE_SLICE)}\n"""${topic && topic.trim().length > 50 ? `\n\nContexto/direcionamento do usuário:\n${topic.slice(0, 1000)}` : ""}`
-          : `TEXTO DO USUÁRIO PRA FORMATAR EM SLIDES (preserve wording, ordem, dados, CTA):\n\n"""\n${topic}\n"""`
+          ? `${overridesBlock}TEXTO PRA FORMATAR EM SLIDES — extraído da fonte (${sourceType}). Preserve wording, ordem, dados, fale da cabeça do autor quando fizer sentido:\n\n"""\n${sourceContent.slice(0, SOURCE_SLICE)}\n"""${topic && topic.trim().length > 50 ? `\n\nContexto/direcionamento do usuário:\n${topic.slice(0, 1000)}` : ""}`
+          : `${overridesBlock}TEXTO DO USUÁRIO PRA FORMATAR EM SLIDES (preserve wording, ordem, dados, CTA):\n\n"""\n${topic}\n"""`
         : sourceContent
-          ? `Create 3 carousel variations (data, story, provocative) based on this content:\n\nTopic: ${topic}\n\nSource (${sourceType}):\n${sourceContent.slice(0, SOURCE_SLICE)}`
-          : `Create 3 carousel variations (data, story, provocative) about: ${topic}`;
+          ? `${overridesBlock}Create 3 carousel variations (data, story, provocative) based on this content:\n\nTopic: ${topic}\n\nSource (${sourceType}):\n${sourceContent.slice(0, SOURCE_SLICE)}`
+          : `${overridesBlock}Create 3 carousel variations (data, story, provocative) about: ${topic}`;
+
+    // Se o usuário pediu fidelidade literal, força layout-only — writer
+    // ainda parafraseia mesmo com instrução. Layout-only é o único modo
+    // que GARANTE preservação de wording.
+    const effectiveMode: GenerationMode =
+      overrides.strictFidelity && sourceContent ? "layout-only" : mode;
+    if (effectiveMode !== mode) {
+      console.log(
+        "[generate] briefing com 'siga exatamente' + source — forçando layout-only"
+      );
+    }
+
+    // Escolhe o prompt baseado no effectiveMode (UI + overrides).
+    const systemPrompt =
+      effectiveMode === "layout-only" ? layoutOnlyPrompt : writerPrompt;
 
     // 3. Increment usage BEFORE calling AI — ensures quota is always counted
     //    even if the response fails or user closes the tab. Se a RPC
@@ -823,13 +919,13 @@ Each slides array must have 6-10 items. Every slide MUST include a valid "varian
     //   formatação, não precisa pesquisa).
     const ai = new GoogleGenAI({ apiKey: geminiKey });
     const modelId =
-      mode === "layout-only" ? "gemini-2.5-flash" : "gemini-2.5-pro";
+      effectiveMode === "layout-only" ? "gemini-2.5-flash" : "gemini-2.5-pro";
     // Thinking budget aumentado no writer mode (10k → 16k) pra Pro
     // raciocinar a estrutura 3-atos e escolher dados específicos.
     // Gabriel pediu qualidade máxima, aceita custo extra.
-    const thinkingBudget = mode === "layout-only" ? 2000 : 16000;
-    const maxOutputTokens = mode === "layout-only" ? 10000 : 14000;
-    const useGrounding = mode !== "layout-only";
+    const thinkingBudget = effectiveMode === "layout-only" ? 2000 : 16000;
+    const maxOutputTokens = effectiveMode === "layout-only" ? 10000 : 14000;
+    const useGrounding = effectiveMode !== "layout-only";
 
     let textResponse: string;
     let inputTokens = 0;

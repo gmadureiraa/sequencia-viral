@@ -30,44 +30,24 @@ const SHORTCUTS: { label: string; kicker: string; seed: string }[] = [
     seed: "Como [ação específica] em [N passos / contexto]. Ex: como ganhar os primeiros 1.000 seguidores sem ads.",
   },
   {
-    kicker: "Nº 02 · CASE",
-    label: "Lições de um case",
-    seed: "O que [marca/pessoa] fez para conseguir [resultado], e as lições aplicáveis ao seu negócio.",
-  },
-  {
-    kicker: "Nº 03 · HOT TAKE",
+    kicker: "Nº 02 · HOT TAKE",
     label: "Opinião forte",
     seed: "Por que [crença popular] está errada e o que você deveria fazer no lugar.",
   },
   {
-    kicker: "Nº 04 · DADOS",
-    label: "Dados surpreendentes",
-    seed: "X dados que [público] não sabe sobre [tema] — e o que muda quando você entende.",
-  },
-  {
-    kicker: "Nº 05 · MITOS",
-    label: "Mitos vs verdades",
-    seed: "N mitos sobre [tema] que ninguém questiona — e a verdade que contradiz cada um.",
-  },
-  {
-    kicker: "Nº 06 · PROCESSO",
-    label: "Explicador técnico",
-    seed: "Como [processo/mecanismo] realmente funciona — passo a passo sem jargão.",
-  },
-  {
-    kicker: "Nº 07 · YOUTUBE",
+    kicker: "Nº 03 · YOUTUBE",
     label: "Resumir vídeo",
-    seed: "Cole URL YouTube aqui — vou extrair a transcript e transformar em carrossel. https://youtube.com/watch?v=...",
+    seed: "Faça um carrossel com base nesse vídeo: https://youtube.com/watch?v=... (eu extraio a transcript).",
   },
   {
-    kicker: "Nº 08 · ARTIGO",
-    label: "Resumir artigo/link",
-    seed: "Cole um link — vou ler o conteúdo e virar carrossel editorial. https://...",
+    kicker: "Nº 04 · REMIX",
+    label: "Remixar carrossel",
+    seed: "Use esse carrossel como referência mas foca em [ângulo novo]: https://www.instagram.com/p/...",
   },
   {
-    kicker: "Nº 09 · POST",
-    label: "Remixar post",
-    seed: "Cole link de um post (X, LinkedIn, Instagram) — vou extrair e remixar no seu tom.",
+    kicker: "Nº 05 · CASE",
+    label: "Lições de um case",
+    seed: "O que [marca/pessoa] fez para conseguir [resultado], e as lições aplicáveis ao seu negócio.",
   },
 ];
 
@@ -838,8 +818,8 @@ export default function NewCarouselPage() {
             onChange={(e) => setIdea(e.target.value)}
             placeholder={
               mode === "layout-only"
-                ? "Cole aqui seu texto pronto. A IA vai preservar todo wording, só quebra em slides..."
-                : "Ex: A estratégia dos três zeros da Coca-Cola e por que ela redefine o mercado de bebidas..."
+                ? "Cole aqui seu texto pronto. A IA preserva o wording inteiro, só distribui em slides."
+                : "Escreva o tema, cole um link de YouTube ou carrossel do Instagram como referência.\n\nDica: pode ditar o título entre aspas (o título deve ser \"...\"), pedir pra seguir EXATAMENTE um link, ou dizer \"usa como inspiração mas foca em X\"."
             }
             style={{
               minHeight: 150,

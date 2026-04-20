@@ -50,12 +50,17 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
     const verifiedBlue = accentOverride || defaultVerifiedBlue;
     const borderColor = isDarkBg ? "#262626" : "#e5e7eb";
 
-    // Template Twitter: capa usa o mesmo layout de um post normal (headline).
-    // Pedido do Gabriel — não quer a capa com gradient + imagem de fundo.
+    // Template Twitter: TODOS os slides renderizam como tweet screenshot.
+    // Variants split/quote/cover quebravam a estética de thread — editor
+    // passava variant e caía em layouts 2-col ou centered-quote, enquanto
+    // o preview de download (que não passa variant) ficava correto.
+    // Agora só `photo` (reduz heading um pouco quando tem imagem) e `cta`
+    // (action bar no último) continuam ativos — são tweaks coerentes com
+    // tweet real.
     const isCover = false;
     const isPhoto = variant === "photo";
-    const isSplit = variant === "split";
-    const isQuote = variant === "quote";
+    const isSplit = false;
+    const isQuote = false;
     const isCta = variant === "cta";
 
     const defaultFontFamily =

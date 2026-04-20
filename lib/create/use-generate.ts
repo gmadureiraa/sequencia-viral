@@ -95,11 +95,20 @@ export function useGenerate(session: Session | null) {
       setLoadingCarousel(true);
       try {
         const { concept, advanced } = input;
+        // Se o user digitou um briefing completo, ele vem em `angle`.
+        // NÃO concatene labels "Hook: / Angle: / Style:" — confunde a IA a
+        // parafrasear. Se tem hook/style explícito, manda como metadado
+        // extra; senão, usa só o angle (= briefing cru).
+        const hasExplicitConcept =
+          !!concept.hook?.trim() && concept.hook.trim() !== concept.angle?.trim();
+        const topicPayload = hasExplicitConcept
+          ? `${concept.title}\n\nHook: ${concept.hook}\nAngle: ${concept.angle}\nStyle: ${concept.style}`
+          : concept.angle?.trim() || concept.title?.trim() || "";
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: jsonWithAuth(session),
           body: JSON.stringify({
-            topic: `${concept.title}\n\nHook: ${concept.hook}\nAngle: ${concept.angle}\nStyle: ${concept.style}`,
+            topic: topicPayload,
             sourceType: input.sourceType ?? "idea",
             sourceUrl: input.sourceUrl,
             niche: input.niche,

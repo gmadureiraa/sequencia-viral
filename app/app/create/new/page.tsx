@@ -345,11 +345,15 @@ export default function NewCarouselPage() {
             }
           : undefined;
 
+      // Passa o briefing completo (até 4900 chars). O servidor aceita até
+      // 5000. NÃO fatia em title/hook/angle diferentes — isso confundia a
+      // IA a "parafrasear" em vez de respeitar o conteúdo.
+      const fullIdea = idea.slice(0, 4900);
       const variations = await generateCarousel({
         concept: {
-          title: idea.slice(0, 80),
-          hook: idea.slice(0, 160),
-          angle: idea.slice(0, 400),
+          title: idea.split("\n")[0].slice(0, 120) || idea.slice(0, 120),
+          hook: "",
+          angle: fullIdea,
           style: "story",
         },
         niche,

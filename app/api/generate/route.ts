@@ -365,6 +365,30 @@ ${languageInstruction}
 TONE: ${tone || "professional"}
 NICHE: ${niche || "general"}
 ${advancedBlock}
+
+# REGRA #0 — FIDELIDADE AO BRIEFING DO USUÁRIO (acima de TUDO abaixo)
+
+Leia o briefing do usuário com atenção ANTES de aplicar qualquer regra deste prompt. Se o briefing contém:
+- Slides prontos ou estruturados (listas, numeração, divisões claras)
+- Hooks específicos com wording próprio ("X% dos Y...", "Pare de...", aspas)
+- Frases/claims com palavras escolhidas
+- Dados/números concretos (percentuais, valores, datas, nomes)
+- CTA específico ("manda mensagem", "comenta X", "vai no link")
+- Ordem narrativa explícita ("primeiro X, depois Y, por fim Z")
+- Exemplos/cases nomeados (empresas, pessoas, produtos)
+
+... então SUA FUNÇÃO É EDITOR, NÃO ESCRITOR. Você:
+1. MANTÉM o wording do usuário (frases literais quando já boas).
+2. RESPEITA a ordem narrativa que ele indicou.
+3. PRESERVA todos os dados/números/nomes que ele trouxe (zero invenção).
+4. DISTRIBUI o conteúdo em slides (heading + body), aplicando variants visuais e micro-cliffhangers entre slides — SEM reescrever o argumento.
+5. USA o CTA específico que ele deu, se deu.
+
+Regras abaixo (12 archetypes, staircase, quality gates) se aplicam SOMENTE quando o briefing é vago/conceitual (ex: "carrossel sobre marketing B2B"). NUNCA sobrescrevem o briefing cheio.
+
+TESTE: antes de gerar, pergunte mentalmente — "o usuário reconheceria esse carrossel como dele?". Se a resposta é não, você traiu a regra #0.
+
+Se o briefing tem mais de 200 palavras e traz frases específicas/estrutura implícita, assuma que é CONTEÚDO PRONTO e respeite.
 ${brandContext ? `
 # BRAND VOICE INTEGRATION
 ${brandContext}
@@ -562,9 +586,27 @@ Shape:
 }
 Each slides array must have 6-10 items. Every slide MUST include a valid "variant".`;
 
-    const userMessage =
-      sourceContent
-        ? `Create 3 carousel variations (data, story, provocative) based on this content:\n\nTopic: ${topic}\n\nSource:\n${sourceContent.slice(0, 3000)}`
+    // Detecta se o briefing já parece "pronto" (> 200 palavras ou tem
+    // estrutura explícita) — nesse caso marca no userMessage pra reforçar
+    // REGRA #0 e gerar APENAS 1 variação (não 3 paráfrases do mesmo texto).
+    const briefingWordCount = (topic || "").trim().split(/\s+/).length;
+    const looksStructured =
+      /\n\s*[-*•\d]/.test(topic || "") || // bullets / numeração
+      /slide\s*\d/i.test(topic || "") || // menções explícitas a slides
+      /hook[:\s]|cta[:\s]/i.test(topic || ""); // labels de estrutura
+    const isFullBriefing = briefingWordCount >= 200 || looksStructured;
+
+    const userMessage = sourceContent
+      ? `Create 3 carousel variations (data, story, provocative) based on this content:\n\nTopic: ${topic}\n\nSource:\n${sourceContent.slice(0, 3000)}`
+      : isFullBriefing
+        ? `O USUÁRIO JÁ ESCREVEU O CONTEÚDO DO CARROSSEL ABAIXO. Aplique REGRA #0 (fidelidade): seu trabalho é ESTRUTURAR em slides + polir, NÃO reescrever.
+Retorne APENAS 1 variação (array variations com 1 item só, style do briefing ou "story" como default) — não é pra gerar 3 paráfrases do mesmo texto.
+Preserve: wording do user, dados, nomes, ordem. Quebre em slides (6-10). Aplique variants visuais.
+
+BRIEFING DO USUÁRIO:
+"""
+${topic}
+"""`
         : `Create 3 carousel variations (data, story, provocative) about: ${topic}`;
 
     // 3. Increment usage BEFORE calling AI — ensures quota is always counted

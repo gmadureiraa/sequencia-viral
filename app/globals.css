@@ -1253,5 +1253,11 @@ select:focus-visible {
   display: block;
   height: 100%;
   background: var(--sv-green);
-  transition: width 1s ease;
+  transition: width 0.35s ease;
+}
+
+/* Shimmer do progresso (passa por cima da barra). */
+@keyframes sv-progress-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }

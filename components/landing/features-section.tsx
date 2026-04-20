@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { BASE_ASSET, REVEAL, SectionHead } from "./shared";
+import { REVEAL, SectionHead } from "./shared";
 
 function FeatKicker({ children }: { children: React.ReactNode }) {
   return (
@@ -57,21 +57,6 @@ function FeatBody({ children }: { children: React.ReactNode }) {
     >
       {children}
     </p>
-  );
-}
-function FeatMeta({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      style={{
-        fontFamily: "var(--sv-mono)",
-        fontSize: 8.5,
-        letterSpacing: "0.22em",
-        textTransform: "uppercase",
-        color: "rgba(255,255,255,.4)",
-      }}
-    >
-      {children}
-    </span>
   );
 }
 function VoiceBox({
@@ -223,11 +208,9 @@ export function FeaturesSection(props: FeaturesSectionProps = {}) {
     sub = "Features",
     tag = "Produto",
     heading,
-    bigCard,
     aestheticCard,
     voiceCard,
     editorCard,
-    imageCard,
   } = props;
   return (
     <section id="features" style={{ padding: "96px 0" }}>
@@ -235,9 +218,9 @@ export function FeaturesSection(props: FeaturesSectionProps = {}) {
         <SectionHead num="03" sub={sub} tag={tag}>
           {heading ?? (
             <>
-              Engenharia de <em>voz</em>,{" "}
+              Um editor que <em>pensa</em>,{" "}
               <span style={{ color: "var(--sv-muted)" }}>
-                não preenchimento de template.
+                não só um gerador que preenche.
               </span>
             </>
           )}
@@ -250,108 +233,11 @@ export function FeaturesSection(props: FeaturesSectionProps = {}) {
             gridAutoRows: "minmax(140px, auto)",
           }}
         >
-          {/* Big preview card c-7 */}
-          <motion.div
-            {...REVEAL}
-            className="sv-feat sv-card"
-            style={{
-              gridColumn: "span 7",
-              padding: 0,
-              background: "var(--sv-green)",
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-            }}
-          >
-            <div
-              className="relative flex flex-col justify-between"
-              style={{ padding: 28 }}
-            >
-              <div>
-                <FeatKicker>{bigCard?.kicker ?? "Preview real"}</FeatKicker>
-                <FeatTitle>
-                  {bigCard?.title ?? (
-                    <>
-                      O slide que você vê
-                      <br />é o slide que <em>sai</em>.
-                    </>
-                  )}
-                </FeatTitle>
-                <p style={{ color: "var(--sv-ink)", opacity: 0.75, fontSize: 13.5, lineHeight: 1.55 }}>
-                  {bigCard?.body ?? (
-                    <>
-                      Tipografia, cores e formato exatos. Sem surpresa no export. Sem
-                      &quot;quase igual&quot;.
-                    </>
-                  )}
-                </p>
-              </div>
-              <div className="mt-5 flex gap-1">
-                {[1, 0.3, 0.3, 0.3].map((o, i) => (
-                  <span
-                    key={i}
-                    style={{
-                      width: 14,
-                      height: 3,
-                      background: "var(--sv-ink)",
-                      opacity: o,
-                      display: "inline-block",
-                    }}
-                  />
-                ))}
-              </div>
-              <img
-                src={`${BASE_ASSET}/hero-megaphone.png`}
-                alt=""
-                aria-hidden
-                className="sv-anim-float-slow absolute"
-                style={
-                  {
-                    right: -10,
-                    bottom: -10,
-                    width: 80,
-                    opacity: 0.8,
-                    ["--sv-r" as string]: "8deg",
-                  } as React.CSSProperties
-                }
-              />
-            </div>
-            <div
-              className="flex flex-col justify-between"
-              style={{
-                background: "var(--sv-ink)",
-                color: "var(--sv-paper)",
-                padding: 28,
-                borderLeft: "1.5px solid var(--sv-ink)",
-                backgroundImage:
-                  "repeating-linear-gradient(45deg, transparent 0 20px, rgba(124,240,103,.06) 20px 22px)",
-              }}
-            >
-              <FeatMeta>{bigCard?.slideMeta ?? "Slide 01 / 04"}</FeatMeta>
-              <h4
-                className="sv-display"
-                style={{
-                  fontSize: 22,
-                  fontWeight: 400,
-                  letterSpacing: "-0.015em",
-                  lineHeight: 1.05,
-                }}
-              >
-                {bigCard?.slideHeadline ?? (
-                  <>
-                    O algoritmo premia consistência,{" "}
-                    <em style={{ color: "var(--sv-green)" }}>não genialidade.</em>
-                  </>
-                )}
-              </h4>
-              <FeatMeta>{bigCard?.slideHandle ?? "@sequencia-viral"}</FeatMeta>
-            </div>
-          </motion.div>
-
-          {/* Referências visuais c-5 */}
+          {/* Referências visuais c-4 */}
           <motion.div
             {...REVEAL}
             className="sv-card sv-feat relative"
-            style={{ gridColumn: "span 5" }}
+            style={{ gridColumn: "span 4" }}
           >
             <span
               className="absolute"
@@ -506,63 +392,6 @@ export function FeaturesSection(props: FeaturesSectionProps = {}) {
                   }}
                 >
                   {v}
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* Imagem contextual c-4 */}
-          <motion.div
-            {...REVEAL}
-            className="sv-card sv-feat"
-            style={{ gridColumn: "span 4" }}
-          >
-            <FeatKicker>{imageCard?.kicker ?? "Imagem contextual"}</FeatKicker>
-            <FeatTitle>
-              {imageCard?.title ?? (
-                <>
-                  Cada slide com <em>sua</em> imagem.
-                </>
-              )}
-            </FeatTitle>
-            <FeatBody>
-              {imageCard?.body ?? (
-                <>
-                  A IA gera ilustração coerente com o texto do slide. Sem stock photo genérico.
-                </>
-              )}
-            </FeatBody>
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              {["01", "02", "03"].map((n, i) => (
-                <div
-                  key={n}
-                  style={{
-                    aspectRatio: "1/1",
-                    border: "1.5px solid var(--sv-ink)",
-                    background:
-                      i === 0
-                        ? "var(--sv-green)"
-                        : i === 1
-                          ? "var(--sv-ink)"
-                          : "var(--sv-pink)",
-                    boxShadow: "2px 2px 0 0 var(--sv-ink)",
-                    position: "relative",
-                    overflow: "hidden",
-                  }}
-                >
-                  <span
-                    style={{
-                      position: "absolute",
-                      top: 4,
-                      left: 6,
-                      fontFamily: "var(--sv-mono)",
-                      fontSize: 7.5,
-                      letterSpacing: "0.18em",
-                      color: i === 1 ? "var(--sv-green)" : "var(--sv-ink)",
-                    }}
-                  >
-                    {n}
-                  </span>
                 </div>
               ))}
             </div>

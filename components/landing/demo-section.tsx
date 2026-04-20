@@ -27,21 +27,37 @@ function DemoLabel({
   );
 }
 
+function Spinner({ tone = "ink" }: { tone?: "ink" | "green" }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        display: "inline-block",
+        width: 10,
+        height: 10,
+        borderRadius: "50%",
+        border: `1.5px solid ${tone === "green" ? "var(--sv-green)" : "var(--sv-ink)"}`,
+        borderRightColor: "transparent",
+        borderTopColor: "transparent",
+        animation: "sv-spin-slow 0.85s linear infinite",
+      }}
+    />
+  );
+}
+
 function ProgressRow({
   label,
-  ok = false,
   pct,
   showPct = false,
 }: {
   label: string;
-  ok?: boolean;
   pct: number;
   showPct?: boolean;
 }) {
   return (
     <div>
       <div
-        className="flex justify-between"
+        className="flex items-center justify-between"
         style={{
           fontFamily: "var(--sv-mono)",
           fontSize: 9.5,
@@ -49,88 +65,27 @@ function ProgressRow({
           textTransform: "uppercase",
         }}
       >
-        <span>{label}</span>
+        <span className="inline-flex items-center gap-[7px]">
+          <Spinner />
+          {label}
+        </span>
         <span style={{ color: "var(--sv-ink)" }}>
-          {ok ? "✓" : showPct ? `${pct}%` : ""}
+          {showPct ? `${pct}%` : ""}
         </span>
       </div>
-      <div className="sv-progress-bar mt-[5px]">
+      <div className="sv-progress-bar mt-[5px] relative overflow-hidden">
         <i style={{ width: `${pct}%` }} />
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 block w-full"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent 0%, transparent 42%, rgba(255,255,255,.55) 50%, transparent 58%, transparent 100%)",
+            animation: "sv-progress-shimmer 1.4s linear infinite",
+            pointerEvents: "none",
+          }}
+        />
       </div>
-    </div>
-  );
-}
-
-function DemoSlide({
-  variant,
-  meta,
-  body,
-  sub,
-}: {
-  variant: "white" | "ink" | "green";
-  meta: string;
-  body: React.ReactNode;
-  sub: string;
-}) {
-  const style: React.CSSProperties = (() => {
-    switch (variant) {
-      case "white":
-        return { background: "var(--sv-white)", color: "var(--sv-ink)" };
-      case "ink":
-        return {
-          background: "var(--sv-ink)",
-          color: "var(--sv-paper)",
-          backgroundImage:
-            "radial-gradient(circle at 1px 1px, rgba(255,255,255,.09) 1px, transparent 1.5px)",
-          backgroundSize: "10px 10px",
-        };
-      case "green":
-        return { background: "var(--sv-green)", color: "var(--sv-ink)" };
-    }
-  })();
-  const metaColor =
-    variant === "ink"
-      ? "var(--sv-green)"
-      : variant === "white"
-        ? "var(--sv-muted)"
-        : "var(--sv-ink)";
-  const subColor =
-    variant === "ink" ? "rgba(255,255,255,.7)" : variant === "white" ? "var(--sv-muted)" : "var(--sv-ink)";
-
-  return (
-    <div
-      className="relative flex flex-col justify-between overflow-hidden"
-      style={{
-        aspectRatio: "4/5",
-        border: "1.5px solid var(--sv-ink)",
-        padding: 16,
-        boxShadow: "4px 4px 0 0 var(--sv-ink)",
-        ...style,
-      }}
-    >
-      <span
-        style={{
-          fontFamily: "var(--sv-mono)",
-          fontSize: 8.5,
-          letterSpacing: "0.2em",
-          textTransform: "uppercase",
-          color: metaColor,
-        }}
-      >
-        {meta}
-      </span>
-      <h4
-        className="sv-display"
-        style={{
-          fontSize: 18,
-          fontWeight: 400,
-          letterSpacing: "-0.015em",
-          lineHeight: 1.05,
-        }}
-      >
-        {body}
-      </h4>
-      <p style={{ fontSize: 10.5, lineHeight: 1.45, color: subColor }}>{sub}</p>
     </div>
   );
 }
@@ -145,36 +100,38 @@ export function DemoSection(props: DemoSectionProps = {}) {
   const { sub = "Cola → lê → entrega", tag = "~15 segundos", heading } = props;
   const targetText = "https://youtube.com/watch?v=carrossel-viral";
   const [typedLen, setTypedLen] = useState(0);
-  const [pct, setPct] = useState(92);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let i = 0;
     let timer: ReturnType<typeof setTimeout>;
-    function tick() {
+    function step() {
       if (i <= targetText.length) {
         setTypedLen(i);
         i++;
-        timer = setTimeout(tick, 55);
+        timer = setTimeout(step, 55);
       } else {
         timer = setTimeout(() => {
           i = 0;
-          tick();
+          step();
         }, 4000);
       }
     }
-    tick();
+    step();
     return () => clearTimeout(timer);
   }, []);
 
+  // Tick global: cada row usa fase deslocada pra nunca ficar parado todo mundo junto.
   useEffect(() => {
-    const iv = setInterval(() => {
-      setPct((v) => {
-        const nv = ((v + 1) % 100);
-        return Math.round(60 + Math.abs(Math.sin(nv / 16)) * 40);
-      });
-    }, 180);
+    const iv = setInterval(() => setTick((t) => (t + 1) % 1000), 140);
     return () => clearInterval(iv);
   }, []);
+
+  const osc = (phase: number) =>
+    Math.round(55 + Math.abs(Math.sin((tick + phase) / 14)) * 45);
+  const pctA = osc(0);
+  const pctB = osc(22);
+  const pctC = osc(44);
 
   return (
     <section id="demo" style={{ padding: "0 0 96px" }}>
@@ -190,14 +147,9 @@ export function DemoSection(props: DemoSectionProps = {}) {
           )}
         </SectionHead>
 
-        <style>{`
-          @media (max-width: 860px) {
-            #demo .sv-demo-grid { grid-template-columns: 1fr !important; }
-          }
-        `}</style>
         <div
-          className="sv-demo-grid grid items-start gap-6"
-          style={{ gridTemplateColumns: "minmax(0, 0.92fr) minmax(0, 1.08fr)" }}
+          className="sv-demo-grid mx-auto"
+          style={{ maxWidth: 720 }}
         >
           <motion.div
             {...REVEAL}
@@ -283,43 +235,14 @@ export function DemoSection(props: DemoSectionProps = {}) {
             >
               <DemoLabel className="mb-[14px] block">02 · Processando</DemoLabel>
               <div className="flex flex-col gap-3">
-                <ProgressRow label="Transcrevendo" ok pct={100} />
-                <ProgressRow label="Identificando ângulos" ok pct={100} />
-                <ProgressRow label="Aplicando sua voz" pct={pct} showPct />
+                <ProgressRow label="Transcrevendo" pct={pctA} showPct />
+                <ProgressRow label="Identificando ângulos" pct={pctB} showPct />
+                <ProgressRow label="Aplicando sua voz" pct={pctC} showPct />
               </div>
-            </div>
-          </motion.div>
-
-          <motion.div {...REVEAL}>
-            <DemoLabel className="mb-3 block">03 · Carrossel pronto</DemoLabel>
-            <div className="grid grid-cols-3 gap-3">
-              <DemoSlide
-                variant="white"
-                meta="Capa"
-                body={<>Hook que <em>interrompe</em> o scroll.</>}
-                sub="Arquétipo escolhido pelo tema."
-              />
-              <DemoSlide
-                variant="ink"
-                meta="Meio"
-                body={<>Escada narrativa com <em style={{ color: "var(--sv-green)" }}>dado concreto</em>.</>}
-                sub="Nome próprio, número, cena real."
-              />
-              <DemoSlide
-                variant="green"
-                meta="CTA"
-                body={<>Fecha o <em>loop</em> do slide 1.</>}
-                sub="Ação específica, não genérica."
-              />
             </div>
           </motion.div>
         </div>
       </div>
-      <style>{`
-        @media (max-width: 900px) {
-          #demo .grid[style*="0.92fr"] { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
     </section>
   );
 }

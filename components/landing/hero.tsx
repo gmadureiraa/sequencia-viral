@@ -1,110 +1,52 @@
 "use client";
 
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { useLandingSession } from "@/lib/use-landing-session";
 import { BASE_ASSET, REVEAL } from "./shared";
 
-const PHONE_SLIDES: {
-  tag: string;
-  bg: "ink" | "green" | "tweet" | "pink";
-  body: React.ReactNode;
-  foot: string;
-}[] = [
-  {
-    tag: "01 / 04 · YouTube",
-    bg: "ink",
-    body: (
-      <>
-        O algoritmo premia{" "}
-        <span
-          style={{
-            background: "var(--sv-green)",
-            color: "var(--sv-ink)",
-            padding: "0 4px",
-            fontStyle: "italic",
-          }}
-        >
-          consistência
-        </span>
-        , não genialidade.
-      </>
-    ),
-    foot: "Deslize →",
-  },
-  {
-    tag: "02 / 04 · Insight",
-    bg: "green",
-    body: (
-      <>
-        Escolha <em>um</em> recorte.
-        <br />
-        Repita em <em>100</em> formatos.
-      </>
-    ),
-    foot: "Deslize →",
-  },
-  {
-    tag: "03 / 04 · Thread",
-    bg: "tweet",
-    body: (
-      <>
-        Não é <em>falta</em> de ideia.
-        <br />É falta de <em>método</em>.
-      </>
-    ),
-    foot: "@seuhandle · 2h",
-  },
-  {
-    tag: "04 / 04 · CTA",
-    bg: "pink",
-    body: (
-      <>
-        Comece <em>hoje</em>.
-        <br />
-        Poste <em>amanhã</em>.
-      </>
-    ),
-    foot: "Salvar ✱",
-  },
+/**
+ * Briefs simulados — a IA "escuta" o usuário digitando um pedido direto.
+ * Passa a sensação de algo recente e vivo (não preenchimento de template).
+ */
+const TYPE_BRIEFS: string[] = [
+  "faz um post sobre o novo algoritmo do Instagram...",
+  "carrossel sobre por que ninguém salva meus posts...",
+  "3 hooks pro meu reel sobre produtividade real...",
+  "quebra esse artigo do Bloomberg em 8 slides...",
 ];
 
 function PhoneMockup() {
-  const [idx, setIdx] = useState(0);
+  // Typewriter state: qual brief, quantos chars, e fase (digitando / pausa / apagando).
+  const [briefIdx, setBriefIdx] = useState(0);
+  const [typed, setTyped] = useState("");
+  const [phase, setPhase] = useState<"typing" | "hold" | "deleting">("typing");
 
   useEffect(() => {
-    const iv = setInterval(() => setIdx((v) => (v + 1) % PHONE_SLIDES.length), 3200);
-    return () => clearInterval(iv);
-  }, []);
+    const current = TYPE_BRIEFS[briefIdx];
+    let timeout: ReturnType<typeof setTimeout>;
 
-  const slide = PHONE_SLIDES[idx];
-  const bgStyle = (() => {
-    switch (slide.bg) {
-      case "ink":
-        return {
-          background: "var(--sv-ink)",
-          color: "var(--sv-paper)",
-          backgroundImage:
-            "radial-gradient(circle at 1px 1px, rgba(255,255,255,.1) 1px, transparent 1.5px)",
-          backgroundSize: "10px 10px",
-        };
-      case "green":
-        return { background: "var(--sv-green)", color: "var(--sv-ink)" };
-      case "tweet":
-        // Mock de tweet: fundo branco, texto ink, border fino no topo
-        // simulando avatar+handle. Contraste forte (ao contrário do
-        // "dots" que era cinza em cinza).
-        return {
-          background: "var(--sv-white)",
-          color: "var(--sv-ink)",
-          borderTop: "3px solid var(--sv-ink)",
-        };
-      case "pink":
-        return { background: "var(--sv-pink)", color: "var(--sv-ink)" };
+    if (phase === "typing") {
+      if (typed.length < current.length) {
+        timeout = setTimeout(() => setTyped(current.slice(0, typed.length + 1)), 42);
+      } else {
+        timeout = setTimeout(() => setPhase("hold"), 1400);
+      }
+    } else if (phase === "hold") {
+      timeout = setTimeout(() => setPhase("deleting"), 1100);
+    } else if (phase === "deleting") {
+      if (typed.length > 0) {
+        timeout = setTimeout(() => setTyped(current.slice(0, typed.length - 1)), 18);
+      } else {
+        setBriefIdx((v) => (v + 1) % TYPE_BRIEFS.length);
+        setPhase("typing");
+      }
     }
-  })();
+
+    return () => clearTimeout(timeout);
+  }, [typed, phase, briefIdx]);
 
   return (
     <div
@@ -138,97 +80,131 @@ function PhoneMockup() {
         style={{
           borderRadius: 16,
           position: "relative",
+          background: "var(--sv-paper)",
+          color: "var(--sv-ink)",
+          padding: "28px 16px 16px",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
         }}
       >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={idx}
-            initial={{ opacity: 0, x: 18 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -18 }}
-            transition={{ duration: 0.4, ease: [0.2, 0.7, 0.2, 1] as const }}
-            className="absolute inset-0 flex flex-col justify-between"
+        {/* Header mock do app */}
+        <div
+          className="flex items-center justify-between"
+          style={{
+            fontFamily: "var(--sv-mono)",
+            fontSize: 7.5,
+            letterSpacing: "0.22em",
+            textTransform: "uppercase",
+            color: "var(--sv-muted)",
+          }}
+        >
+          <span>
+            <span
+              style={{
+                display: "inline-block",
+                width: 5,
+                height: 5,
+                borderRadius: "50%",
+                background: "var(--sv-pink)",
+                marginRight: 5,
+                verticalAlign: "middle",
+                animation: "sv-pulse 1.4s ease-in-out infinite",
+              }}
+            />
+            Sequência Viral
+          </span>
+          <span>Novo</span>
+        </div>
+
+        {/* Label "Brief" */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <span
             style={{
-              padding: "20px 18px 14px",
-              borderRadius: 14,
-              ...bgStyle,
+              fontFamily: "var(--sv-mono)",
+              fontSize: 7.5,
+              letterSpacing: "0.22em",
+              textTransform: "uppercase",
+              color: "var(--sv-muted)",
+              marginBottom: 8,
+            }}
+          >
+            Seu brief
+          </span>
+
+          {/* Textarea mock com typewriter */}
+          <div
+            style={{
+              minHeight: 90,
+              border: "1.5px solid var(--sv-ink)",
+              background: "var(--sv-white)",
+              padding: "10px 11px",
+              boxShadow: "2px 2px 0 0 var(--sv-ink)",
+              fontFamily: "var(--sv-sans)",
+              fontSize: 11.5,
+              lineHeight: 1.42,
+              color: "var(--sv-ink)",
+              position: "relative",
+            }}
+          >
+            {typed}
+            <span
+              className="sv-cursor"
+              style={{ marginLeft: 1, verticalAlign: "-1px" }}
+            />
+          </div>
+
+          {/* Tag platform + CTA mock */}
+          <div
+            className="mt-2 flex items-center justify-between gap-2"
+            style={{
+              fontFamily: "var(--sv-mono)",
+              fontSize: 7.5,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
             }}
           >
             <span
               style={{
-                fontFamily: "var(--sv-mono)",
-                fontSize: 8.5,
-                letterSpacing: "0.22em",
-                textTransform: "uppercase",
-                color:
-                  slide.bg === "ink" ? "var(--sv-green)" : "rgba(10,10,10,0.65)",
+                padding: "3px 7px",
+                border: "1px solid var(--sv-ink)",
+                background: "var(--sv-green)",
+                boxShadow: "1.5px 1.5px 0 0 var(--sv-ink)",
               }}
             >
-              {slide.tag}
+              Instagram
             </span>
-            <h2
-              style={{
-                fontFamily: "var(--sv-display)",
-                fontSize: 26,
-                lineHeight: 1.06,
-                fontWeight: 400,
-                letterSpacing: "-0.012em",
-              }}
-            >
-              {slide.body}
-            </h2>
             <span
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontFamily: "var(--sv-mono)",
-                fontSize: 7.5,
-                letterSpacing: "0.2em",
-                textTransform: "uppercase",
-                opacity: 0.7,
+                padding: "3px 7px",
+                border: "1px solid var(--sv-ink)",
+                background: "var(--sv-ink)",
+                color: "var(--sv-paper)",
+                boxShadow: "1.5px 1.5px 0 0 var(--sv-ink)",
               }}
             >
-              <span>@sequencia-viral</span>
-              <span>{slide.foot}</span>
+              Gerar →
             </span>
-          </motion.div>
-        </AnimatePresence>
+          </div>
+        </div>
 
+        {/* Status barra inferior */}
         <div
-          className="absolute z-[5] flex gap-[3px]"
-          style={{ left: 20, right: 20, bottom: 30 }}
+          className="flex items-center justify-between"
+          style={{
+            fontFamily: "var(--sv-mono)",
+            fontSize: 7,
+            letterSpacing: "0.22em",
+            textTransform: "uppercase",
+            color: "var(--sv-muted)",
+            paddingTop: 6,
+            borderTop: "1px solid rgba(10,10,10,.12)",
+          }}
         >
-          {PHONE_SLIDES.map((_, i) => {
-            const isDone = i < idx;
-            const isActive = i === idx;
-            const barBg =
-              slide.bg === "ink"
-                ? "rgba(255,255,255,.22)"
-                : "rgba(0,0,0,.18)";
-            return (
-              <i
-                key={i}
-                className="relative block"
-                style={{
-                  flex: 1,
-                  height: 2,
-                  background: barBg,
-                  borderRadius: 2,
-                  overflow: "hidden",
-                }}
-              >
-                <span
-                  className="absolute inset-0 block"
-                  style={{
-                    background: "var(--sv-green)",
-                    transformOrigin: "left",
-                    transform: isDone ? "scaleX(1)" : "scaleX(0)",
-                    animation: isActive ? "sv-fill-bar 3.2s linear forwards" : undefined,
-                  }}
-                />
-              </i>
-            );
-          })}
+          <span>
+            {phase === "typing" ? "Digitando" : phase === "hold" ? "Pronto" : "Limpando"}
+          </span>
+          <span>~15s</span>
         </div>
       </div>
     </div>
@@ -308,12 +284,14 @@ export function Hero(props: HeroProps = {}) {
           >
             {h1 ?? (
               <>
-                <span className="block">Cole um link.</span>
                 <span className="block">
-                  Publique um <span className="sv-splash">carrossel</span>
+                  Engenharia de <span className="sv-splash">voz</span>,
                 </span>
                 <span className="block">
-                  em <span className="sv-under">minutos</span>.
+                  não preenchimento
+                </span>
+                <span className="block">
+                  de <span className="sv-under">template</span>.
                 </span>
               </>
             )}
@@ -330,10 +308,10 @@ export function Hero(props: HeroProps = {}) {
           >
             {subtitle ?? (
               <>
-                A IA lê sua fonte e devolve um carrossel editorial{" "}
+                Cola um link, cola uma ideia. A IA lê sua fonte e devolve um carrossel{" "}
                 <b style={{ color: "var(--sv-ink)", fontWeight: 600 }}>com a sua voz</b>
-                , com imagens contextuais na sua estética. Não é ChatGPT
-                cheiroso — é uma ferramenta que entende que{" "}
+                , com imagens contextuais na sua estética. Não é ChatGPT cheiroso,
+                é uma ferramenta que entende que{" "}
                 <b style={{ color: "var(--sv-ink)", fontWeight: 600 }}>
                   você já tem algo a dizer
                 </b>
@@ -351,13 +329,6 @@ export function Hero(props: HeroProps = {}) {
               {primaryLabel}
               <ArrowRight size={12} strokeWidth={2.5} />
             </Link>
-            <a
-              href="#exemplos"
-              className="sv-btn sv-btn-outline"
-              style={{ padding: "14px 22px", fontSize: 11.5 }}
-            >
-              Ver exemplos reais
-            </a>
           </div>
 
           <div

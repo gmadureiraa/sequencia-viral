@@ -23,9 +23,9 @@ export function CompareSection() {
     ["Usa o seu tom", "✦ Voz configurável", "—", "Com prompt", "✓"],
     ["Referências visuais", "✦ 3 imagens da marca", "Manual", "—", "Manual"],
     ["Imagem por slide", "✦ Contextual por IA", "Stock photo", "—", "Manual"],
-    ["Export 1080×1350", "✦ 1 clique", "Manual", "—", "Manual"],
+    ["Export pronto pra postar", "✦ 1 clique", "Manual", "—", "Manual"],
     ["Preview real (WYSIWYG)", "✦ Sim", "✓", "—", "✓"],
-    ["Preço (pra postar todo dia)", "R$ 89/mês", "R$ 75/mês", "R$ 110/mês", "Seu tempo"],
+    ["Preço (pra postar todo dia)", "$9.90/mês", "$15/mês", "$20/mês", "Seu tempo"],
   ];
 
   return (

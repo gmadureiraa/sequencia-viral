@@ -58,7 +58,7 @@ function PlanCard({
   return (
     <motion.article
       {...REVEAL}
-      className="relative flex flex-col gap-[14px]"
+      className={`relative flex flex-col gap-[14px] ${featured ? "sv-plan-featured" : ""}`}
       style={{
         background: featured ? "var(--sv-ink)" : "var(--sv-white)",
         color: featured ? "var(--sv-paper)" : "var(--sv-ink)",
@@ -261,6 +261,11 @@ export function PricingSection() {
 
   return (
     <section id="pricing" style={{ padding: "0 0 96px" }}>
+      <style>{`
+        @media (max-width: 768px) {
+          #pricing .sv-plan-featured { transform: none !important; }
+        }
+      `}</style>
       <div className="mx-auto max-w-[1240px] px-6">
         <SectionHead num="08" sub="Pricing" tag="Preço de lançamento">
           Preço <em>honesto</em>.{" "}
@@ -301,8 +306,8 @@ export function PricingSection() {
               "30 carrosséis/mês",
               "Voz da IA configurável",
               "3 referências visuais por marca",
-              "Export PNG + PDF",
-              "3 perfis de marca",
+              "Export PNG pronto pra postar",
+              "1 perfil de marca",
               "Transcrição de vídeos",
               "Histórico completo",
             ]}
@@ -311,7 +316,7 @@ export function PricingSection() {
             ctaVariant="primary"
           />
           <PlanCard
-            ribbon="Pra agências e times"
+            ribbon="Pra criador avançado"
             ribbonVariant="biz"
             title="Agência"
             price={isAnnual ? agencyAnnualMonthlyEq : agencyMonth}
@@ -320,12 +325,12 @@ export function PricingSection() {
             annualSaving={isAnnual ? `Cobrado ${agencyYearTotal}` : undefined}
             features={[
               "Carrosséis ilimitados",
-              "10 perfis de marca",
-              "Workspace compartilhado",
-              "Templates customizados",
-              "Referências visuais por cliente",
-              "Suporte prioritário",
-              "API (em breve)",
+              "Voz da IA configurável",
+              "3 referências visuais por marca",
+              "Export PNG pronto pra postar",
+              "1 perfil de marca",
+              "Transcrição de vídeos",
+              "Suporte prioritário (WhatsApp)",
             ]}
             cta={isAnnual ? "Assinar Agência anual" : "Assinar Agência"}
             ctaHref={`/app/checkout?plan=agency${isAnnual ? "&interval=year" : ""}`}

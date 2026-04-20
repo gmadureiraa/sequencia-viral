@@ -272,7 +272,7 @@ export function WelcomePopup() {
                 color: "var(--sv-muted)",
               }}
             >
-              Válido até 31/jul · 10.000 primeiras contas
+              Por tempo limitado
             </p>
           </motion.div>
         </motion.div>

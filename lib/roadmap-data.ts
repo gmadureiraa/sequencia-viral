@@ -157,6 +157,22 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
     color: "#FFE8B0",
     pin: "#EC6000",
   },
+  {
+    n: "10",
+    title: "Galeria pública de carrosséis",
+    body:
+      "Página dedicada com dezenas de carrosséis reais gerados por criadores — filtrável por nicho, voz e template. Quem usou, quanto converteu.",
+    bullets: [
+      "Filtro por nicho e template",
+      "Métricas reais (likes, salvos, comments)",
+      "Permissão opt-in do criador",
+    ],
+    status: "later",
+    tag: "Planejado",
+    rotate: "rotate-[1.6deg]",
+    color: "#FFD8A8",
+    pin: "#0A0A0A",
+  },
 ];
 
 export const ROADMAP_STATUS_LABEL: Record<RoadmapStatus, string> = {

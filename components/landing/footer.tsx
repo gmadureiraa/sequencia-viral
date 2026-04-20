@@ -117,12 +117,11 @@ export function Footer() {
           <FooterCol
             title="Kaleidos"
             links={[
-              { label: "Agência", href: "https://kaleidos.ag" },
-              { label: "Cases", href: "https://kaleidos.ag" },
+              { label: "kaleidos.com.br", href: "https://kaleidos.com.br" },
               { label: "Manifesto", href: "#manifesto" },
               {
-                label: "Contato",
-                href: "mailto:madureira@kaleidosdigital.com",
+                label: "WhatsApp suporte",
+                href: "https://wa.me/5512936180547",
               },
             ]}
           />
@@ -132,8 +131,8 @@ export function Footer() {
               { label: "Privacidade", href: "/privacy" },
               { label: "Termos", href: "/terms" },
               {
-                label: "Contato",
-                href: "mailto:madureira@kaleidosdigital.com",
+                label: "WhatsApp suporte",
+                href: "https://wa.me/5512936180547",
               },
             ]}
           />
@@ -164,7 +163,7 @@ export function Footer() {
               Feito por
             </span>
             <a
-              href="https://kaleidos.ag"
+              href="https://kaleidos.com.br"
               target="_blank"
               rel="noreferrer"
               style={{

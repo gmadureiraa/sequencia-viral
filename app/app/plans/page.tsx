@@ -30,12 +30,13 @@ const FREE_FEATURES = [
   "Todos os 4 templates editoriais",
 ];
 
-const PRO_FEATURES = PLANS.pro.features.slice(0, 4);
+const PRO_FEATURES = PLANS.pro.features.slice(0, 5);
 const BUSINESS_FEATURES = [
   "Carrosséis ilimitados",
-  "3 seats inclusos",
-  "API de integração",
-  "Suporte prioritário",
+  "Voz da IA configurável",
+  "Referências visuais por marca",
+  "1 perfil de marca",
+  "Suporte prioritário (WhatsApp)",
 ];
 
 function buildCards(interval: Interval): PlanCard[] {

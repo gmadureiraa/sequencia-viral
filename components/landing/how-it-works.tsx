@@ -46,8 +46,15 @@ export function HowItWorks() {
           <em>editar no Canva</em>.
         </SectionHead>
 
+        <style>{`
+          @media (max-width: 760px) {
+            #como .sv-how-grid { grid-template-columns: 1fr !important; }
+            #como .sv-how-grid > article { border-right: none !important; border-bottom: 1px solid var(--sv-ink); }
+            #como .sv-how-grid > article:last-child { border-bottom: none; }
+          }
+        `}</style>
         <div
-          className="grid"
+          className="sv-how-grid grid"
           style={{
             gridTemplateColumns: "repeat(3, 1fr)",
             borderTop: "1.5px solid var(--sv-ink)",

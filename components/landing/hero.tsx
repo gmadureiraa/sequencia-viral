@@ -244,11 +244,23 @@ export function Hero() {
 
   return (
     <header
-      className="relative overflow-hidden"
+      className="sv-hero relative overflow-hidden"
       style={{ padding: "clamp(28px, 4.2vw, 56px) 0 clamp(16px, 3vw, 40px)" }}
     >
+      <style>{`
+        @media (max-width: 860px) {
+          .sv-hero .sv-hero-grid {
+            grid-template-columns: 1fr !important;
+            gap: 28px !important;
+          }
+          .sv-hero .sv-hero-visual {
+            max-width: 420px !important;
+            margin: 0 auto !important;
+          }
+        }
+      `}</style>
       <div
-        className="mx-auto grid max-w-[1240px] items-center gap-10 px-6"
+        className="sv-hero-grid mx-auto grid max-w-[1240px] items-center gap-10 px-6"
         style={{
           gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 0.95fr)",
         }}
@@ -334,14 +346,14 @@ export function Hero() {
             </span>
             <span>
               <span style={{ color: "var(--sv-pink)", marginRight: 4 }}>✦</span>
-              Export PNG 1080×1350
+              Pronto pra postar
             </span>
           </div>
         </motion.div>
 
         <motion.div
           {...REVEAL}
-          className="relative mx-auto w-full"
+          className="sv-hero-visual relative mx-auto w-full"
           style={{
             maxWidth: 520,
             aspectRatio: "1 / 1.02",
@@ -511,36 +523,6 @@ export function Hero() {
         </motion.div>
       </div>
 
-      <div
-        className="absolute"
-        style={{
-          top: 88,
-          right: 24,
-          fontFamily: "var(--sv-mono)",
-          fontSize: 8.5,
-          letterSpacing: "0.22em",
-          textTransform: "uppercase",
-          color: "var(--sv-muted)",
-          textAlign: "right",
-          zIndex: 5,
-          pointerEvents: "none",
-        }}
-      >
-        <span
-          style={{
-            display: "block",
-            fontFamily: "var(--sv-display)",
-            fontStyle: "italic",
-            fontSize: 20,
-            color: "var(--sv-ink)",
-            letterSpacing: "-0.02em",
-            lineHeight: 1,
-          }}
-        >
-          MMXXVI
-        </span>
-        Ed. 01 · Brasil
-      </div>
     </header>
   );
 }

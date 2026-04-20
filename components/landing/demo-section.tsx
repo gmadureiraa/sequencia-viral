@@ -177,8 +177,13 @@ export function DemoSection() {
           <span style={{ color: "var(--sv-muted)" }}>É só engenharia boa.</span>
         </SectionHead>
 
+        <style>{`
+          @media (max-width: 860px) {
+            #demo .sv-demo-grid { grid-template-columns: 1fr !important; }
+          }
+        `}</style>
         <div
-          className="grid items-start gap-6"
+          className="sv-demo-grid grid items-start gap-6"
           style={{ gridTemplateColumns: "minmax(0, 0.92fr) minmax(0, 1.08fr)" }}
         >
           <motion.div

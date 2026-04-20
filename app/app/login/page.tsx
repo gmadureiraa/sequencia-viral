@@ -244,18 +244,6 @@ export default function LoginPage() {
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
           className="relative z-10 mt-10 md:mt-0"
         >
-          <span
-            className="block uppercase"
-            style={{
-              fontFamily: "var(--sv-mono)",
-              fontSize: 10,
-              letterSpacing: "0.22em",
-              color: "var(--sv-green)",
-              marginBottom: 18,
-            }}
-          >
-            Manifesto — Ed. Nº 04
-          </span>
           <p
             className="max-w-[560px]"
             style={{
@@ -279,46 +267,6 @@ export default function LoginPage() {
             </span>{" "}
             — escritos <em className="italic">por você,</em> diagramados pela Sequência.
           </p>
-          <div className="mt-7 flex items-center gap-4">
-            <span
-              className="flex items-center justify-center italic"
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: "50%",
-                background: "var(--sv-pink)",
-                border: "1.5px solid var(--sv-paper)",
-                fontFamily: "var(--sv-display)",
-                fontSize: 20,
-                color: "var(--sv-ink)",
-              }}
-            >
-              G
-            </span>
-            <div>
-              <b
-                className="block"
-                style={{
-                  fontFamily: "var(--sv-sans)",
-                  fontWeight: 600,
-                  fontSize: 14,
-                }}
-              >
-                Gabriel Madureira
-              </b>
-              <span
-                className="mt-1 block uppercase"
-                style={{
-                  fontFamily: "var(--sv-mono)",
-                  fontSize: 9,
-                  letterSpacing: "0.2em",
-                  color: "rgba(245,243,236,.55)",
-                }}
-              >
-                Criador · @madureira0x
-              </span>
-            </div>
-          </div>
         </motion.div>
 
         {/* Legal footer on left, desktop only */}

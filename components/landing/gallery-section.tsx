@@ -3,13 +3,14 @@
 import { motion } from "framer-motion";
 import { REVEAL, SectionHead } from "./shared";
 
-type GSlideVariant = "cream" | "ink" | "green" | "pink" | "dots";
+type GSlideVariant = "cream" | "ink" | "green" | "pink" | "dots" | "photo";
 
 interface GallerySlideData {
   variant: GSlideVariant;
   tag: string;
   heading: React.ReactNode;
   body: string;
+  imageUrl?: string;
 }
 
 interface GalleryPost {
@@ -206,6 +207,56 @@ const GALLERY: GalleryPost[] = [
     caption:
       "Todo mês recebo 40+ mensagens perguntando qual melatonina tomar. A resposta honesta: na maior parte dos casos, nenhuma. O sono ruim dos meus pacientes não é falta de suplemento. É hábito inconsistente disfarçado de vida atarefada. Salva esse carrossel antes de abrir a próxima aba às 23h47.",
   },
+
+  /* ───── TECH / SAAS ───── */
+  {
+    av: "B",
+    avBg: "var(--sv-ink)",
+    avColor: "var(--sv-green)",
+    handle: "@bruno.saas",
+    bio: "founder técnico · série A",
+    niche: "Tech · SaaS founder",
+    voice: "Factual, prova em número",
+    engagement: { likes: "6.721", saves: "894", comments: "118" },
+    slides: [
+      {
+        variant: "photo",
+        imageUrl:
+          "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=900&q=80",
+        tag: "01 / 06",
+        heading: (
+          <>
+            Nosso churn caiu <em>62%</em> num trimestre.
+          </>
+        ),
+        body: "Sem mexer no produto. Só arrumando o que acontece nos primeiros 14 dias. Onboarding é retenção disfarçada.",
+      },
+      {
+        variant: "ink",
+        tag: "02 / 06",
+        heading: (
+          <>
+            A métrica <em>que ninguém</em> olha:
+          </>
+        ),
+        body: "Time-to-first-value. No nosso caso, quem chegava ao primeiro output em menos de 9 minutos convertia 3.4x mais. Depois disso, caía a pique.",
+      },
+      {
+        variant: "photo",
+        imageUrl:
+          "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=900&q=80",
+        tag: "03 / 06",
+        heading: (
+          <>
+            3 mudanças <em>que destravaram</em> tudo:
+          </>
+        ),
+        body: "Removemos 4 steps do signup. Pré-preenchemos o primeiro projeto. Botamos o resultado primeiro, explicação depois. Nada no backend mudou.",
+      },
+    ],
+    caption:
+      "A gente gastou 8 meses discutindo novas features. O que mudou o jogo foi cortar fricção que já existia. Tá tudo lá no Mixpanel, só a gente não tava olhando. Se você é founder técnico e sente que 'precisa construir mais', lê isso primeiro.",
+  },
 ];
 
 function GallerySlide({
@@ -213,12 +264,14 @@ function GallerySlide({
   tag,
   heading,
   body,
+  imageUrl,
   main = false,
 }: {
   variant: GSlideVariant;
   tag: string;
   heading: React.ReactNode;
   body: string;
+  imageUrl?: string;
   main?: boolean;
 }) {
   const bg: React.CSSProperties = (() => {
@@ -239,11 +292,23 @@ function GallerySlide({
             "radial-gradient(circle at 2px 2px, var(--sv-ink) 1px, transparent 1.5px)",
           backgroundSize: "8px 8px",
         };
+      case "photo":
+        return {
+          backgroundColor: "var(--sv-ink)",
+          color: "var(--sv-paper)",
+          backgroundImage: imageUrl
+            ? `linear-gradient(180deg, rgba(10,10,10,0.2) 0%, rgba(10,10,10,0.85) 100%), url(${imageUrl})`
+            : undefined,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        };
     }
   })();
 
   const bodyColor =
-    variant === "ink" ? "rgba(247,245,239,.7)" : "rgba(10,10,10,.7)";
+    variant === "ink" || variant === "photo"
+      ? "rgba(247,245,239,.75)"
+      : "rgba(10,10,10,.7)";
 
   return (
     <motion.div
@@ -315,7 +380,7 @@ export function GallerySection() {
       style={{ padding: "96px 0", borderTop: "1px solid var(--sv-ink)" }}
     >
       <div className="mx-auto max-w-[1240px] px-6">
-        <SectionHead num="06" sub="Exemplos reais" tag="4 nichos · 12 slides">
+        <SectionHead num="06" sub="Exemplos reais" tag="5 nichos · 15 slides">
           Carrosséis que <em>saem</em>{" "}
           <span style={{ color: "var(--sv-muted)" }}>do app.</span>
         </SectionHead>
@@ -329,9 +394,10 @@ export function GallerySection() {
             maxWidth: 640,
           }}
         >
-          Abaixo, 4 posts completos gerados em nichos diferentes. Texto real, com
+          Abaixo, 5 posts completos gerados em nichos diferentes. Texto real, com
           dado e tensão. Nenhum é template. Nenhum é ChatGPT puro. Cada um usou uma
-          voz de marca e 3 referências visuais diferentes.
+          voz de marca e 3 referências visuais diferentes. Em breve, galeria
+          pública com dezenas de exemplos.
         </p>
 
         <div className="flex flex-col gap-12">

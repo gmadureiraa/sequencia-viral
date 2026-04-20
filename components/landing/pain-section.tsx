@@ -166,11 +166,11 @@ export function PainSection() {
           {...REVEAL}
           className="mt-10 flex flex-wrap items-center justify-between gap-6"
           style={{
-            padding: "24px 26px",
-            background: "var(--sv-ink)",
-            color: "var(--sv-paper)",
+            padding: "28px 28px",
+            background: "var(--sv-green)",
+            color: "var(--sv-ink)",
             border: "1.5px solid var(--sv-ink)",
-            boxShadow: "4px 4px 0 0 var(--sv-green)",
+            boxShadow: "4px 4px 0 0 var(--sv-ink)",
           }}
         >
           <div>
@@ -180,7 +180,9 @@ export function PainSection() {
                 fontSize: 9.5,
                 letterSpacing: "0.22em",
                 textTransform: "uppercase",
-                color: "var(--sv-green)",
+                color: "var(--sv-ink)",
+                fontWeight: 700,
+                opacity: 0.6,
               }}
             >
               O plot twist
@@ -189,14 +191,25 @@ export function PainSection() {
               className="sv-display mt-2"
               style={{
                 fontSize: 26,
-                lineHeight: 1.1,
+                lineHeight: 1.15,
                 letterSpacing: "-0.015em",
                 maxWidth: 720,
+                color: "var(--sv-ink)",
+                fontWeight: 400,
               }}
             >
               O conteúdo <em>já existe</em> na sua cabeça, no seu YouTube, no seu
               blog. O que falta é uma ferramenta que{" "}
-              <span style={{ color: "var(--sv-green)" }}>termine o trabalho.</span>
+              <span
+                style={{
+                  background: "var(--sv-ink)",
+                  color: "var(--sv-green)",
+                  padding: "0 5px",
+                  fontStyle: "italic",
+                }}
+              >
+                termine o trabalho.
+              </span>
             </p>
           </div>
           <div
@@ -206,11 +219,13 @@ export function PainSection() {
               fontSize: 9.5,
               letterSpacing: "0.2em",
               textTransform: "uppercase",
-              color: "rgba(247,245,239,.6)",
+              color: "var(--sv-ink)",
+              fontWeight: 700,
+              opacity: 0.55,
             }}
           >
             <span>Desliza pra baixo</span>
-            <span style={{ color: "var(--sv-green)" }}>— é a cura ↓</span>
+            <span style={{ opacity: 1 }}>— é a cura ↓</span>
           </div>
         </motion.div>
       </div>

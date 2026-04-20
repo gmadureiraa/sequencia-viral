@@ -1,103 +1,77 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { BASE_ASSET, REVEAL } from "./shared";
 
+/**
+ * Banner minimalista de marca. Antes era uma dobra cheia com imagem + texto
+ * gigante + gradient animado. Agora é uma faixa fina, uma linha, cores
+ * equilibradas. Assinatura discreta da Kaleidos.
+ */
 export function Manifesto() {
   return (
     <section
       id="manifesto"
-      className="relative overflow-hidden"
       style={{
-        background: "var(--sv-ink)",
-        color: "var(--sv-paper)",
-        padding: "96px 0",
-        borderTop: "1px solid var(--sv-ink)",
-        borderBottom: "1px solid var(--sv-ink)",
+        background: "var(--sv-paper)",
+        borderTop: "1.5px solid var(--sv-ink)",
+        borderBottom: "1.5px solid var(--sv-ink)",
       }}
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute"
-        style={{
-          inset: "-50%",
-          background:
-            "repeating-conic-gradient(from 0deg at 50% 50%, transparent 0 8deg, rgba(124,240,103,.07) 8deg 9deg)",
-          animation: "sv-spin-slow 120s linear infinite",
-        }}
-      />
-      <div className="relative mx-auto max-w-[1240px] px-6">
-        <div
-          className="grid items-end gap-14"
-          style={{ gridTemplateColumns: "1fr auto" }}
-        >
-          <div>
-            <div
-              className="mb-7 inline-flex items-center gap-2"
-              style={{
-                fontFamily: "var(--sv-mono)",
-                fontSize: 9.5,
-                letterSpacing: "0.22em",
-                textTransform: "uppercase",
-                color: "var(--sv-green)",
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 34,
-                  height: 1,
-                  background: "var(--sv-green)",
-                }}
-              />
-              Manifesto · um braço da Kaleidos Digital
-            </div>
-            <motion.h2
-              {...REVEAL}
-              className="sv-display"
-              style={{
-                fontSize: "clamp(32px, 4.3vw, 56px)",
-                lineHeight: 1.08,
-                letterSpacing: "-0.018em",
-                maxWidth: 900,
-                fontWeight: 400,
-              }}
-            >
-              Toda semana você grava, escreve, pensa. E toda semana{" "}
-              <span className="sv-st">perde horas no Canva</span> tentando virar
-              aquilo em post. A Sequência Viral resolve a parte chata:{" "}
-              <em style={{ color: "var(--sv-green)" }}>
-                transforma o que você já produziu
-              </em>{" "}
-              em carrossel editorial, com a sua voz{" "}
-              <em style={{ color: "var(--sv-green)" }}>e pronto pra postar</em>.
-            </motion.h2>
-          </div>
-          <motion.div
-            {...REVEAL}
-            className="sv-anim-float-slow"
+      <motion.div
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true, margin: "-40px" }}
+        transition={{ duration: 0.5 }}
+        className="mx-auto flex max-w-[1240px] flex-wrap items-center justify-between gap-4 px-6 py-5"
+      >
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden
             style={{
-              width: 140,
-              aspectRatio: "1/1",
-              position: "relative",
-              ["--sv-r" as string]: "-4deg",
-            } as React.CSSProperties}
+              display: "inline-block",
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: "var(--sv-green)",
+              border: "1px solid var(--sv-ink)",
+            }}
+          />
+          <span
+            className="uppercase"
+            style={{
+              fontFamily: "var(--sv-mono)",
+              fontSize: 10,
+              letterSpacing: "0.2em",
+              color: "var(--sv-muted)",
+              fontWeight: 700,
+            }}
           >
-            <img
-              src={`${BASE_ASSET}/manifest-cutout.png`}
-              alt=""
-              aria-hidden
-              className="h-full w-full object-contain"
-              style={{ filter: "invert(1) brightness(1.1) contrast(1.1)" }}
-            />
-          </motion.div>
+            Um braço da Kaleidos Digital
+          </span>
         </div>
-      </div>
-      <style>{`
-        @media (max-width: 900px) {
-          #manifesto > div > div { grid-template-columns: 1fr !important; gap: 32px !important; }
-        }
-      `}</style>
+        <a
+          href="https://kaleidos.com.br"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="uppercase inline-flex items-center gap-1.5"
+          style={{
+            fontFamily: "var(--sv-mono)",
+            fontSize: 10,
+            letterSpacing: "0.2em",
+            color: "var(--sv-ink)",
+            fontWeight: 700,
+            textDecoration: "none",
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.color = "var(--sv-green)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.color = "var(--sv-ink)")
+          }
+        >
+          kaleidos.com.br ↗
+        </a>
+      </motion.div>
     </section>
   );
 }

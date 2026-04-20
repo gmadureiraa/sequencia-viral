@@ -158,6 +158,19 @@ interface AdminStats {
 
 // ───────────────────────────────── utils ─────────────────────────────────
 
+/**
+ * Coerção segura pra string — evita "[object Object]" em renders quando
+ * o campo veio como objeto por schema drift, OAuth metadata estranho,
+ * ou user extension. Null/undefined viram fallback. Objetos viram "—".
+ */
+function safeStr(v: unknown, fallback = "—"): string {
+  if (v === null || v === undefined) return fallback;
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  // Array ou objeto: não renderiza cru.
+  return fallback;
+}
+
 function fmtNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
@@ -711,7 +724,7 @@ function UsersTab({ stats }: { stats: AdminStats }) {
                 style={{ borderTop: "1px solid rgba(10,10,10,0.08)" }}
               >
                 <Td>
-                  <div style={{ fontWeight: 700 }}>{u.name || "—"}</div>
+                  <div style={{ fontWeight: 700 }}>{safeStr(u.name)}</div>
                   <div
                     className="uppercase"
                     style={{
@@ -721,14 +734,14 @@ function UsersTab({ stats }: { stats: AdminStats }) {
                       color: "var(--sv-muted)",
                     }}
                   >
-                    {u.instagram_handle
+                    {typeof u.instagram_handle === "string" && u.instagram_handle
                       ? `@${u.instagram_handle}`
-                      : u.twitter_handle
+                      : typeof u.twitter_handle === "string" && u.twitter_handle
                         ? `@${u.twitter_handle}`
                         : "sem handle"}
                   </div>
                 </Td>
-                <Td>{u.email || "—"}</Td>
+                <Td>{safeStr(u.email)}</Td>
                 <Td>
                   <PlanBadge plan={u.plan} />
                 </Td>
@@ -887,9 +900,9 @@ function GenerationsTab({ stats }: { stats: AdminStats }) {
                     "—"
                   )}
                 </Td>
-                <Td>{g.provider ?? "—"}</Td>
-                <Td>{g.model ?? "—"}</Td>
-                <Td>{g.prompt_type ?? "—"}</Td>
+                <Td>{safeStr(g.provider)}</Td>
+                <Td>{safeStr(g.model)}</Td>
+                <Td>{safeStr(g.prompt_type)}</Td>
                 <Td align="right">{g.input_tokens ?? 0}</Td>
                 <Td align="right">{g.output_tokens ?? 0}</Td>
                 <Td align="right">{fmtUsd(parseCost(g.cost_usd))}</Td>
@@ -1167,10 +1180,10 @@ function SubscriptionsTab({ stats }: { stats: AdminStats }) {
                   <Td>
                     <PlanBadge plan={p.plan} />
                   </Td>
-                  <Td>{p.method ?? "—"}</Td>
+                  <Td>{safeStr(p.method)}</Td>
                   <Td align="right">
                     {p.amount_usd
-                      ? `${p.currency ?? "USD"} ${parseCost(p.amount_usd).toFixed(2)}`
+                      ? `${safeStr(p.currency, "USD")} ${parseCost(p.amount_usd).toFixed(2)}`
                       : "—"}
                   </Td>
                   <Td>
@@ -1273,7 +1286,7 @@ function StatCard({
 }
 
 function PlanBadge({ plan }: { plan: string | null | undefined }) {
-  const p = plan || "free";
+  const p = typeof plan === "string" && plan ? plan : "free";
   return (
     <span
       className="uppercase"
@@ -1298,7 +1311,7 @@ function PlanBadge({ plan }: { plan: string | null | undefined }) {
 }
 
 function StatusBadge({ status }: { status: string | null | undefined }) {
-  const s = status || "—";
+  const s = typeof status === "string" && status ? status : "—";
   const color =
     s === "confirmed"
       ? "#2c7a1f"

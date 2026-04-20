@@ -103,6 +103,14 @@ function parseCost(c: number | string | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Coerção segura pra string — evita "[object Object]" em render. */
+function safeStr(v: unknown, fallback = "—"): string {
+  if (v === null || v === undefined) return fallback;
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  return fallback;
+}
+
 function fmtUsd(n: number): string {
   return `$${n.toFixed(4)}`;
 }
@@ -251,11 +259,13 @@ function ProfileHeader({
   fetching: boolean;
 }) {
   const handle =
-    profile.instagram_handle
+    typeof profile.instagram_handle === "string" && profile.instagram_handle
       ? `@${profile.instagram_handle} · IG`
-      : profile.twitter_handle
+      : typeof profile.twitter_handle === "string" && profile.twitter_handle
         ? `@${profile.twitter_handle} · X`
         : "sem handle";
+  const displayName = safeStr(profile.name, "Sem nome");
+  const displayEmail = safeStr(profile.email, "sem email");
 
   return (
     <>
@@ -300,7 +310,7 @@ function ProfileHeader({
                 letterSpacing: "-0.02em",
               }}
             >
-              {profile.name || "Sem nome"}
+              {displayName}
             </h1>
             <div
               className="mt-1"
@@ -310,7 +320,7 @@ function ProfileHeader({
                 color: "var(--sv-muted)",
               }}
             >
-              {profile.email || "sem email"} · {handle}
+              {displayEmail} · {handle}
             </div>
             <div
               className="mt-1 uppercase"
@@ -356,10 +366,10 @@ function ProfileHeader({
           gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
         }}
       >
-        <Stat label="Plano" value={profile.plan || "free"} />
+        <Stat label="Plano" value={safeStr(profile.plan, "free")} />
         <Stat
           label="Uso do mês"
-          value={`${profile.usage_count ?? 0}/${profile.usage_limit ?? "?"}`}
+          value={`${typeof profile.usage_count === "number" ? profile.usage_count : 0}/${typeof profile.usage_limit === "number" ? profile.usage_limit : "?"}`}
         />
         <Stat label="Carrosséis" value={String(totals.totalCarousels)} />
         <Stat label="Gerações" value={String(totals.totalGenerations)} />

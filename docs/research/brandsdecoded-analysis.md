@@ -1,87 +1,78 @@
 # BrandsDecoded — padrão editorial
 
-_Gerado por `scripts/analyze-brandsdecoded.ts` em 2026-04-20T16:29:25.990Z · 1 posts analisados._
+_Gerado por `scripts/analyze-brandsdecoded.ts` em 2026-04-20T17:01:24.118Z · 14 posts analisados._
 
 ### 1. Padrão da capa (gancho/título do slide 1)
 
-- **Fórmula dominante** (com variações):
-    1.  **Análise Contraintuitiva:** `POR QUE [MARCA] FEZ [AÇÃO APARENTEMENTE NEGATIVA/ESTRANHA] (E ACERTOU).`
-        - Ex: POR QUE A APPLE CONTINUA VENDENDO O IPHONE MAIS "FRACO" (E LUCRA MUITO COM ISSO).
-    2.  **Segredo/Estratégia Revelada:** `O [SEGREDO/ESTRATÉGIA/MOTIVO] POR TRÁS DO [FENÔMENO/PRODUTO] DA [MARCA].`
-        - Ex: A ESTRATÉGIA POR TRÁS DO NOVO LOGO DO ITAÚ.
-    3.  **Conexão Inesperada:** `O QUE [MARCA A] E [CONCEITO/MARCA B] TÊM EM COMUM?`
-        - Ex: O QUE A SHEIN E O TIKTOK TÊM EM COMUM?
-    4.  **Afirmação Polêmica + Promessa de Explicação:** `[MARCA] ESTÁ [AÇÃO POLÊMICA]. ENTENDA A JOGADA.`
-        - Ex: A AMBEV ESTÁ COMPRANDO SEUS CONCORRENTES. ENTENDA A JOGADA.
+-   **Fórmula dominante** (com 3-5 variações):
+    1.  **Afirmação Contraintuitiva + Pergunta de Aprofundamento:** "[FENÔMENO] ACABOU/MORREU: POR QUE [NOVA REALIDADE] É O FUTURO?" (Ex: "A MORTE DOS REELS: POR QUE TODO PERFIL DEVERIA POSTAR 1 CARROSSEL POR DIA?")
+    2.  **Análise de Caso (Jornada do Herói):** "DE [PONTO A NEGATIVO] A [PONTO B POSITIVO]: COMO [ATOR] CONSEGUIU [RESULTADO INCRÍVEL]?" (Ex: "DE PARALISIA FACIAL..., AO MAIOR CACHÊ...: COMO JUSTIN BIEBER FEZ UM SHOW DE 10 MILHÕES...")
+    3.  **Segredo/Novidade Revelada:** "[NÚMERO] MUDANÇAS/TIPOS DE [TÓPICO] QUE VOCÊ PROVAVELMENTE NÃO SABE" (Ex: "5 MUDANÇAS DO INSTAGRAM QUE VOCÊ PROVAVELMENTE AINDA NÃO SABE")
+    4.  **Conceito Complexo + Pergunta Simplificadora:** "O [CONCEITO NOVO] DO [PLATAFORMA]: POR QUE [ATOR] ESTÁ [AÇÃO INESPERADA]?" (Ex: "O FUNIL INVISÍVEL DO INSTAGRAM: POR QUE CREATORS... ESTÃO ABANDONANDO... SEGUIDORES?")
 
-- **Tamanho:** Extremamente conciso. Entre **8 a 14 palavras**. O objetivo é ser lido e compreendido em menos de 3 segundos.
+-   **Tamanho:** Entre 12 e 25 palavras. O suficiente para estabelecer um cenário e uma pergunta central.
 
-- **Uso de acento/destaque:**
-    - **CAIXA ALTA (CAPS):** Praticamente 100% dos títulos são em caixa alta para máximo impacto.
-    - **Cor de Destaque (Vermelho/Outra):** Usado de forma cirúrgica em 1-3 palavras por título para enfatizar o núcleo da polêmica, da estratégia ou da marca. Geralmente na palavra que gera mais curiosidade (ex: "SEGREDO", "FRACASSO", "IGNOROU").
-    - **Sublinhado (Underline):** Menos comum, mas usado para dar ênfase secundária ou agrupar um termo composto.
+-   **Uso de acento/destaque:** O principal destaque é o uso de **CAIXA ALTA (ALL CAPS)** para todo o título. Não há uso consistente de cores ou sublinhados nos exemplos, a ênfase é tipográfica.
 
-- **Dispositivos retóricos** mais usados:
-    - **Curiosity Gap (Lacuna de Curiosidade):** A estrutura inteira dos títulos é baseada em prometer uma informação que o leitor não tem. "O segredo...", "A estratégia...", "O motivo...".
-    - **Afirmação Contraintuitiva:** Apresentar um paradoxo que precisa ser resolvido. Ex: Fazer algo "errado" e ter sucesso.
-    - **Pergunta Direta:** Menos frequente no título, mas usado para engajar. Ex: "SERÁ O FIM DA PARCERIA X?".
+-   **Dispositivos retóricos** mais usados:
+    -   **Pergunta Provocativa:** Quase todas as capas terminam com uma pergunta que gera curiosidade sobre o "como" ou o "porquê".
+    -   **Hipérbole / Afirmação Chocante:** "A MORTE DOS REELS", "O FIM DO CRIADOR DE CONTEÚDO", "CAOS SOCIAL".
+    -   **Contraste Extremo:** "Paralisia facial" vs. "Maior cachê da história". "10 milhões de views" vs. "500 views".
+    -   **Promessa de Informação Privilegiada:** "...QUE VOCÊ PROVAVELMENTE AINDA NÃO SABE", "MÁQUINAS 'SECRETAS' DE CONVERSÃO".
 
 ### 2. Padrão do desenvolvimento (slides 2-N)
 
-- **Estrutura narrativa dominante:** Storytelling analítico em 5 atos.
-    1.  **SETUP (Slide 2):** Apresenta o **contexto** de forma direta. O que aconteceu? A notícia. "A marca X lançou o produto Y." "A empresa Z anunciou o fim da parceria W."
-    2.  **TENSÃO (Slide 3):** Explica **por que isso importa**. Qual o problema, a oportunidade ou o impacto? "Isso gerou uma crise de imagem." "Mas essa decisão não foi por acaso."
-    3.  **ANÁLISE PROFUNDA (Slides 4-7):** O núcleo do carrossel. Desdobra o "porquê" em 2 a 4 pontos chave. Cada slide aborda um ponto. Frequentemente usam títulos como "Motivo 1: ...", "A Estratégia é Dupla: ...".
-    4.  **A GRANDE LIÇÃO (Slide 8-9):** Sintetiza a análise em um **takeaway** ou aprendizado. O que podemos aprender com isso? Qual a implicação para o mercado? "A lição: o timing é tudo."
-    5.  **CONCLUSÃO E CTA (Slide 10):** Fecha o raciocínio e convida à interação com uma pergunta aberta. "E você, o que achou dessa estratégia?".
+-   **Estrutura narrativa dominante:** A estrutura mais comum é a de **PROBLEMA → PONTO DE VIRADA → NOVA REALIDADE**.
+    -   **Slide 2 (SETUP):** Apresenta o status quo, o "mundo antigo" ou o problema que todos enfrentam. (Ex: "O QUE FUNCIONAVA ANTES", "A MAIORIA DOS PERFIS FICA PRESA EM UM FORMATO SÓ").
+    -   **Slide 3 (PONTO DE VIRADA / A CAUSA):** Introduz a mudança, a ruptura, o evento que alterou o cenário. (Ex: "O QUE MUDOU", "A INTERNET FOI FICANDO MAIS POVOADA").
+    -   **Slides 4-N (NOVA REALIDADE / EVIDÊNCIAS):** Explora as consequências da mudança, apresentando dados, exemplos, e o cenário atual. Cada slide aprofunda um aspecto da nova realidade. (Ex: "O CENÁRIO ATUAL", exemplos de formatos de carrossel, análise do caso Bieber).
 
-- **Densidade por slide:** Baixíssima. **15 a 30 palavras por slide**, em média. Uma ideia principal por tela. A complexidade está na conexão entre os slides, não dentro de um único slide.
+-   **Densidade por slide:** Baixa densidade para alta legibilidade.
+    -   **Uma ideia central por slide.**
+    -   **Título curto e impactante em CAIXA ALTA** (3-6 palavras).
+    -   **Texto de apoio com 20-50 palavras**, em parágrafo único.
 
-- **Uso de imagem vs só texto:**
-    - Slide 1 (Capa): Sempre com imagem de fundo (produto, logo, pessoa).
-    - Slides de desenvolvimento (2-9): Predominantemente **só texto** sobre um fundo de cor sólida (branco, preto). Isso foca 100% a atenção na leitura e acelera o consumo. Imagens são usadas apenas se forem essenciais para ilustrar um ponto (ex: um gráfico, um print de tweet).
-    - Slide 10 (Final): Geralmente só texto com o logo da Brands Decoded.
+-   **Uso de imagem vs só texto:** Praticamente todos os slides usam uma imagem de fundo (fotografia, print de tela, etc.) com o texto sobreposto. O texto é o elemento principal, a imagem serve para dar contexto visual e textura, mas raramente é o foco.
 
-- **Transições entre slides:**
-    - **Loop Aberto (Open Loop):** Frases no final de um slide que forçam a ida para o próximo. Ex: "...Mas o principal motivo vem a seguir."
-    - **Numeração Explícita:** "3 motivos para o sucesso da... 1/3: ..."
-    - **Conectivos de Continuidade:** "Além disso...", "Isso nos leva ao ponto final:", "A consequência direta foi...".
+-   **Transições entre slides:** A transição é puramente narrativa. Cada slide termina de forma a deixar uma ponta solta ou criar a necessidade de entender o próximo passo lógico do argumento. Não usam "arraste para o lado". A curiosidade é o motor.
 
 ### 3. Padrão da legenda
 
-- **Estrutura:**
-    1.  **Hook (1ª linha):** Repete ou parafraseia o título da capa para prender a atenção de quem lê a legenda primeiro.
-    2.  **Parágrafo-resumo (2-4 linhas):** Um breve resumo do caso analisado no carrossel. Serve para dar contexto e otimizar para o SEO do Instagram.
-    3.  **CTA (Call-to-Action):** Uma pergunta direta e aberta, sempre convidando à discussão nos comentários.
-    4.  **Hashtags:** Bloco final com 5-10 hashtags, misturando termos amplos (#MarketingDigital, #Branding) com específicos do post (#Nubank, #EstrategiaDeMarca).
+-   **Estrutura:**
+    1.  **Hook/Resumo:** O primeiro parágrafo resume ou repete a ideia central do carrossel, muitas vezes reformulando o título da capa.
+    2.  **Desenvolvimento:** 1-2 parágrafos que adicionam contexto, dados ou uma opinião que não coube nos slides.
+    3.  **CTA (Call to Action):** Um comando claro e direto no final.
+    4.  **Hashtags:** Usadas de forma pontual e relevante (ex: #carrossel #instagram).
 
-- **Tamanho médio:** Curta e direta. Entre **40 e 80 palavras**. O conteúdo principal está no carrossel.
+-   **Tamanho médio:** Entre 60 e 150 palavras.
 
-- **CTA mais comum:** Perguntas de opinião. "O que você achou dessa jogada?", "Qual sua marca favorita nesse segmento? Comente 👇", "Você concorda com essa análise?".
+-   **CTA mais comum:** O CTA mais recorrente é o de geração de leads por automação de DM.
+    -   **"Comenta '[PALAVRA-CHAVE]' que eu te mando [RECOMPENSA] na DM."** (Ex: "Comenta 'CLAUDE' que eu te mando na DM.")
+    -   Secundariamente, pedem para salvar o post ou responder a uma pergunta.
 
 ### 4. Tópicos/nichos cobertos
 
-- **Análise de Rebranding/Campanhas:** Lançamentos, sucessos e, principalmente, fracassos de campanhas e mudanças de identidade visual (ex: logo do Itaú, campanha da Burger King).
-- **Movimentos Estratégicos:** Fusões, aquisições, parcerias e encerramentos de parcerias entre grandes marcas (ex: Ambev comprando concorrentes, Disney e Sony).
-- **Guerra de Marcas:** Análise de concorrência direta e movimentos de uma para superar a outra (ex: iFood vs. Rappi, Coca-Cola vs. Pepsi).
-- **Case de Sucesso/Fracasso:** Desconstrução dos fatores que levaram um produto, marca ou estratégia a um resultado extremo.
-- **Tendências de Mercado:** Como uma tendência cultural ou de consumo (ex: sustentabilidade, IA) está sendo aplicada (ou ignorada) por marcas relevantes.
+-   **Análise de Mudanças no Instagram:** Foco em algoritmo, novas funcionalidades e o "fim" de formatos antigos.
+-   **Estratégias de Conteúdo Viral:** Guias táticos sobre formatos (carrosséis), funil de conteúdo e como crescer na plataforma.
+-   **Cases de Marketing (Celebridades e Marcas):** Análise de campanhas, lançamentos e crises de figuras públicas (Justin Bieber, Sydney Sweeney) e marcas (American Eagle).
+-   **Análise de Tendências Culturais:** Conexão entre movimentos culturais (Geração Z, séries como Euphoria) e suas implicações para o marketing.
+-   **Novas Ferramentas para Criadores:** Lançamentos e tutoriais de ferramentas que otimizam a criação de conteúdo (foco recente em IA como o Claude).
 
 ### 5. 5 REGRAS CONCRETAS pra nosso prompt IA
 
-1.  **Título da Capa:** "Crie um título de 8 a 14 palavras, sempre em caixa alta. Use a fórmula `O [SEGREDO/MOTIVO] POR TRÁS DO [RESULTADO] DE [MARCA]` e destaque em vermelho a palavra que gera mais curiosidade."
-2.  **Estrutura Narrativa:** "O carrossel deve ter exatamente 10 slides. Siga esta ordem: Slide 2 (Contexto do fato), Slide 3 (A tensão/o problema), Slides 4, 5 e 6 (Análise em 3 motivos numerados), Slide 7 e 8 (A lição para o mercado), Slide 9 (Resumo em uma frase), Slide 10 (Pergunta para o leitor)."
-3.  **Densidade de Texto:** "Nenhum slide de desenvolvimento (2 a 9) pode ultrapassar 25 palavras. Use frases curtas e diretas. Priorize uma única ideia por slide."
-4.  **Transição Obrigatória:** "Ao final dos slides 3, 4 e 5, inclua uma frase de transição para criar um loop aberto. Use variações de: 'Mas o verdadeiro motivo é...', 'Isso nos leva ao próximo ponto:', 'E a consequência disso foi...'."
-5.  **Legenda Padronizada:** "Gere uma legenda de no máximo 60 palavras. A primeira frase deve ser uma pergunta que repete o tema da capa. O segundo parágrafo deve resumir o case em 2 frases. Finalize com a CTA: 'Deixe sua opinião nos comentários 👇' e 5 hashtags relevantes."
+1.  **Título da Capa:** "Crie um título de 12-25 palavras em CAIXA ALTA. Use a fórmula 'Afirmação Contraintuitiva + Pergunta de Aprofundamento'. Exemplo: 'O ALCANCE ORGÂNICO MORREU: POR QUE O INSTAGRAM AGORA SÓ ENTREGA CONTEÚDO PAGO?'."
+2.  **Estrutura Narrativa:** "Desenvolva o carrossel em 3 atos: Slide 2 deve apresentar 'O CENÁRIO ANTIGO'. Slide 3 deve apresentar 'A RUPTURA'. Slides 4 em diante devem detalhar 'A NOVA REALIDADE' com exemplos e dados."
+3.  **Formato do Slide:** "Cada slide de desenvolvimento deve ter um título de 3-5 palavras em CAIXA ALTA e um parágrafo de apoio de no máximo 40 palavras, focando em uma única ideia."
+4.  **Template de Legenda:** "Escreva uma legenda de ~100 palavras. Comece resumindo o argumento central do carrossel. Termine com o CTA: 'Comente [PALAVRA-CHAVE] para receber o guia completo por DM'."
+5.  **Tom de Voz Analítico:** "Adote um tom de voz de um analista de tendências que decodifica o mercado. Use termos como 'ecossistema', 'narrativa', 'ruptura', 'cenário atual' e faça afirmações ousadas e definitivas."
 
 ### 6. 3 EXEMPLOS de hooks que funcionam (dos posts) + por que funcionam
 
-1.  **Hook:** `POR QUE A RENNER IGNOROU O METAVERSO (E ACERTOU EM CHEIO).`
-    - **Por que funciona:** **Contraintuitivo + Validação.** Em um momento onde todas as marcas corriam para o metaverso, a decisão de "ignorar" parece um erro. A promessa de que essa foi a decisão *certa* ("acertou em cheio") cria uma tensão cognitiva irresistível e promete uma lição de estratégia valiosa.
+1.  **Hook:** "DE PARALISIA FACIAL E TURNÊ CANCELADA, AO MAIOR CACHÊ DA HISTÓRIA DO COACHELLA: COMO JUSTIN BIEBER FEZ UM SHOW DE 10 MILHÕES SÓ COM SEU NOTEBOOK"
+    -   **Por que funciona:** Usa o gatilho de **contraste extremo** (doença vs. sucesso recorde), criando uma narrativa instantânea de superação. A especificidade ("só com seu notebook") gera uma curiosidade imensa sobre o "como", prometendo revelar um segredo ou um método genial.
 
-2.  **Hook:** `A ESTRATÉGIA DA DOVE PARA TRANSFORMAR UM "FRACASSO" EM LUCRO.`
-    - **Por que funciona:** **Paradoxo + Promessa de Reversão.** A palavra "fracasso" captura a atenção imediatamente. A ideia de que é possível transformar algo negativo em "lucro" é o sonho de qualquer profissional de marketing. O hook promete uma fórmula, um "pulo do gato" que transforma perda em ganho.
+2.  **Hook:** "A MORTE DOS REELS: POR QUE TODO PERFIL DEVERIA POSTAR PELO MENOS 1 CARROSSEL POR DIA?"
+    -   **Por que funciona:** É **contraintuitivo e alarmista**. Ataca uma crença popular ("Reels são tudo") e gera FOMO (medo de ficar para trás). A promessa de explicar o "porquê" e oferecer uma solução clara ("1 carrossel por dia") torna o clique irresistível para qualquer criador de conteúdo.
 
-3.  **Hook:** `O DETALHE NO PIX QUE O ITAÚ USOU PARA ATRAIR CLIENTES.`
-    - **Por que funciona:** **Especificidade + Segredo.** Não é sobre "a estratégia do Pix", mas sobre "O DETALHE". Essa especificidade faz o insight parecer mais raro e valioso. Sugere que há uma informação pequena, quase secreta, que teve um impacto gigante, e o leitor está a um swipe de descobri-la.
+3.  **Hook:** "O NOVO ALGORITMO DO INSTAGRAM EM 2026 E O FIM DO CRIADOR DE CONTEÚDO → PORQUE TER 100 MIL SEGUIDORES PODE SER UM PÉSSIMO NEGÓCIO"
+    -   **Por que funciona:** Combina **urgência** ("novo algoritmo"), **ameaça existencial** ("fim do criador de conteúdo") e um **paradoxo** ("ter 100 mil seguidores pode ser ruim"). Ele invalida uma métrica de vaidade universal e promete explicar uma nova regra do jogo que todos são forçados a jogar.

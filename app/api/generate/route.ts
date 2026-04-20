@@ -469,6 +469,32 @@ Create 1 carousel (6-10 slides) built on NARRATIVE TENSION — a conflict betwee
 
 Formula: surface reading → friction → reframe → mechanism → proof → implication → expanded closing
 
+# REFERÊNCIA EDITORIAL PREMIUM (BrandsDecoded pattern)
+Carrosséis de análise (marketing, negócios, tecnologia, cultura) seguem um padrão editorial específico que performa MUITO bem em Instagram/LinkedIn. Aplique quando o tema permitir:
+
+**CAPA (slide 1) — padrão BrandsDecoded**:
+- **Fórmula dominante**: "Afirmação Contraintuitiva + Pergunta de Aprofundamento".
+  Exemplo: "A MORTE DOS REELS: POR QUE TODO PERFIL DEVERIA POSTAR 1 CARROSSEL POR DIA?"
+- Tamanho: 12-25 palavras (NÃO max 8 como arquétipos padrão — capa editorial é mais longa).
+- Tudo em CAIXA ALTA (uppercase).
+- Pode usar destaque colorido em palavras-chave finais (accent).
+- Dispositivos retóricos que funcionam: hipérbole ("A MORTE DE X"), contraste extremo (jornada do herói), informação privilegiada ("que você provavelmente não sabe"), paradoxo ("ter 100 mil seguidores pode ser ruim").
+
+**ESTRUTURA 3 ATOS — para tópicos analíticos**:
+- Slide 2 (SETUP): "O CENÁRIO ANTIGO" — apresenta status quo que todos conhecem
+- Slide 3 (RUPTURA): "O QUE MUDOU" — introduz a inversão, o ponto de virada
+- Slides 4+ (NOVA REALIDADE): consequências, evidências, exemplos, como aplicar
+- Slide final (CTA): fecha com comando específico
+
+**Desenvolvimento (slides 2-N) — densidade**:
+- UMA ideia central por slide.
+- Título curto CAPS (3-6 palavras) + parágrafo de apoio de até 40 palavras.
+- Legibilidade alta: parágrafos curtos, linhas com espaço, palavras-chave destacadas.
+
+**TOM ANALÍTICO** — voz de analista que decodifica o mercado, não gurú. Termos como "ecossistema", "narrativa", "ruptura", "cenário atual", "pattern reconhecido". Faça afirmações ousadas e definitivas com segurança — não hedge.
+
+**CTA estilo DM-lead** (quando fizer sentido): "Comenta [PALAVRA-CHAVE] que eu te mando [RECOMPENSA] na DM." Ex: "Comenta CLAUDE que eu te mando o prompt completo na DM." Essa estrutura captura leads diretamente, é o CTA dominante em carrosséis virais de 2026.
+
 # GROUND TRUTH (regra inegociável — leia antes de tudo)
 NUNCA INVENTE: números, percentuais, nomes de empresas, valores em R$/US$, datas, fontes, citações atribuídas. Se o source content do usuário não traz um dado, você tem 3 opções:
 1. Usar número DERIVÁVEL de lógica (ex: "1 em cada 3") com caveat.
@@ -728,7 +754,10 @@ Each slides array must have 6-10 items. Every slide MUST include a valid "varian
     const ai = new GoogleGenAI({ apiKey: geminiKey });
     const modelId =
       mode === "layout-only" ? "gemini-2.5-flash" : "gemini-2.5-pro";
-    const thinkingBudget = mode === "layout-only" ? 2000 : 10000;
+    // Thinking budget aumentado no writer mode (10k → 16k) pra Pro
+    // raciocinar a estrutura 3-atos e escolher dados específicos.
+    // Gabriel pediu qualidade máxima, aceita custo extra.
+    const thinkingBudget = mode === "layout-only" ? 2000 : 16000;
     const maxOutputTokens = mode === "layout-only" ? 10000 : 14000;
     const useGrounding = mode !== "layout-only";
 

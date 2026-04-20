@@ -150,15 +150,15 @@ export async function POST(request: Request) {
       );
       if (!gateErr && Array.isArray(gate) && gate[0]) {
         const row = gate[0] as {
-          allowed: boolean;
-          new_count: number;
-          usage_limit: number;
-          plan: string;
+          out_allowed: boolean;
+          out_new_count: number;
+          out_usage_limit: number;
+          out_plan: string;
         };
-        if (!row.allowed) {
+        if (!row.out_allowed) {
           return Response.json(
             {
-              error: `Você atingiu o limite de ${row.usage_limit} carrosséis do plano ${row.plan || "free"}. Faça upgrade para continuar gerando.`,
+              error: `Você atingiu o limite de ${row.out_usage_limit} carrosséis do plano ${row.out_plan || "free"}. Faça upgrade para continuar gerando.`,
               code: "PLAN_LIMIT_REACHED",
             },
             { status: 403 }

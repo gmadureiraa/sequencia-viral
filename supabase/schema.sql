@@ -221,39 +221,45 @@ end;
 $$;
 
 -- Atomic check-and-increment: elimina TOCTOU entre node check + rpc increment.
+-- OUT params usam prefixo out_ pra não colidir com nomes de coluna no UPDATE.
 create or replace function public.try_increment_usage_count(uid uuid)
-returns table(allowed boolean, new_count int, usage_limit int, plan text)
+returns table(
+  out_allowed boolean,
+  out_new_count int,
+  out_usage_limit int,
+  out_plan text
+)
 language plpgsql
 security definer set search_path = ''
 as $$
 declare
-  row_limit int;
-  row_plan text;
-  row_count int;
+  v_count int;
+  v_limit int;
+  v_plan text;
 begin
-  update public.profiles
-     set usage_count = usage_count + 1,
+  update public.profiles p
+     set usage_count = p.usage_count + 1,
          updated_at = now()
-   where id = uid
-     and usage_count < usage_limit
-  returning usage_count, usage_limit, plan
-    into row_count, row_limit, row_plan;
+   where p.id = uid
+     and p.usage_count < p.usage_limit
+  returning p.usage_count, p.usage_limit, p.plan
+    into v_count, v_limit, v_plan;
 
   if found then
-    allowed := true;
-    new_count := row_count;
-    usage_limit := row_limit;
-    plan := row_plan;
+    out_allowed := true;
+    out_new_count := v_count;
+    out_usage_limit := v_limit;
+    out_plan := v_plan;
     return next;
   else
     select p.usage_count, p.usage_limit, p.plan
-      into row_count, row_limit, row_plan
+      into v_count, v_limit, v_plan
       from public.profiles p
      where p.id = uid;
-    allowed := false;
-    new_count := coalesce(row_count, 0);
-    usage_limit := coalesce(row_limit, 5);
-    plan := coalesce(row_plan, 'free');
+    out_allowed := false;
+    out_new_count := coalesce(v_count, 0);
+    out_usage_limit := coalesce(v_limit, 5);
+    out_plan := coalesce(v_plan, 'free');
     return next;
   end if;
 end;

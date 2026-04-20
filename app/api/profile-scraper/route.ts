@@ -202,12 +202,17 @@ function normalizeInstagram(item: any, handle: string): ProfileData {
 
   const bio: string | null = item.biography ?? item.bio ?? null;
 
+  // Avatar do Instagram vem de cdninstagram.com/fbcdn.net — URLs com token
+  // que expira em ~1h e bloqueia hotlinking de origem diferente. Usar essa
+  // URL pra avatar salva uma referência que quebra no dia seguinte.
+  // Decisão: não retornamos avatarUrl pra Instagram — o user faz upload
+  // da foto manualmente no onboarding.
   return {
     handle,
     platform: "instagram",
     name: item.fullName ?? item.name ?? null,
     bio,
-    avatarUrl: item.profilePicUrl ?? item.profilePicUrlHD ?? item.avatarUrl ?? item.profilePic ?? null,
+    avatarUrl: null,
     followers: item.followersCount ?? item.followers ?? null,
     following: item.followsCount ?? item.following ?? item.followingCount ?? null,
     niche: inferNiche(bio),

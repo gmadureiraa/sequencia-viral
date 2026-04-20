@@ -9,6 +9,7 @@ import { jsonWithAuth } from "@/lib/api-auth-headers";
 import { Loader2 } from "lucide-react";
 import posthog from "posthog-js";
 import { toast } from "sonner";
+import { scrubInstagramCdn } from "@/lib/instagram-cdn";
 
 // ──────────────────────────────────────────────────────────────────
 // Config
@@ -223,6 +224,14 @@ export default function OnboardingPage() {
       const p: ScrapedProfile = await res.json();
       setScrapedProfile(p);
 
+      // Instagram CDN bloqueia download de foto — scraper retorna null de
+      // propósito. Avisa o user pra subir a foto depois em Ajustes.
+      if (platform === "instagram" && !p.avatarUrl && !data.avatar_url) {
+        toast.info(
+          "Instagram bloqueia download da foto de perfil. Continue sem — dá pra subir em Ajustes → Perfil."
+        );
+      }
+
       const niches: string[] = [];
       if (p.niche && typeof p.niche === "string") niches.push(p.niche);
 
@@ -314,7 +323,9 @@ export default function OnboardingPage() {
 
       await updateProfile({
         name: data.name,
-        avatar_url: data.avatar_url,
+        // Limpa avatar se veio do CDN do Instagram — URL expira em ~1h e
+        // deixa o perfil com foto quebrada. User faz upload depois.
+        avatar_url: scrubInstagramCdn(data.avatar_url) || "",
         twitter_handle: data.twitter_handle,
         instagram_handle: data.instagram_handle,
         linkedin_url: data.linkedin_url,

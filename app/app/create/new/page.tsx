@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { upsertUserCarousel } from "@/lib/carousel-storage";
 import { useGenerate, type GenerationError } from "@/lib/create/use-generate";
+import { DiscountPopup } from "@/components/app/discount-popup";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
 
 /**
@@ -154,6 +155,7 @@ export default function NewCarouselPage() {
   const [tone, setTone] = useState<Tone>("editorial");
   const [lang, setLang] = useState<Lang>("pt-br");
   const [submitting, setSubmitting] = useState(false);
+  const [showLimitPopup, setShowLimitPopup] = useState(false);
 
   // Modo de geração — decisão MAIS importante: IA escreve vs IA só formata.
   // Default writer (comportamento antigo). Layout-only = preserva wording.
@@ -249,6 +251,8 @@ export default function NewCarouselPage() {
     if (!(err instanceof Error)) return "Erro inesperado ao gerar.";
     const e = err as GenerationError;
     if (e.code === "PLAN_LIMIT_REACHED" || e.status === 403) {
+      // Dispara popup de desconto — é o momento natural pra oferecer upgrade.
+      setShowLimitPopup(true);
       return (
         e.message ||
         "Você atingiu o limite do plano. Faça upgrade pra seguir gerando."
@@ -497,6 +501,9 @@ export default function NewCarouselPage() {
       className="mx-auto w-full"
       style={{ maxWidth: 680, minWidth: 0 }}
     >
+      {/* Popup 30% off — mount only when user hit plan limit (PLAN_LIMIT_REACHED). */}
+      {showLimitPopup && <DiscountPopup trigger="limit-reached" />}
+
       {/* eyebrow */}
       <span className="sv-eyebrow">
         <span className="sv-dot" /> Nº 01 · Brief · Novo carrossel

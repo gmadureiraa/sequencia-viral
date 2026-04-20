@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useDraft, useAutoSaveDraft } from "@/lib/create/use-draft";
 import { useImages } from "@/lib/create/use-images";
 import CarouselFeedbackPanel from "@/components/app/carousel-feedback";
+import { DiscountPopup } from "@/components/app/discount-popup";
 import { supabase } from "@/lib/supabase";
 import type {
   CreateSlide,
@@ -1579,6 +1580,10 @@ export default function EditPage(props: {
       transition={{ duration: 0.2 }}
       className="w-full"
     >
+      {/* Popup 30% off — usuário acabou de ver o primeiro carrossel pronto,
+          momento perfeito pra oferta. Só dispara pra plano free, 1x. */}
+      <DiscountPopup trigger="post-first-carousel" />
+
       {/* Topbar do editor */}
       <div
         className="flex flex-wrap items-center justify-between gap-3 mb-5"

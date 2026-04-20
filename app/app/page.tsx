@@ -9,6 +9,7 @@ import { fetchUserCarousels, type SavedCarousel } from "@/lib/carousel-storage";
 import EditorialSlide from "@/components/app/editorial-slide";
 import { CarouselListSkeleton } from "@/components/app/carousel-skeleton";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
+import { DiscountPopup } from "@/components/app/discount-popup";
 
 /* ============================================================================
  *  Dashboard · Sequência Viral (brutalist editorial Kaleidos)
@@ -208,6 +209,10 @@ export default function DashboardPage() {
       className="mx-auto px-4 sm:px-6"
       style={{ maxWidth: CONTAINER_MAX, paddingTop: 8, paddingBottom: 96 }}
     >
+      {/* Popup 30% off — só user free, após onboarding. 1x por trigger
+          + cooldown global de 7 dias. */}
+      <DiscountPopup trigger="post-onboarding" />
+
       {/* ──────────────────────────────────────────────────────────────────
            1. HEADER
          ────────────────────────────────────────────────────────────────── */}

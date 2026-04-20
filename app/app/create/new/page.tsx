@@ -452,9 +452,15 @@ export default function NewCarouselPage() {
       //   editorial se não for cover.
       const imageMode: "search" | "generate" =
         designTemplate === "twitter" ? "search" : "generate";
+      // Slides que o usuário subiu imagem: primeiros N recebem em ordem,
+      // pulando slides que são quote/cta (tipográficos) quando isso economiza
+      // upload desperdiçado em slide sem imagem. Mantém ordem pra ser
+      // previsível ("minha primeira foto vira a capa").
+      const uploadedQueue = [...advUploadedUrls];
+
       const slidesWithImages = await Promise.all(
         chosen.slides.map(async (slide, idx) => {
-          // Se já veio imageUrl (modo avançado com upload), pula fetch.
+          // Se já veio imageUrl (raro — algum fluxo antigo), pula fetch.
           if (slide.imageUrl && typeof slide.imageUrl === "string") {
             setImagesProgress((prev) =>
               prev ? { ...prev, done: prev.done + 1 } : null
@@ -470,6 +476,15 @@ export default function NewCarouselPage() {
               prev ? { ...prev, done: prev.done + 1 } : null
             );
             return slide;
+          }
+
+          // Prioridade 1: imagens que o usuário subiu. Consome em ordem FIFO.
+          if (uploadedQueue.length > 0) {
+            const nextUrl = uploadedQueue.shift()!;
+            setImagesProgress((prev) =>
+              prev ? { ...prev, done: prev.done + 1 } : null
+            );
+            return { ...slide, imageUrl: nextUrl };
           }
 
           const query = (slide.imageQuery || slide.heading || "").slice(0, 300);
@@ -845,6 +860,126 @@ export default function NewCarouselPage() {
               e.currentTarget.style.boxShadow = "3px 3px 0 0 var(--sv-ink)";
             }}
           />
+
+          {/* Upload de imagens — primary, sempre visível. Imagens enviadas são
+              usadas PRIMEIRO em ordem nos slides; restante cai pra busca/geração. */}
+          <div
+            style={{
+              padding: 16,
+              border: "1.5px solid var(--sv-ink)",
+              background: "var(--sv-paper)",
+              boxShadow: "3px 3px 0 0 var(--sv-ink)",
+            }}
+          >
+            <div
+              className="mb-2 uppercase"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: 10.5,
+                letterSpacing: "0.14em",
+                color: "var(--sv-ink)",
+                fontWeight: 700,
+              }}
+            >
+              ✦ Suas imagens (opcional)
+            </div>
+            <div
+              className="mb-3"
+              style={{
+                fontFamily: "var(--sv-sans)",
+                fontSize: 12.5,
+                lineHeight: 1.5,
+                color: "var(--sv-muted)",
+              }}
+            >
+              Suba até 8 imagens. A gente usa as suas PRIMEIRO (slide 1, 2,
+              3…) e só gera/busca o resto se sobrar slide.
+            </div>
+            {advUploadedUrls.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {advUploadedUrls.map((url, i) => (
+                  <div
+                    key={url}
+                    style={{
+                      position: "relative",
+                      width: 80,
+                      height: 80,
+                      border: "1.5px solid var(--sv-ink)",
+                      background: `url(${url}) center/cover`,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAdvUploadedUrls((prev) =>
+                          prev.filter((_, idx) => idx !== i)
+                        )
+                      }
+                      style={{
+                        position: "absolute",
+                        top: -8,
+                        right: -8,
+                        width: 22,
+                        height: 22,
+                        borderRadius: "50%",
+                        border: "1.5px solid var(--sv-ink)",
+                        background: "var(--sv-pink)",
+                        fontSize: 11,
+                        lineHeight: 1,
+                        cursor: "pointer",
+                        color: "var(--sv-ink)",
+                        fontWeight: 700,
+                      }}
+                      title="Remover"
+                    >
+                      ×
+                    </button>
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: 2,
+                        left: 2,
+                        padding: "1px 5px",
+                        fontFamily: "var(--sv-mono)",
+                        fontSize: 9,
+                        background: "var(--sv-ink)",
+                        color: "var(--sv-white)",
+                        fontWeight: 700,
+                      }}
+                    >
+                      SLIDE {i + 1}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              ref={advFileInputRef}
+              onChange={(e) => handleAdvancedUpload(e.target.files)}
+              style={{ display: "none" }}
+            />
+            <button
+              type="button"
+              onClick={() => advFileInputRef.current?.click()}
+              disabled={advUploading || advUploadedUrls.length >= 8}
+              className="sv-btn sv-btn-outline"
+              style={{
+                padding: "8px 14px",
+                fontSize: 11,
+                opacity:
+                  advUploading || advUploadedUrls.length >= 8 ? 0.5 : 1,
+              }}
+            >
+              {advUploading
+                ? "Subindo…"
+                : advUploadedUrls.length === 0
+                  ? "+ Subir imagens"
+                  : `+ Mais imagens (${advUploadedUrls.length}/8)`}
+            </button>
+          </div>
 
           <div>
             <div

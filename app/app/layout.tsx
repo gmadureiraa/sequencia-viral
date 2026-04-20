@@ -16,6 +16,7 @@ import {
   Sparkles,
   Search,
   Shield,
+  ImageIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { Toaster } from "@/components/ui/sonner";
@@ -31,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/app", label: "Início", icon: LayoutDashboard },
   { href: "/app/create/new", label: "Criar", icon: PlusCircle },
   { href: "/app/carousels", label: "Carrosséis", icon: FolderOpen },
+  { href: "/app/gallery", label: "Galeria", icon: ImageIcon },
   { href: "/app/plans", label: "Assinar", icon: Sparkles, badge: "Pro" },
   { href: "/app/help", label: "Guia", icon: BookOpen },
   { href: "/app/roadmap", label: "Roadmap", icon: Map },
@@ -64,6 +66,7 @@ function breadcrumbFor(pathname: string): { kicker: string; title: string } {
     "/app": { kicker: "DASHBOARD", title: "INÍCIO" },
     "/app/create/new": { kicker: "NOVO", title: "CARROSSEL" },
     "/app/carousels": { kicker: "BIBLIOTECA", title: "CARROSSÉIS" },
+    "/app/gallery": { kicker: "IMAGENS", title: "GALERIA" },
     "/app/plans": { kicker: "PLANOS", title: "ASSINAR" },
     "/app/settings": { kicker: "CONTA", title: "AJUSTES" },
     "/app/roadmap": { kicker: "PRODUTO", title: "ROADMAP" },

@@ -1,5 +1,6 @@
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { saveToUserGallery } from "@/lib/server/user-images";
 
 export const maxDuration = 30;
 
@@ -129,6 +130,17 @@ export async function POST(request: Request) {
     }
 
     const { data: pub } = supabase.storage.from("carousel-images").getPublicUrl(path);
+
+    // Salva na galeria pra reuso futuro.
+    await saveToUserGallery({
+      userId: user.id,
+      url: pub.publicUrl,
+      source: "uploaded",
+      carouselId: safeCarousel === "draft" ? null : safeCarousel,
+      slideIndex: safeSlide !== "0" ? Number(safeSlide) : null,
+      supabase,
+    });
+
     return Response.json({ url: pub.publicUrl, path });
   } catch (err) {
     console.error("[upload] error:", err);

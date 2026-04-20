@@ -9,6 +9,7 @@ import {
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { costForImages, recordGeneration } from "@/lib/server/generation-log";
+import { saveToUserGallery } from "@/lib/server/user-images";
 
 const MAX_QUERY_LEN = 500;
 
@@ -226,6 +227,17 @@ export async function POST(request: Request) {
                 const { data: pub } = supabase.storage
                   .from("carousel-images")
                   .getPublicUrl(path);
+
+                // Salva na galeria do user pra reuso futuro.
+                await saveToUserGallery({
+                  userId: user.id,
+                  url: pub.publicUrl,
+                  source: "generated",
+                  title: query.slice(0, 200),
+                  prompt: imagePrompt.slice(0, 2000),
+                  tags: [tmplId, ...(niche ? [niche] : [])],
+                  supabase,
+                });
 
                 return Response.json({
                   images: [

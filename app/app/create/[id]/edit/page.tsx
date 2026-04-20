@@ -4,6 +4,7 @@ import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import {
   TEMPLATES_META,
   TemplateRenderer,
@@ -581,6 +582,52 @@ export default function EditPage(props: {
   function triggerUploadFor(targetIndex: number) {
     uploadTargetRef.current = targetIndex;
     fileInputRef.current?.click();
+  }
+
+  // ── Galeria do usuário (reuso de imagens geradas/upadas) ──
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryImages, setGalleryImages] = useState<
+    { id: string; url: string; source: string; title: string | null }[]
+  >([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryTargetIndex, setGalleryTargetIndex] = useState<number | null>(null);
+
+  async function openGalleryFor(targetIndex: number) {
+    setGalleryTargetIndex(targetIndex);
+    setGalleryOpen(true);
+    if (galleryImages.length > 0) return;
+    if (!session) return;
+    setGalleryLoading(true);
+    try {
+      const headers: HeadersInit = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : {};
+      const res = await fetch("/api/gallery?limit=120", { headers });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro");
+      setGalleryImages(data.images ?? []);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao carregar galeria.");
+    } finally {
+      setGalleryLoading(false);
+    }
+  }
+
+  function pickGalleryImage(url: string) {
+    const idx = galleryTargetIndex;
+    if (idx === null) return;
+    updateSlide(idx, { imageUrl: url });
+    // Marca uso (fire-and-forget).
+    if (session) {
+      const headers: HeadersInit = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : {};
+      void fetch(`/api/gallery?url=${encodeURIComponent(url)}`, {
+        method: "PATCH",
+        headers,
+      }).catch(() => null);
+    }
+    setGalleryOpen(false);
   }
 
   function pickPickerImage(url: string) {
@@ -1393,6 +1440,22 @@ export default function EditPage(props: {
       <div className="grid gap-1.5" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <button
           type="button"
+          onClick={() => void openGalleryFor(activeIndex)}
+          className="sv-btn sv-btn-outline"
+          style={{
+            width: "100%",
+            justifyContent: "center",
+            padding: "8px 10px",
+            fontSize: 9.5,
+            gridColumn: "1 / -1",
+            background: "var(--sv-green)",
+            fontWeight: 700,
+          }}
+        >
+          ✦ Escolher da minha galeria
+        </button>
+        <button
+          type="button"
           onClick={() => void handleSearchImage(activeIndex)}
           disabled={imagesHook.loadingIndex === activeIndex}
           className="sv-btn sv-btn-outline"
@@ -1662,6 +1725,174 @@ export default function EditPage(props: {
           </div>
         )}
       </div>
+
+      {/* ── Modal galeria ── */}
+      {galleryOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setGalleryOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10,10,10,0.7)",
+            zIndex: 60,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--sv-paper)",
+              border: "1.5px solid var(--sv-ink)",
+              boxShadow: "6px 6px 0 0 var(--sv-ink)",
+              width: "100%",
+              maxWidth: 920,
+              maxHeight: "85vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div
+              className="flex items-center justify-between"
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1.5px solid var(--sv-ink)",
+                background: "var(--sv-white)",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontFamily: "var(--sv-mono)",
+                    fontSize: 9,
+                    letterSpacing: "0.2em",
+                    textTransform: "uppercase",
+                    color: "var(--sv-muted)",
+                  }}
+                >
+                  Sua galeria
+                </div>
+                <div
+                  className="sv-display"
+                  style={{ fontSize: 22, letterSpacing: "-0.01em" }}
+                >
+                  Escolher <em>imagem</em>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGalleryOpen(false)}
+                className="sv-btn sv-btn-outline"
+                style={{ padding: "6px 12px", fontSize: 10 }}
+              >
+                Fechar
+              </button>
+            </div>
+            <div
+              style={{
+                padding: 16,
+                overflowY: "auto",
+                flex: 1,
+              }}
+            >
+              {galleryLoading ? (
+                <div
+                  className="flex items-center justify-center"
+                  style={{ padding: 40, color: "var(--sv-muted)" }}
+                >
+                  <Loader2 size={20} className="animate-spin" />
+                </div>
+              ) : galleryImages.length === 0 ? (
+                <div
+                  className="text-center"
+                  style={{
+                    padding: 40,
+                    color: "var(--sv-muted)",
+                    fontSize: 14,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Sua galeria está vazia. Gere imagens com IA ou suba fotos
+                  em <strong>/app/gallery</strong> — elas aparecem aqui pra
+                  reuso.
+                </div>
+              ) : (
+                <div
+                  className="grid gap-2"
+                  style={{
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(140px, 1fr))",
+                  }}
+                >
+                  {galleryImages.map((img) => (
+                    <button
+                      key={img.id}
+                      type="button"
+                      onClick={() => pickGalleryImage(img.url)}
+                      style={{
+                        position: "relative",
+                        aspectRatio: "1 / 1",
+                        background: "var(--sv-white)",
+                        border: "1.5px solid var(--sv-ink)",
+                        boxShadow: "2px 2px 0 0 var(--sv-ink)",
+                        overflow: "hidden",
+                        cursor: "pointer",
+                        padding: 0,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow =
+                          "4px 4px 0 0 var(--sv-green)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow =
+                          "2px 2px 0 0 var(--sv-ink)";
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={img.url}
+                        alt={img.title || "Imagem"}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                        loading="lazy"
+                      />
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: 4,
+                          left: 4,
+                          padding: "2px 5px",
+                          fontFamily: "var(--sv-mono)",
+                          fontSize: 7,
+                          letterSpacing: "0.16em",
+                          textTransform: "uppercase",
+                          background:
+                            img.source === "generated"
+                              ? "var(--sv-green)"
+                              : "var(--sv-white)",
+                          border: "1px solid var(--sv-ink)",
+                          color: "var(--sv-ink)",
+                        }}
+                      >
+                        {img.source === "generated" ? "IA" : "Minha"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

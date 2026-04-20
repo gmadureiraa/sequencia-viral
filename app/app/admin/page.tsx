@@ -14,6 +14,8 @@ import {
   Activity,
   CreditCard,
   TrendingUp,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
@@ -31,12 +33,19 @@ import { jsonWithAuth } from "@/lib/api-auth-headers";
 
 const ADMIN_EMAILS = ["gf.madureiraa@gmail.com", "gf.madureira@hotmail.com"];
 
-type TabId = "overview" | "users" | "generations" | "apis" | "subscriptions";
+type TabId =
+  | "overview"
+  | "users"
+  | "generations"
+  | "apis"
+  | "subscriptions"
+  | "feedback";
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "overview", label: "Overview", icon: <Activity size={13} /> },
   { id: "users", label: "Usuários", icon: <Users size={13} /> },
   { id: "generations", label: "Gerações", icon: <Zap size={13} /> },
+  { id: "feedback", label: "Feedback", icon: <ThumbsUp size={13} /> },
   { id: "apis", label: "APIs", icon: <DollarSign size={13} /> },
   {
     id: "subscriptions",
@@ -130,6 +139,20 @@ interface AdminStats {
   };
   apiHealth: Record<string, "SET" | "MISSING">;
   apiLastUsed: Record<string, string | null>;
+  feedback?: {
+    totalWithFeedback: number;
+    up: number;
+    down: number;
+    satisfactionPct: number | null;
+    recent: Array<{
+      carouselId: string;
+      userId: string | null;
+      title: string | null;
+      sentiment: "up" | "down" | null;
+      comment: string;
+      updatedAt: string | null;
+    }>;
+  };
   generatedAt: string;
 }
 
@@ -367,6 +390,7 @@ export default function AdminPage() {
           {activeTab === "overview" && <OverviewTab stats={stats} />}
           {activeTab === "users" && <UsersTab stats={stats} />}
           {activeTab === "generations" && <GenerationsTab stats={stats} />}
+          {activeTab === "feedback" && <FeedbackTab stats={stats} />}
           {activeTab === "apis" && <ApisTab stats={stats} />}
           {activeTab === "subscriptions" && <SubscriptionsTab stats={stats} />}
         </div>
@@ -1320,6 +1344,224 @@ function Th({
     >
       {children}
     </th>
+  );
+}
+
+// ─────────────────────────────── FeedbackTab ────────────────────────────────
+
+function FeedbackTab({ stats }: { stats: AdminStats }) {
+  const fb = stats.feedback;
+  if (!fb) {
+    return (
+      <div
+        className="rounded-xl border border-dashed p-10 text-center"
+        style={{
+          borderColor: "var(--sv-muted)",
+          color: "var(--sv-muted)",
+        }}
+      >
+        Sem dados de feedback ainda. Quando usuários avaliarem carrosséis no
+        app, aparece aqui.
+      </div>
+    );
+  }
+
+  const userEmailById = new Map<string, string | null>();
+  for (const u of stats.users) userEmailById.set(u.id, u.email);
+
+  const satisfaction = fb.satisfactionPct;
+  const satisfactionColor =
+    satisfaction === null
+      ? "var(--sv-muted)"
+      : satisfaction >= 70
+        ? "var(--sv-green)"
+        : satisfaction >= 40
+          ? "#E8A94F"
+          : "#E06B6B";
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid gap-3 md:grid-cols-4">
+        <StatCard
+          icon={<Activity size={13} />}
+          label="Total avaliados"
+          value={String(fb.totalWithFeedback)}
+          sub={`${fb.recent.length} com comentário`}
+        />
+        <StatCard
+          icon={<ThumbsUp size={13} />}
+          label="Positivos"
+          value={String(fb.up)}
+          sub={fb.totalWithFeedback > 0 ? `${Math.round((fb.up / fb.totalWithFeedback) * 100)}% do total` : "—"}
+        />
+        <StatCard
+          icon={<ThumbsDown size={13} />}
+          label="Negativos"
+          value={String(fb.down)}
+          sub={fb.totalWithFeedback > 0 ? `${Math.round((fb.down / fb.totalWithFeedback) * 100)}% do total` : "—"}
+        />
+        <div
+          className="flex flex-col gap-1 rounded-xl border p-4"
+          style={{
+            borderColor: "var(--sv-ink)",
+            background: "var(--sv-white)",
+            boxShadow: "3px 3px 0 0 var(--sv-ink)",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--sv-mono)",
+              fontSize: 9,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "var(--sv-muted)",
+            }}
+          >
+            Satisfação
+          </span>
+          <span
+            className="sv-display"
+            style={{
+              fontSize: 32,
+              fontStyle: "italic",
+              color: satisfactionColor,
+              lineHeight: 1,
+            }}
+          >
+            {satisfaction === null ? "—" : `${satisfaction}%`}
+          </span>
+          <span style={{ fontSize: 11, color: "var(--sv-muted)" }}>
+            👍 ÷ (👍 + 👎)
+          </span>
+        </div>
+      </div>
+
+      <div
+        className="rounded-xl border"
+        style={{
+          borderColor: "var(--sv-ink)",
+          background: "var(--sv-white)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          className="flex items-center justify-between px-4 py-3"
+          style={{ borderBottom: "1.5px solid var(--sv-ink)" }}
+        >
+          <strong
+            style={{
+              fontFamily: "var(--sv-mono)",
+              fontSize: 11,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+            }}
+          >
+            Últimos {fb.recent.length} com feedback
+          </strong>
+          <span style={{ fontSize: 11, color: "var(--sv-muted)" }}>
+            Clique no título pra abrir o carrossel
+          </span>
+        </div>
+        {fb.recent.length === 0 ? (
+          <div className="p-6 text-center" style={{ color: "var(--sv-muted)" }}>
+            Nenhum feedback ainda.
+          </div>
+        ) : (
+          <ul className="flex flex-col">
+            {fb.recent.map((entry, i) => {
+              const email = entry.userId
+                ? userEmailById.get(entry.userId)
+                : null;
+              return (
+                <li
+                  key={`${entry.carouselId}-${i}`}
+                  className="flex flex-col gap-2 px-4 py-3"
+                  style={{
+                    borderBottom:
+                      i < fb.recent.length - 1
+                        ? "1px solid var(--sv-soft)"
+                        : undefined,
+                  }}
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    {entry.sentiment === "up" ? (
+                      <span
+                        className="inline-flex items-center gap-1"
+                        style={{ color: "var(--sv-green)", fontSize: 14 }}
+                      >
+                        <ThumbsUp size={14} />
+                        Bom
+                      </span>
+                    ) : entry.sentiment === "down" ? (
+                      <span
+                        className="inline-flex items-center gap-1"
+                        style={{ color: "#E06B6B", fontSize: 14 }}
+                      >
+                        <ThumbsDown size={14} />
+                        Ruim
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 12, color: "var(--sv-muted)" }}>
+                        Sem voto
+                      </span>
+                    )}
+                    {entry.carouselId ? (
+                      <Link
+                        href={`/app/create/${entry.carouselId}/edit`}
+                        className="truncate text-sm hover:underline"
+                        style={{ color: "var(--sv-ink)", fontWeight: 600 }}
+                      >
+                        {entry.title || "Sem título"}
+                      </Link>
+                    ) : (
+                      <span style={{ fontSize: 13 }}>
+                        {entry.title || "Sem título"}
+                      </span>
+                    )}
+                    <span
+                      className="ml-auto"
+                      style={{
+                        fontFamily: "var(--sv-mono)",
+                        fontSize: 10,
+                        color: "var(--sv-muted)",
+                      }}
+                    >
+                      {fmtDate(entry.updatedAt)}
+                    </span>
+                  </div>
+                  {entry.comment && (
+                    <p
+                      style={{
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        color: "var(--sv-ink)",
+                        margin: 0,
+                        paddingLeft: 4,
+                        borderLeft: "2px solid var(--sv-soft)",
+                        paddingInlineStart: 10,
+                      }}
+                    >
+                      {entry.comment}
+                    </p>
+                  )}
+                  {email && (
+                    <span
+                      style={{
+                        fontFamily: "var(--sv-mono)",
+                        fontSize: 10,
+                        color: "var(--sv-muted)",
+                      }}
+                    >
+                      {email}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 

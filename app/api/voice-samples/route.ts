@@ -2,6 +2,7 @@ export const maxDuration = 60;
 
 import { getAuthenticatedUser } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { costForTokens, recordGeneration } from "@/lib/server/generation-log";
 
 interface VoiceSamplesRequest {
   niche: string[];
@@ -147,6 +148,23 @@ Generate 3 hook samples that feel like this creator would actually post them.`;
     }
 
     const data = await response.json();
+
+    const usage = (data.usage ?? {}) as {
+      input_tokens?: number;
+      output_tokens?: number;
+    };
+    const inputTokens = usage.input_tokens ?? 0;
+    const outputTokens = usage.output_tokens ?? 0;
+    await recordGeneration({
+      userId: user.id,
+      model: "claude-sonnet-4-6",
+      provider: "anthropic",
+      inputTokens,
+      outputTokens,
+      costUsd: costForTokens("claude-sonnet-4-6", inputTokens, outputTokens),
+      promptType: "brand-analysis",
+    });
+
     const textBlock = data.content?.find(
       (block: { type: string }) => block.type === "text"
     );

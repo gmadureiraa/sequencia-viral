@@ -5,6 +5,7 @@ import {
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { geminiWithRetry } from "@/lib/server/gemini-retry";
 import { GoogleGenAI } from "@google/genai";
+import { costForTokens, recordGeneration } from "@/lib/server/generation-log";
 
 export const maxDuration = 15;
 
@@ -147,6 +148,18 @@ Retorne APENAS JSON válido no formato:
       })
     );
     const text = result.text || "";
+    const usage = result.usageMetadata;
+    const inputTokens = usage?.promptTokenCount ?? 0;
+    const outputTokens = usage?.candidatesTokenCount ?? 0;
+    await recordGeneration({
+      userId: user.id,
+      model: "gemini-2.5-flash",
+      provider: "google",
+      inputTokens,
+      outputTokens,
+      costUsd: costForTokens("gemini-2.5-flash", inputTokens, outputTokens),
+      promptType: "concepts",
+    });
     try {
       parsed = JSON.parse(text);
     } catch {

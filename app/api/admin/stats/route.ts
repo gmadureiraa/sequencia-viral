@@ -33,8 +33,21 @@ interface GenerationRow {
 }
 
 interface CarouselRow {
+  id?: string | null;
   user_id: string | null;
   status: string | null;
+  title?: string | null;
+  style?: Record<string, unknown> | null;
+  updated_at?: string | null;
+}
+
+interface FeedbackEntry {
+  carouselId: string;
+  userId: string | null;
+  title: string | null;
+  sentiment: "up" | "down" | null;
+  comment: string;
+  updatedAt: string | null;
 }
 
 interface PaymentRow {
@@ -91,7 +104,11 @@ export async function GET(request: Request) {
           )
           .order("created_at", { ascending: false })
           .limit(1000),
-        sb.from("carousels").select("user_id,status").limit(10000),
+        sb
+          .from("carousels")
+          .select("id,user_id,status,title,style,updated_at")
+          .order("updated_at", { ascending: false })
+          .limit(10000),
         sb
           .from("payments")
           .select(
@@ -276,6 +293,44 @@ export async function GET(request: Request) {
       },
     }));
 
+    // Feedback agregado dos carrosséis (salvo em style.feedback).
+    let feedbackUp = 0;
+    let feedbackDown = 0;
+    const feedbackEntries: FeedbackEntry[] = [];
+    for (const c of carousels) {
+      const fb = (c.style as Record<string, unknown> | null)?.feedback as
+        | Record<string, unknown>
+        | undefined;
+      if (!fb || typeof fb !== "object") continue;
+      const s = fb.sentiment;
+      const sentiment: "up" | "down" | null =
+        s === "up" || s === "down" ? s : null;
+      const comment =
+        typeof fb.comment === "string" ? fb.comment.trim() : "";
+      if (!sentiment && !comment) continue;
+      if (sentiment === "up") feedbackUp += 1;
+      if (sentiment === "down") feedbackDown += 1;
+      feedbackEntries.push({
+        carouselId: String(c.id ?? ""),
+        userId: c.user_id,
+        title: c.title ?? null,
+        sentiment,
+        comment,
+        updatedAt:
+          typeof fb.updated_at === "string"
+            ? fb.updated_at
+            : c.updated_at ?? null,
+      });
+    }
+    feedbackEntries.sort((a, b) => {
+      const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return tb - ta;
+    });
+    const feedbackTotal = feedbackUp + feedbackDown;
+    const feedbackSatisfaction =
+      feedbackTotal > 0 ? Math.round((feedbackUp / feedbackTotal) * 100) : null;
+
     // Assinaturas / MRR — preços de lançamento em USD.
     // (Stripe cobra em USD, cartão BR converte automaticamente.)
     const PRO_PRICE_USD = 9.9; // $/mês
@@ -358,6 +413,13 @@ export async function GET(request: Request) {
       },
       apiHealth,
       apiLastUsed,
+      feedback: {
+        totalWithFeedback: feedbackTotal,
+        up: feedbackUp,
+        down: feedbackDown,
+        satisfactionPct: feedbackSatisfaction,
+        recent: feedbackEntries.slice(0, 50),
+      },
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {

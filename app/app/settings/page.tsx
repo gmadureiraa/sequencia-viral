@@ -51,7 +51,9 @@ const TABS: { id: TabId; label: string; glyph: string }[] = [
   { id: "branding", label: "Branding padrão", glyph: "◆" },
   { id: "social", label: "Redes", glyph: "❋" },
   { id: "voice", label: "Voz IA", glyph: "✦" },
-  { id: "notifications", label: "Notificações", glyph: "●" },
+  // Notificações escondida — ainda não temos sistema real.
+  // Quando houver toggles funcionais (email ou push), reativar.
+  // { id: "notifications", label: "Notificações", glyph: "●" },
   { id: "plan", label: "Plano", glyph: "☆" },
   { id: "security", label: "Segurança", glyph: "▲" },
 ];
@@ -924,35 +926,40 @@ function SettingsPageContent() {
 
               <div className="mt-5">
                 <Label>Nichos e temas</Label>
-                <div className="flex flex-wrap gap-2">
-                  {NICHE_SUGGESTIONS.map((s) => {
-                    const on = niche.includes(s);
-                    return (
-                      <button
-                        key={s}
-                        onClick={() => toggleNiche(s)}
-                        className={`sv-chip ${on ? "sv-chip-on" : ""}`}
+                <p
+                  className="mb-2"
+                  style={{
+                    fontSize: 11.5,
+                    color: "var(--sv-muted)",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Escreve os nichos como quiser. Múltiplos nichos separados por vírgula — exemplo: &quot;marketing B2B, cripto educacional, fotografia de retrato&quot;.
+                </p>
+                <input
+                  type="text"
+                  value={niche.join(", ")}
+                  onChange={(e) => {
+                    const parts = e.target.value
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    setNiche(parts.slice(0, 8));
+                  }}
+                  className="sv-input w-full"
+                  placeholder="marketing B2B, saúde preventiva, design editorial..."
+                />
+                {niche.length > 0 && (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {niche.map((n) => (
+                      <span
+                        key={n}
+                        className="sv-chip sv-chip-on"
+                        style={{ cursor: "default" }}
                       >
-                        {on ? "✓ " : "+ "}
-                        {s}
-                      </button>
-                    );
-                  })}
-                </div>
-                {niche.filter((n) => !NICHE_SUGGESTIONS.includes(n)).length >
-                  0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {niche
-                      .filter((n) => !NICHE_SUGGESTIONS.includes(n))
-                      .map((n) => (
-                        <button
-                          key={n}
-                          onClick={() => toggleNiche(n)}
-                          className="sv-chip sv-chip-on"
-                        >
-                          {n} <X size={10} />
-                        </button>
-                      ))}
+                        {n}
+                      </span>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1026,39 +1033,9 @@ function SettingsPageContent() {
                 </p>
               </div>
 
-              <div className="mt-6">
-                <Label>Cor de destaque padrão</Label>
-                <div className="flex flex-wrap gap-3">
-                  {ACCENT_SWATCHES.map((sw) => {
-                    const on = accentColor === sw.value;
-                    return (
-                      <button
-                        key={sw.value}
-                        type="button"
-                        onClick={() => setAccentColor(sw.value)}
-                        className="relative flex h-12 w-12 items-center justify-center transition-all"
-                        title={sw.name}
-                        style={{
-                          background: sw.value,
-                          border: "1.5px solid var(--sv-ink)",
-                          boxShadow: on ? "4px 4px 0 0 var(--sv-ink)" : "none",
-                        }}
-                      >
-                        {on && (
-                          <Check
-                            size={16}
-                            strokeWidth={3}
-                            color={
-                              sw.value === "#0A0A0A" ? "#F7F5EF" : "#0A0A0A"
-                            }
-                          />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
+              {/* "Cor de destaque padrão" foi consolidada na Paleta da marca
+                  abaixo — user adiciona as cores dele e clique na cor existente
+                  remove. Sem default imposto. */}
               <div className="mt-6">
                 <Label>Paleta da sua marca</Label>
                 <p
@@ -1765,35 +1742,40 @@ function SettingsPageContent() {
               <hr className="sv-divider my-8" />
 
               <Label>Nichos e temas</Label>
-              <div className="flex flex-wrap gap-2">
-                {NICHE_SUGGESTIONS.map((s) => {
-                  const on = niche.includes(s);
-                  return (
-                    <button
-                      key={s}
-                      onClick={() => toggleNiche(s)}
-                      className={`sv-chip ${on ? "sv-chip-on" : ""}`}
+              <p
+                className="mb-2"
+                style={{
+                  fontSize: 11.5,
+                  color: "var(--sv-muted)",
+                  lineHeight: 1.5,
+                }}
+              >
+                Campo livre. Separe múltiplos nichos com vírgula.
+              </p>
+              <input
+                type="text"
+                value={niche.join(", ")}
+                onChange={(e) => {
+                  const parts = e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                  setNiche(parts.slice(0, 8));
+                }}
+                className="sv-input w-full"
+                placeholder="marketing B2B, saúde preventiva, design editorial..."
+              />
+              {niche.length > 0 && (
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  {niche.map((n) => (
+                    <span
+                      key={n}
+                      className="sv-chip sv-chip-on"
+                      style={{ cursor: "default" }}
                     >
-                      {on ? "✓ " : "+ "}
-                      {s}
-                    </button>
-                  );
-                })}
-              </div>
-              {niche.filter((n) => !NICHE_SUGGESTIONS.includes(n)).length >
-                0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {niche
-                    .filter((n) => !NICHE_SUGGESTIONS.includes(n))
-                    .map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => toggleNiche(n)}
-                        className="sv-chip sv-chip-on"
-                      >
-                        {n} <X size={10} />
-                      </button>
-                    ))}
+                      {n}
+                    </span>
+                  ))}
                 </div>
               )}
 

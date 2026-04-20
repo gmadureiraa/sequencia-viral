@@ -235,10 +235,38 @@ function PhoneMockup() {
   );
 }
 
-export function Hero() {
+export interface HeroProps {
+  /** Texto do eyebrow (topo). Default: "YouTube · Reels · Blog · Ideia". */
+  eyebrow?: string;
+  /** H1 custom — se passado, sobrescreve o 3-linhas default. Aceita ReactNode. */
+  h1?: React.ReactNode;
+  /** Parágrafo de descrição. Aceita ReactNode. */
+  subtitle?: React.ReactNode;
+  /** Label do CTA principal quando user não logado. Default: "Criar primeiro grátis". */
+  primaryCtaLabel?: string;
+  /** Badge decorativo topo-direito. Default: "✦ Em 15 seg". */
+  topBadge?: string;
+  /** Badge decorativo canto-esquerdo-baixo. Default: "Seu conteúdo · seu ritmo". */
+  bottomBadge?: string;
+  /** 3 itens de trust pills (abaixo dos CTAs). */
+  trustPills?: [string, string, string];
+}
+
+export function Hero(props: HeroProps = {}) {
+  const {
+    eyebrow = "YouTube · Reels · Blog · Ideia",
+    h1,
+    subtitle,
+    primaryCtaLabel,
+    topBadge = "✦ Em 15 seg",
+    bottomBadge = "Seu conteúdo · seu ritmo",
+    trustPills,
+  } = props;
   const { isLoggedIn } = useLandingSession();
   const primaryHref = isLoggedIn ? "/app" : "/app/login";
-  const primaryLabel = isLoggedIn ? "Ir pro app →" : "Criar primeiro grátis";
+  const primaryLabel = isLoggedIn
+    ? "Ir pro app →"
+    : primaryCtaLabel || "Criar primeiro grátis";
 
   return (
     <header
@@ -266,7 +294,7 @@ export function Hero() {
         <motion.div {...REVEAL}>
           <span className="sv-eyebrow">
             <span className="sv-dot" />
-            YouTube · Reels · Blog · Ideia
+            {eyebrow}
           </span>
 
           <h1
@@ -278,13 +306,17 @@ export function Hero() {
               fontWeight: 400,
             }}
           >
-            <span className="block">Cole um link.</span>
-            <span className="block">
-              Publique um <span className="sv-splash">carrossel</span>
-            </span>
-            <span className="block">
-              em <span className="sv-under">minutos</span>.
-            </span>
+            {h1 ?? (
+              <>
+                <span className="block">Cole um link.</span>
+                <span className="block">
+                  Publique um <span className="sv-splash">carrossel</span>
+                </span>
+                <span className="block">
+                  em <span className="sv-under">minutos</span>.
+                </span>
+              </>
+            )}
           </h1>
 
           <p
@@ -296,14 +328,18 @@ export function Hero() {
               maxWidth: 460,
             }}
           >
-            A IA lê sua fonte e devolve um carrossel editorial{" "}
-            <b style={{ color: "var(--sv-ink)", fontWeight: 600 }}>com a sua voz</b>
-            , com imagens contextuais na sua estética. Não é ChatGPT
-            cheiroso — é uma ferramenta que entende que{" "}
-            <b style={{ color: "var(--sv-ink)", fontWeight: 600 }}>
-              você já tem algo a dizer
-            </b>
-            .
+            {subtitle ?? (
+              <>
+                A IA lê sua fonte e devolve um carrossel editorial{" "}
+                <b style={{ color: "var(--sv-ink)", fontWeight: 600 }}>com a sua voz</b>
+                , com imagens contextuais na sua estética. Não é ChatGPT
+                cheiroso — é uma ferramenta que entende que{" "}
+                <b style={{ color: "var(--sv-ink)", fontWeight: 600 }}>
+                  você já tem algo a dizer
+                </b>
+                .
+              </>
+            )}
           </p>
 
           <div className="mt-6 flex flex-wrap gap-[10px]">
@@ -334,18 +370,14 @@ export function Hero() {
               color: "var(--sv-muted)",
             }}
           >
-            <span>
-              <span style={{ color: "var(--sv-pink)", marginRight: 4 }}>✦</span>
-              Sem cartão
-            </span>
-            <span>
-              <span style={{ color: "var(--sv-pink)", marginRight: 4 }}>✦</span>
-              5 carrosséis grátis
-            </span>
-            <span>
-              <span style={{ color: "var(--sv-pink)", marginRight: 4 }}>✦</span>
-              Pronto pra postar
-            </span>
+            {(trustPills ?? ["Sem cartão", "5 carrosséis grátis", "Pronto pra postar"]).map(
+              (pill, i) => (
+                <span key={i}>
+                  <span style={{ color: "var(--sv-pink)", marginRight: 4 }}>✦</span>
+                  {pill}
+                </span>
+              )
+            )}
           </div>
         </motion.div>
 
@@ -493,7 +525,7 @@ export function Hero() {
               } as React.CSSProperties
             }
           >
-            ✦ Em 15 seg
+            {topBadge}
           </span>
           <span
             className="sv-anim-float absolute"
@@ -516,7 +548,7 @@ export function Hero() {
               } as React.CSSProperties
             }
           >
-            Seu conteúdo · seu ritmo
+            {bottomBadge}
           </span>
         </motion.div>
       </div>

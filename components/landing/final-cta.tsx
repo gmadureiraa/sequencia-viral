@@ -5,10 +5,25 @@ import { motion } from "framer-motion";
 import { useLandingSession } from "@/lib/use-landing-session";
 import { BASE_ASSET } from "./shared";
 
-export function FinalCTA() {
+export interface FinalCTAProps {
+  eyebrow?: string;
+  heading?: React.ReactNode;
+  subtitle?: React.ReactNode;
+  primaryCtaLabel?: string;
+}
+
+export function FinalCTA(props: FinalCTAProps = {}) {
+  const {
+    eyebrow = "Pronto pro primeiro post?",
+    heading,
+    subtitle,
+    primaryCtaLabel,
+  } = props;
   const { isLoggedIn } = useLandingSession();
   const primaryHref = isLoggedIn ? "/app" : "/app/login";
-  const primaryLabel = isLoggedIn ? "Ir pro app →" : "Criar carrossel grátis →";
+  const primaryLabel = isLoggedIn
+    ? "Ir pro app →"
+    : primaryCtaLabel || "Criar carrossel grátis →";
 
   return (
     <section
@@ -102,7 +117,7 @@ export function FinalCTA() {
               animation: "sv-pulse 1.5s infinite",
             }}
           />
-          Pronto pro primeiro post?
+          {eyebrow}
         </motion.span>
         <motion.h2
           className="relative mt-5"
@@ -118,9 +133,13 @@ export function FinalCTA() {
             fontWeight: 400,
           }}
         >
-          Seu primeiro carrossel
-          <br />
-          <em style={{ color: "var(--sv-green)" }}>em 30 segundos.</em>
+          {heading ?? (
+            <>
+              Seu primeiro carrossel
+              <br />
+              <em style={{ color: "var(--sv-green)" }}>em 30 segundos.</em>
+            </>
+          )}
         </motion.h2>
         <motion.p
           className="relative"
@@ -135,7 +154,7 @@ export function FinalCTA() {
             color: "rgba(245,243,236,.7)",
           }}
         >
-          Cole um link, um texto ou uma ideia. A IA faz o resto, com a sua voz.
+          {subtitle ?? "Cole um link, um texto ou uma ideia. A IA faz o resto, com a sua voz."}
         </motion.p>
         <motion.div
           className="relative mt-7 flex flex-wrap justify-center gap-[10px]"

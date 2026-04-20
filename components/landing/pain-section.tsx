@@ -46,7 +46,21 @@ const PAINS: { tag: string; title: React.ReactNode; body: string; cross: string 
   },
 ];
 
-export function PainSection() {
+export interface PainSectionProps {
+  /** Sub do SectionHead. Default: "A dor antes da cura". */
+  sub?: string;
+  /** Tag do SectionHead. Default: "Familiar?". */
+  tag?: string;
+  /** Título principal. Aceita ReactNode. */
+  heading?: React.ReactNode;
+}
+
+export function PainSection(props: PainSectionProps = {}) {
+  const {
+    sub = "A dor antes da cura",
+    tag = "Familiar?",
+    heading,
+  } = props;
   return (
     <section
       id="dor"
@@ -58,9 +72,15 @@ export function PainSection() {
       }}
     >
       <div className="mx-auto max-w-[1240px] px-6">
-        <SectionHead num="00" sub="A dor antes da cura" tag="Familiar?">
-          Você tem <em>ideia</em>.{" "}
-          <span style={{ color: "var(--sv-muted)" }}>O que falta é tempo pra virar post.</span>
+        <SectionHead num="00" sub={sub} tag={tag}>
+          {heading ?? (
+            <>
+              Você tem <em>ideia</em>.{" "}
+              <span style={{ color: "var(--sv-muted)" }}>
+                O que falta é tempo pra virar post.
+              </span>
+            </>
+          )}
         </SectionHead>
 
         <div

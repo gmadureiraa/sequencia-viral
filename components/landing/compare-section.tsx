@@ -16,23 +16,43 @@ function thStyle(): React.CSSProperties {
   };
 }
 
-export function CompareSection() {
-  const rows = [
-    ["Tempo por carrossel", "~ 15 segundos", "45–60 min", "20 min + edição", "2–3 horas"],
-    ["Transcreve YouTube", "✦ Automático", "—", "Copia/cola", "Manual"],
-    ["Usa o seu tom", "✦ Voz configurável", "—", "Com prompt", "✓"],
-    ["Referências visuais", "✦ 3 imagens da marca", "Manual", "—", "Manual"],
-    ["Imagem por slide", "✦ Contextual por IA", "Stock photo", "—", "Manual"],
-    ["Export pronto pra postar", "✦ 1 clique", "Manual", "—", "Manual"],
-    ["Preview real (WYSIWYG)", "✦ Sim", "✓", "—", "✓"],
-    ["Preço (pra postar todo dia)", "$9.90/mês", "$15/mês", "$20/mês", "Seu tempo"],
-  ];
+export interface CompareSectionProps {
+  sub?: string;
+  tag?: string;
+  heading?: React.ReactNode;
+  columns?: [string, string, string, string];
+  rows?: string[][];
+}
+
+const DEFAULT_ROWS: string[][] = [
+  ["Tempo por carrossel", "~ 15 segundos", "45–60 min", "20 min + edição", "2–3 horas"],
+  ["Transcreve YouTube", "✦ Automático", "—", "Copia/cola", "Manual"],
+  ["Usa o seu tom", "✦ Voz configurável", "—", "Com prompt", "✓"],
+  ["Referências visuais", "✦ 3 imagens da marca", "Manual", "—", "Manual"],
+  ["Imagem por slide", "✦ Contextual por IA", "Stock photo", "—", "Manual"],
+  ["Export pronto pra postar", "✦ 1 clique", "Manual", "—", "Manual"],
+  ["Preview real (WYSIWYG)", "✦ Sim", "✓", "—", "✓"],
+  ["Preço (pra postar todo dia)", "$9.90/mês", "$15/mês", "$20/mês", "Seu tempo"],
+];
+
+export function CompareSection(props: CompareSectionProps = {}) {
+  const {
+    sub = "Sem vs Com",
+    tag = "Honesto",
+    heading,
+    columns = ["Sequência Viral", "Canva", "ChatGPT", "Manual"],
+    rows = DEFAULT_ROWS,
+  } = props;
 
   return (
     <section id="compare" style={{ padding: "0 0 96px" }}>
       <div className="mx-auto max-w-[1240px] px-6">
-        <SectionHead num="05" sub="Sem vs Com" tag="Honesto">
-          Sem Sequência Viral. <em>Com.</em>
+        <SectionHead num="05" sub={sub} tag={tag}>
+          {heading ?? (
+            <>
+              Sem Sequência Viral. <em>Com.</em>
+            </>
+          )}
         </SectionHead>
 
         <motion.div
@@ -54,11 +74,11 @@ export function CompareSection() {
                     background: "var(--sv-green)",
                   }}
                 >
-                  <em>Sequência Viral</em>
+                  <em>{columns[0]}</em>
                 </th>
-                <th style={thStyle()}>Canva</th>
-                <th style={thStyle()}>ChatGPT</th>
-                <th style={thStyle()}>Manual</th>
+                <th style={thStyle()}>{columns[1]}</th>
+                <th style={thStyle()}>{columns[2]}</th>
+                <th style={thStyle()}>{columns[3]}</th>
               </tr>
             </thead>
             <tbody>

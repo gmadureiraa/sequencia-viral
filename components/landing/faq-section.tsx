@@ -4,7 +4,12 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { SectionHead } from "./shared";
 
-const FAQ_ITEMS: { q: React.ReactNode; a: React.ReactNode }[] = [
+export interface FAQItem {
+  q: React.ReactNode;
+  a: React.ReactNode;
+}
+
+const DEFAULT_FAQ_ITEMS: FAQItem[] = [
   {
     q: (
       <>
@@ -86,14 +91,32 @@ const FAQ_ITEMS: { q: React.ReactNode; a: React.ReactNode }[] = [
   },
 ];
 
-export function FAQSection() {
+export interface FAQSectionProps {
+  sub?: string;
+  tag?: string;
+  heading?: React.ReactNode;
+  items?: FAQItem[];
+}
+
+export function FAQSection(props: FAQSectionProps = {}) {
+  const {
+    sub = "FAQ",
+    tag = "Respostas rápidas",
+    heading,
+    items = DEFAULT_FAQ_ITEMS,
+  } = props;
+  const FAQ_ITEMS = items;
   const [openIdx, setOpenIdx] = useState(0);
 
   return (
     <section id="faq" style={{ padding: "0 0 96px" }}>
       <div className="mx-auto max-w-[1240px] px-6">
-        <SectionHead num="10" sub="FAQ" tag="Respostas rápidas">
-          Perguntas <em>antes</em> de pagar.
+        <SectionHead num="10" sub={sub} tag={tag}>
+          {heading ?? (
+            <>
+              Perguntas <em>antes</em> de pagar.
+            </>
+          )}
         </SectionHead>
 
         <div

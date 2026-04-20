@@ -87,46 +87,63 @@ export async function GET(request: Request) {
       );
     }
 
-    // Busca paralela.
-    const [profilesRes, generationsRes, carouselsRes, paymentsRes] =
-      await Promise.all([
-        sb
-          .from("profiles")
-          .select(
-            "id,email,name,plan,usage_count,usage_limit,onboarding_completed,created_at,instagram_handle,twitter_handle,stripe_customer_id,stripe_subscription_id"
-          )
-          .order("created_at", { ascending: false })
-          .limit(500),
-        sb
-          .from("generations")
-          .select(
-            "id,user_id,model,provider,input_tokens,output_tokens,cost_usd,prompt_type,created_at"
-          )
-          .order("created_at", { ascending: false })
-          .limit(1000),
-        sb
-          .from("carousels")
-          .select("id,user_id,status,title,style,updated_at")
-          .order("updated_at", { ascending: false })
-          .limit(10000),
-        sb
-          .from("payments")
-          .select(
-            "id,user_id,amount_usd,currency,method,status,plan,period_start,period_end,created_at"
-          )
-          .order("created_at", { ascending: false })
-          .limit(500),
-      ]);
+    // Busca paralela. `Promise.allSettled` + tolerância por query: se uma
+    // tabela vier com erro (RLS policy mudou, coluna removida, timeout
+    // pontual), o endpoint devolve stats parciais com `queryErrors`
+    // anexado em vez de 500 matar o painel inteiro.
+    const queries = await Promise.allSettled([
+      sb
+        .from("profiles")
+        .select(
+          "id,email,name,plan,usage_count,usage_limit,onboarding_completed,created_at,instagram_handle,twitter_handle,stripe_customer_id,stripe_subscription_id"
+        )
+        .order("created_at", { ascending: false })
+        .limit(500),
+      sb
+        .from("generations")
+        .select(
+          "id,user_id,model,provider,input_tokens,output_tokens,cost_usd,prompt_type,created_at"
+        )
+        .order("created_at", { ascending: false })
+        .limit(1000),
+      sb
+        .from("carousels")
+        .select("id,user_id,status,title,style,updated_at")
+        .order("updated_at", { ascending: false })
+        .limit(10000),
+      sb
+        .from("payments")
+        .select(
+          "id,user_id,amount_usd,currency,method,status,plan,period_start,period_end,created_at"
+        )
+        .order("created_at", { ascending: false })
+        .limit(500),
+    ]);
 
-    if (profilesRes.error) throw profilesRes.error;
-    if (generationsRes.error) throw generationsRes.error;
-    if (carouselsRes.error) throw carouselsRes.error;
-    if (paymentsRes.error) throw paymentsRes.error;
+    const queryErrors: Record<string, string> = {};
+    const names = ["profiles", "generations", "carousels", "payments"] as const;
 
-    const profiles = (profilesRes.data ?? []) as UserRow[];
-    const generations = (generationsRes.data ?? []) as GenerationRow[];
-    const carousels = (carouselsRes.data ?? []) as CarouselRow[];
-    const payments = (paymentsRes.data ?? []) as PaymentRow[];
+    function pickData<T>(idx: number, label: (typeof names)[number]): T[] {
+      const r = queries[idx];
+      if (r.status === "rejected") {
+        const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        console.error(`[admin/stats] query ${label} rejected:`, msg);
+        queryErrors[label] = msg.slice(0, 200);
+        return [];
+      }
+      const res = r.value as { data: T[] | null; error: { message: string } | null };
+      if (res.error) {
+        console.error(`[admin/stats] query ${label} error:`, res.error.message);
+        queryErrors[label] = res.error.message.slice(0, 200);
+        return [];
+      }
+      return res.data ?? [];
+    }
+
+    const profiles = pickData<UserRow>(0, "profiles");
+    const generations = pickData<GenerationRow>(1, "generations");
+    const carousels = pickData<CarouselRow>(2, "carousels");
+    const payments = pickData<PaymentRow>(3, "payments");
 
     // Totais globais
     const totalUsers = profiles.length;
@@ -420,6 +437,7 @@ export async function GET(request: Request) {
         satisfactionPct: feedbackSatisfaction,
         recent: feedbackEntries.slice(0, 50),
       },
+      queryErrors: Object.keys(queryErrors).length > 0 ? queryErrors : undefined,
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {

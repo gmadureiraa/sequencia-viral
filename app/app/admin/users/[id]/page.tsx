@@ -138,21 +138,25 @@ export default function AdminUserDetailPage(props: {
 }) {
   const { id } = use(props.params);
   const router = useRouter();
-  const { profile: me, session, loading } = useAuth();
+  const { user, profile: me, session, loading } = useAuth();
   const [data, setData] = useState<UserDetail | null>(null);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Gate: usar user.email (Supabase auth) como fonte principal — profile
+  // pode falhar de carregar. Mesma estratégia do /app/admin root.
   const isAdmin = useMemo(() => {
-    const email = me?.email?.toLowerCase().trim();
+    const email =
+      user?.email?.toLowerCase().trim() ||
+      me?.email?.toLowerCase().trim();
     return email ? ADMIN_EMAILS.includes(email) : false;
-  }, [me]);
+  }, [user, me]);
 
   useEffect(() => {
     if (loading) return;
-    if (!me) return;
+    if (!user) return;
     if (!isAdmin) router.replace("/app");
-  }, [loading, me, isAdmin, router]);
+  }, [loading, user, isAdmin, router]);
 
   const load = useCallback(async () => {
     if (!session || !id) return;
@@ -163,21 +167,54 @@ export default function AdminUserDetailPage(props: {
         method: "GET",
         headers: jsonWithAuth(session),
       });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error || "Falha ao carregar");
+      // Parse defensivo: servidor pode retornar HTML em erro fatal.
+      const text = await res.text();
+      let payload: { error?: string } & Partial<UserDetail> = {};
+      try {
+        payload = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error(
+          `Resposta inválida do servidor (HTTP ${res.status}). ${text.slice(0, 120)}`
+        );
+      }
+      if (!res.ok) throw new Error(payload.error || `Falha ao carregar (HTTP ${res.status})`);
       setData(payload as UserDetail);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao carregar");
+      const msg = e instanceof Error ? e.message : "Erro ao carregar";
+      console.error("[admin/user-detail] load falhou:", msg);
+      setError(msg);
     } finally {
       setFetching(false);
     }
   }, [session, id]);
 
   useEffect(() => {
-    if (isAdmin) void load();
-  }, [isAdmin, load]);
+    if (isAdmin && session) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, session?.access_token, id]);
 
-  if (!isAdmin && !loading) return null;
+  // Loading / aguardando auth — evita flash de null (tela 100% branca).
+  if (loading || (!user && !me)) {
+    return (
+      <div className="py-20 text-center">
+        <Loader2
+          size={20}
+          className="animate-spin inline-block"
+          style={{ color: "var(--sv-ink)" }}
+        />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="mx-auto max-w-[600px] py-12">
+        <p style={{ fontFamily: "var(--sv-mono)", color: "var(--sv-muted)" }}>
+          Sem acesso.
+        </p>
+      </div>
+    );
+  }
 
   if (fetching && !data) {
     return (

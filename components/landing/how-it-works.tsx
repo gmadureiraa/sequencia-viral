@@ -3,47 +3,72 @@
 import { motion } from "framer-motion";
 import { BASE_ASSET, REVEAL, SectionHead } from "./shared";
 
-export function HowItWorks() {
-  const steps = [
-    {
-      n: "01",
-      img: "hero-ear.png",
-      title: (
-        <>
-          <em>Cole</em> a fonte.
-        </>
-      ),
-      body: "Link de YouTube, artigo de blog, post do Instagram, PDF ou só uma ideia em uma frase. A IA escuta e entende.",
-    },
-    {
-      n: "02",
-      img: "step-typewriter.png",
-      title: (
-        <>
-          A IA <em>pensa</em>.
-        </>
-      ),
-      body: "Cinco conceitos primeiro pra você escolher o ângulo. Depois, três carrosséis completos: dados, narrativa e provocação.",
-    },
-    {
-      n: "03",
-      img: "hero-megaphone.png",
-      title: (
-        <>
-          Edite. Exporte. <em>Poste</em>.
-        </>
-      ),
-      body: "Ajuste texto e imagem inline. Exporta PNG 1080×1350 pixel-perfect. Abre no celular, posta. Acabou.",
-    },
-  ];
+export interface HowItWorksStep {
+  n: string;
+  img: string;
+  title: React.ReactNode;
+  body: React.ReactNode;
+}
+
+export interface HowItWorksProps {
+  sub?: string;
+  tag?: string;
+  heading?: React.ReactNode;
+  steps?: HowItWorksStep[];
+}
+
+const DEFAULT_STEPS: HowItWorksStep[] = [
+  {
+    n: "01",
+    img: "hero-ear.png",
+    title: (
+      <>
+        <em>Cole</em> a fonte.
+      </>
+    ),
+    body: "Link de YouTube, artigo de blog, post do Instagram, PDF ou só uma ideia em uma frase. A IA escuta e entende.",
+  },
+  {
+    n: "02",
+    img: "step-typewriter.png",
+    title: (
+      <>
+        A IA <em>pensa</em>.
+      </>
+    ),
+    body: "Cinco conceitos primeiro pra você escolher o ângulo. Depois, três carrosséis completos: dados, narrativa e provocação.",
+  },
+  {
+    n: "03",
+    img: "hero-megaphone.png",
+    title: (
+      <>
+        Edite. Exporte. <em>Poste</em>.
+      </>
+    ),
+    body: "Ajuste texto e imagem inline. Exporta PNG 1080×1350 pixel-perfect. Abre no celular, posta. Acabou.",
+  },
+];
+
+export function HowItWorks(props: HowItWorksProps = {}) {
+  const {
+    sub = "Como funciona",
+    tag = "Manual",
+    heading,
+    steps = DEFAULT_STEPS,
+  } = props;
 
   return (
     <section id="como" style={{ padding: "96px 0" }}>
       <div className="mx-auto max-w-[1240px] px-6">
-        <SectionHead num="01" sub="Como funciona" tag="Manual">
-          Três passos.{" "}
-          <span style={{ color: "var(--sv-muted)" }}>Nenhum deles envolve</span>{" "}
-          <em>editar no Canva</em>.
+        <SectionHead num="01" sub={sub} tag={tag}>
+          {heading ?? (
+            <>
+              Três passos.{" "}
+              <span style={{ color: "var(--sv-muted)" }}>Nenhum deles envolve</span>{" "}
+              <em>editar no Canva</em>.
+            </>
+          )}
         </SectionHead>
 
         <style>{`

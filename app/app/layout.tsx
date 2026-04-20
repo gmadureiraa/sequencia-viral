@@ -450,6 +450,13 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const authenticated = !!(user && session?.access_token);
   const isLoginPage = pathname === "/app/login";
   const isOnboardingPage = pathname === "/app/onboarding";
+  // Admin bypass: rotas /app/admin/* não podem ser bloqueadas pelo gate
+  // de onboarding — o admin precisa entrar mesmo antes de preencher
+  // onboarding pessoal (ou depois, sem ser redirecionado pra wizard).
+  const isAdminArea = pathname.startsWith("/app/admin");
+  const userEmail = user?.email?.toLowerCase().trim();
+  const isAdmin =
+    !!userEmail && ADMIN_EMAILS.includes(userEmail);
 
   useEffect(() => {
     if (loading) return;
@@ -460,6 +467,9 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
       }
       return;
     }
+
+    // Admin acessando /app/admin nunca é forçado pra onboarding.
+    if (isAdminArea && isAdmin) return;
 
     if (
       profile &&
@@ -477,6 +487,8 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
     router,
     isLoginPage,
     isOnboardingPage,
+    isAdminArea,
+    isAdmin,
   ]);
 
   if (loading && !isLoginPage) {

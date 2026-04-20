@@ -3,14 +3,16 @@
 import { motion } from "framer-motion";
 import { REVEAL, SectionHead } from "./shared";
 
-const TWEETS: {
+export interface TestimonialTweet {
   av: string;
   avClass: "" | "pink" | "ink";
   name: string;
   handle: string;
   role: string;
   body: React.ReactNode;
-}[] = [
+}
+
+const DEFAULT_TWEETS: TestimonialTweet[] = [
   {
     av: "A",
     avClass: "",
@@ -64,15 +66,35 @@ const TWEETS: {
   },
 ];
 
-export function TestimonialsSection() {
+export interface TestimonialsSectionProps {
+  sub?: string;
+  tag?: string;
+  heading?: React.ReactNode;
+  tweets?: TestimonialTweet[];
+  noticeLabel?: string;
+}
+
+export function TestimonialsSection(props: TestimonialsSectionProps = {}) {
+  const {
+    sub = "Quem já usa",
+    tag = "Creators",
+    heading,
+    tweets = DEFAULT_TWEETS,
+    noticeLabel = "Exemplos ilustrativos · depoimentos reais chegam em breve",
+  } = props;
+  const TWEETS = tweets;
   return (
     <section style={{ padding: "0 0 96px" }}>
       <div className="mx-auto max-w-[1240px] px-6">
-        <SectionHead num="09" sub="Quem já usa" tag="Creators">
-          Criador posta <em>mais</em>.{" "}
-          <span style={{ color: "var(--sv-muted)" }}>
-            Porque parou de brigar com Canva.
-          </span>
+        <SectionHead num="09" sub={sub} tag={tag}>
+          {heading ?? (
+            <>
+              Criador posta <em>mais</em>.{" "}
+              <span style={{ color: "var(--sv-muted)" }}>
+                Porque parou de brigar com Canva.
+              </span>
+            </>
+          )}
         </SectionHead>
 
         <div
@@ -98,7 +120,7 @@ export function TestimonialsSection() {
               animation: "sv-pulse 1.3s infinite",
             }}
           />
-          Exemplos ilustrativos · depoimentos reais chegam em breve
+          {noticeLabel}
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

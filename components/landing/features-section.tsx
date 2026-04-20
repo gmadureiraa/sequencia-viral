@@ -173,13 +173,74 @@ function ExportRow({
   );
 }
 
-export function FeaturesSection() {
+export interface FeaturesSectionProps {
+  sub?: string;
+  tag?: string;
+  heading?: React.ReactNode;
+  /** Card grande (c-7) — preview real. */
+  bigCard?: {
+    kicker?: React.ReactNode;
+    title?: React.ReactNode;
+    body?: React.ReactNode;
+    slideHeadline?: React.ReactNode;
+    slideHandle?: string;
+    slideMeta?: string;
+  };
+  /** Card de referências visuais (c-5). */
+  aestheticCard?: {
+    badge?: string;
+    kicker?: React.ReactNode;
+    title?: React.ReactNode;
+    body?: React.ReactNode;
+    footer?: React.ReactNode;
+  };
+  /** Card de brand voice (c-4). */
+  voiceCard?: {
+    kicker?: React.ReactNode;
+    title?: React.ReactNode;
+    body?: React.ReactNode;
+    inputTitle?: string;
+    inputBody?: string;
+    outputTitle?: string;
+    outputBody?: string;
+  };
+  /** Card variantes/editor (c-4). */
+  editorCard?: {
+    kicker?: React.ReactNode;
+    title?: React.ReactNode;
+    body?: React.ReactNode;
+  };
+  /** Card imagem contextual (c-4). */
+  imageCard?: {
+    kicker?: React.ReactNode;
+    title?: React.ReactNode;
+    body?: React.ReactNode;
+  };
+}
+
+export function FeaturesSection(props: FeaturesSectionProps = {}) {
+  const {
+    sub = "Features",
+    tag = "Produto",
+    heading,
+    bigCard,
+    aestheticCard,
+    voiceCard,
+    editorCard,
+    imageCard,
+  } = props;
   return (
     <section id="features" style={{ padding: "96px 0" }}>
       <div className="mx-auto max-w-[1240px] px-6">
-        <SectionHead num="03" sub="Features" tag="Produto">
-          Engenharia de <em>voz</em>,{" "}
-          <span style={{ color: "var(--sv-muted)" }}>não preenchimento de template.</span>
+        <SectionHead num="03" sub={sub} tag={tag}>
+          {heading ?? (
+            <>
+              Engenharia de <em>voz</em>,{" "}
+              <span style={{ color: "var(--sv-muted)" }}>
+                não preenchimento de template.
+              </span>
+            </>
+          )}
         </SectionHead>
 
         <div
@@ -206,14 +267,22 @@ export function FeaturesSection() {
               style={{ padding: 28 }}
             >
               <div>
-                <FeatKicker>Preview real</FeatKicker>
+                <FeatKicker>{bigCard?.kicker ?? "Preview real"}</FeatKicker>
                 <FeatTitle>
-                  O slide que você vê
-                  <br />é o slide que <em>sai</em>.
+                  {bigCard?.title ?? (
+                    <>
+                      O slide que você vê
+                      <br />é o slide que <em>sai</em>.
+                    </>
+                  )}
                 </FeatTitle>
                 <p style={{ color: "var(--sv-ink)", opacity: 0.75, fontSize: 13.5, lineHeight: 1.55 }}>
-                  Tipografia, cores e formato exatos. Sem surpresa no export. Sem
-                  &quot;quase igual&quot;.
+                  {bigCard?.body ?? (
+                    <>
+                      Tipografia, cores e formato exatos. Sem surpresa no export. Sem
+                      &quot;quase igual&quot;.
+                    </>
+                  )}
                 </p>
               </div>
               <div className="mt-5 flex gap-1">
@@ -257,7 +326,7 @@ export function FeaturesSection() {
                   "repeating-linear-gradient(45deg, transparent 0 20px, rgba(124,240,103,.06) 20px 22px)",
               }}
             >
-              <FeatMeta>Slide 01 / 04</FeatMeta>
+              <FeatMeta>{bigCard?.slideMeta ?? "Slide 01 / 04"}</FeatMeta>
               <h4
                 className="sv-display"
                 style={{
@@ -267,10 +336,14 @@ export function FeaturesSection() {
                   lineHeight: 1.05,
                 }}
               >
-                O algoritmo premia consistência,{" "}
-                <em style={{ color: "var(--sv-green)" }}>não genialidade.</em>
+                {bigCard?.slideHeadline ?? (
+                  <>
+                    O algoritmo premia consistência,{" "}
+                    <em style={{ color: "var(--sv-green)" }}>não genialidade.</em>
+                  </>
+                )}
               </h4>
-              <FeatMeta>@sequencia-viral</FeatMeta>
+              <FeatMeta>{bigCard?.slideHandle ?? "@sequencia-viral"}</FeatMeta>
             </div>
           </motion.div>
 
@@ -295,14 +368,22 @@ export function FeaturesSection() {
                 boxShadow: "2px 2px 0 0 var(--sv-ink)",
               }}
             >
-              Novo
+              {aestheticCard?.badge ?? "Novo"}
             </span>
-            <FeatKicker>DNA visual da sua marca</FeatKicker>
+            <FeatKicker>{aestheticCard?.kicker ?? "DNA visual da sua marca"}</FeatKicker>
             <FeatTitle>
-              Sua <em>estética</em> virou prompt.
+              {aestheticCard?.title ?? (
+                <>
+                  Sua <em>estética</em> virou prompt.
+                </>
+              )}
             </FeatTitle>
             <FeatBody>
-              Cola 3 imagens de referência. A IA destila paleta, iluminação, textura e mood — e replica em TODA imagem gerada. Seu feed para de parecer genérico.
+              {aestheticCard?.body ?? (
+                <>
+                  Cola 3 imagens de referência. A IA destila paleta, iluminação, textura e mood — e replica em TODA imagem gerada. Seu feed para de parecer genérico.
+                </>
+              )}
             </FeatBody>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {[
@@ -336,7 +417,7 @@ export function FeaturesSection() {
                 color: "var(--sv-pink)",
               }}
             >
-              ↓ Aplicado em todo slide
+              {aestheticCard?.footer ?? "↓ Aplicado em todo slide"}
             </div>
           </motion.div>
 
@@ -346,16 +427,27 @@ export function FeaturesSection() {
             className="sv-card sv-feat"
             style={{ gridColumn: "span 4" }}
           >
-            <FeatKicker>Voz da IA</FeatKicker>
+            <FeatKicker>{voiceCard?.kicker ?? "Voz da IA"}</FeatKicker>
             <FeatTitle>
-              O tom é <em>seu</em>,<br />
-              não do ChatGPT.
+              {voiceCard?.title ?? (
+                <>
+                  O tom é <em>seu</em>,<br />
+                  não do ChatGPT.
+                </>
+              )}
             </FeatTitle>
             <FeatBody>
-              Configure pilares, audiência, tabus, exemplos de posts. A IA escreve dentro dessas regras.
+              {voiceCard?.body ?? (
+                <>
+                  Configure pilares, audiência, tabus, exemplos de posts. A IA escreve dentro dessas regras.
+                </>
+              )}
             </FeatBody>
             <div className="mt-4 flex flex-col gap-2">
-              <VoiceBox title="Entrada" body="@meuperfil · 30 posts + regras" />
+              <VoiceBox
+                title={voiceCard?.inputTitle ?? "Entrada"}
+                body={voiceCard?.inputBody ?? "@meuperfil · 30 posts + regras"}
+              />
               <div
                 style={{
                   textAlign: "center",
@@ -367,7 +459,11 @@ export function FeaturesSection() {
               >
                 ↓
               </div>
-              <VoiceBox title="Saída" body="Carrossel com o seu tom" highlight />
+              <VoiceBox
+                title={voiceCard?.outputTitle ?? "Saída"}
+                body={voiceCard?.outputBody ?? "Carrossel com o seu tom"}
+                highlight
+              />
             </div>
           </motion.div>
 
@@ -377,12 +473,20 @@ export function FeaturesSection() {
             className="sv-card sv-feat"
             style={{ gridColumn: "span 4" }}
           >
-            <FeatKicker>Editor</FeatKicker>
+            <FeatKicker>{editorCard?.kicker ?? "Editor"}</FeatKicker>
             <FeatTitle>
-              <em>Variantes</em> por slide.
+              {editorCard?.title ?? (
+                <>
+                  <em>Variantes</em> por slide.
+                </>
+              )}
             </FeatTitle>
             <FeatBody>
-              Cada slide vira 6 layouts: capa, headline, foto, quote, split, CTA. Troca em um clique.
+              {editorCard?.body ?? (
+                <>
+                  Cada slide vira 6 layouts: capa, headline, foto, quote, split, CTA. Troca em um clique.
+                </>
+              )}
             </FeatBody>
             <div className="mt-3 grid grid-cols-3 gap-[6px]">
               {["Capa", "Headline", "Foto", "Quote", "Split", "CTA"].map((v, i) => (
@@ -413,12 +517,20 @@ export function FeaturesSection() {
             className="sv-card sv-feat"
             style={{ gridColumn: "span 4" }}
           >
-            <FeatKicker>Imagem contextual</FeatKicker>
+            <FeatKicker>{imageCard?.kicker ?? "Imagem contextual"}</FeatKicker>
             <FeatTitle>
-              Cada slide com <em>sua</em> imagem.
+              {imageCard?.title ?? (
+                <>
+                  Cada slide com <em>sua</em> imagem.
+                </>
+              )}
             </FeatTitle>
             <FeatBody>
-              A IA gera ilustração coerente com o texto do slide. Sem stock photo genérico.
+              {imageCard?.body ?? (
+                <>
+                  A IA gera ilustração coerente com o texto do slide. Sem stock photo genérico.
+                </>
+              )}
             </FeatBody>
             <div className="mt-4 grid grid-cols-3 gap-2">
               {["01", "02", "03"].map((n, i) => (

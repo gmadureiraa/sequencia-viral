@@ -135,7 +135,14 @@ function DemoSlide({
   );
 }
 
-export function DemoSection() {
+export interface DemoSectionProps {
+  sub?: string;
+  tag?: string;
+  heading?: React.ReactNode;
+}
+
+export function DemoSection(props: DemoSectionProps = {}) {
+  const { sub = "Cola → lê → entrega", tag = "~15 segundos", heading } = props;
   const targetText = "https://youtube.com/watch?v=carrossel-viral";
   const [typedLen, setTypedLen] = useState(0);
   const [pct, setPct] = useState(92);
@@ -172,11 +179,15 @@ export function DemoSection() {
   return (
     <section id="demo" style={{ padding: "0 0 96px" }}>
       <div className="mx-auto max-w-[1240px] px-6">
-        <SectionHead num="04" sub="Cola → lê → entrega" tag="~15 segundos">
-          Cola um <em>link</em>.{" "}
-          <span style={{ color: "var(--sv-muted)" }}>
-            Sai um carrossel com a sua voz.
-          </span>
+        <SectionHead num="04" sub={sub} tag={tag}>
+          {heading ?? (
+            <>
+              Cola um <em>link</em>.{" "}
+              <span style={{ color: "var(--sv-muted)" }}>
+                Sai um carrossel com a sua voz.
+              </span>
+            </>
+          )}
         </SectionHead>
 
         <style>{`

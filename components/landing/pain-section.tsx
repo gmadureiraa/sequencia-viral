@@ -3,7 +3,14 @@
 import { motion } from "framer-motion";
 import { REVEAL, SectionHead } from "./shared";
 
-const PAINS: { tag: string; title: React.ReactNode; body: string; cross: string }[] = [
+export interface PainCard {
+  tag: string;
+  title: React.ReactNode;
+  body: React.ReactNode;
+  cross: string;
+}
+
+const DEFAULT_PAINS: PainCard[] = [
   {
     tag: "Sintoma 01",
     title: (
@@ -53,6 +60,14 @@ export interface PainSectionProps {
   tag?: string;
   /** Título principal. Aceita ReactNode. */
   heading?: React.ReactNode;
+  /** 4 cards de dor. Default: dores genéricas de produção. */
+  pains?: PainCard[];
+  /** Conteúdo do banner plot-twist (verde). Eyebrow + título. */
+  plotTwist?: {
+    eyebrow?: string;
+    title?: React.ReactNode;
+    caption?: React.ReactNode;
+  };
 }
 
 export function PainSection(props: PainSectionProps = {}) {
@@ -60,6 +75,8 @@ export function PainSection(props: PainSectionProps = {}) {
     sub = "A dor antes da cura",
     tag = "Familiar?",
     heading,
+    pains = DEFAULT_PAINS,
+    plotTwist,
   } = props;
   return (
     <section
@@ -89,7 +106,7 @@ export function PainSection(props: PainSectionProps = {}) {
             gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
           }}
         >
-          {PAINS.map((p, i) => (
+          {pains.map((p, i) => (
             <motion.article
               key={p.tag}
               {...REVEAL}
@@ -204,7 +221,7 @@ export function PainSection(props: PainSectionProps = {}) {
                 opacity: 0.6,
               }}
             >
-              O plot twist
+              {plotTwist?.eyebrow ?? "O plot twist"}
             </span>
             <p
               className="sv-display mt-2"
@@ -217,18 +234,22 @@ export function PainSection(props: PainSectionProps = {}) {
                 fontWeight: 400,
               }}
             >
-              O conteúdo <em>já existe</em> na sua cabeça, no seu YouTube, no seu
-              blog. O que falta é uma ferramenta que{" "}
-              <span
-                style={{
-                  background: "var(--sv-ink)",
-                  color: "var(--sv-green)",
-                  padding: "0 5px",
-                  fontStyle: "italic",
-                }}
-              >
-                termine o trabalho.
-              </span>
+              {plotTwist?.title ?? (
+                <>
+                  O conteúdo <em>já existe</em> na sua cabeça, no seu YouTube, no seu
+                  blog. O que falta é uma ferramenta que{" "}
+                  <span
+                    style={{
+                      background: "var(--sv-ink)",
+                      color: "var(--sv-green)",
+                      padding: "0 5px",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    termine o trabalho.
+                  </span>
+                </>
+              )}
             </p>
           </div>
           <div
@@ -243,8 +264,12 @@ export function PainSection(props: PainSectionProps = {}) {
               opacity: 0.55,
             }}
           >
-            <span>Desliza pra baixo</span>
-            <span style={{ opacity: 1 }}>— é a cura ↓</span>
+            {plotTwist?.caption ?? (
+              <>
+                <span>Desliza pra baixo</span>
+                <span style={{ opacity: 1 }}>— é a cura ↓</span>
+              </>
+            )}
           </div>
         </motion.div>
       </div>

@@ -153,6 +153,8 @@ interface AdminStats {
       updatedAt: string | null;
     }>;
   };
+  /** Erros por query Supabase (nullish quando tudo OK). */
+  queryErrors?: Record<string, string>;
   generatedAt: string;
 }
 
@@ -217,7 +219,7 @@ function parseCost(c: number | string | null | undefined): number {
 export default function AdminPage() {
   const router = useRouter();
   const search = useSearchParams();
-  const { profile, session, loading } = useAuth();
+  const { user, profile, session, loading } = useAuth();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -234,16 +236,25 @@ export default function AdminPage() {
     router.replace(`/app/admin?tab=${t}`, { scroll: false });
   }
 
+  // Gate: usar user.email direto (Supabase auth) em vez de profile.email.
+  // profile pode demorar ou falhar (RLS, schema drift, coluna nulada), e o
+  // server-side gate (requireAdmin) também compara contra auth.user.email —
+  // manter em sync evita falso-negativo que trava o admin em "Sem acesso".
   const isAdmin = useMemo(() => {
-    const email = profile?.email?.toLowerCase().trim();
+    const emailFromUser = user?.email?.toLowerCase().trim();
+    const emailFromProfile = profile?.email?.toLowerCase().trim();
+    const email = emailFromUser || emailFromProfile;
     return email ? ADMIN_EMAILS.includes(email) : false;
-  }, [profile]);
+  }, [user, profile]);
 
   useEffect(() => {
     if (loading) return;
-    if (!profile) return;
+    // Redirect só quando temos CERTEZA que não é admin: user carregado +
+    // email não bate na lista. Sem user ainda → aguarda (auth-context
+    // pode estar populando em paralelo ao profile).
+    if (!user) return;
     if (!isAdmin) router.replace("/app");
-  }, [loading, profile, isAdmin, router]);
+  }, [loading, user, isAdmin, router]);
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -254,21 +265,63 @@ export default function AdminPage() {
         method: "GET",
         headers: jsonWithAuth(session),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha ao carregar");
+      // Parse defensivo: se resposta não for JSON (ex: HTML de erro 500
+      // nativo do Next), não explode — converte em erro legível.
+      const text = await res.text();
+      let data: { error?: string } & Partial<AdminStats> = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error(
+          `Resposta inválida do servidor (HTTP ${res.status}). ${text.slice(0, 120)}`
+        );
+      }
+      if (!res.ok) throw new Error(data.error || `Falha ao carregar (HTTP ${res.status})`);
       setStats(data as AdminStats);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao carregar");
+      const msg = e instanceof Error ? e.message : "Erro ao carregar";
+      console.error("[admin] load falhou:", msg);
+      setError(msg);
     } finally {
       setFetching(false);
     }
   }, [session]);
 
+  // Dispara load assim que isAdmin + session estão prontos. Evita o efeito
+  // re-disparar toda vez que `load` (useCallback sobre session) muda — o
+  // `load` já depende de session internamente, então basta reagir a session.
   useEffect(() => {
-    if (isAdmin) void load();
-  }, [isAdmin, load]);
+    if (isAdmin && session) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, session?.access_token]);
 
-  if (!isAdmin && !loading) {
+  // Estado "aguardando sessão" — evita flash de tela branca quando o
+  // AuthProvider ainda está inicializando.
+  if (loading || (!user && !profile)) {
+    return (
+      <div className="mx-auto max-w-[600px] py-12 text-center">
+        <Loader2
+          size={18}
+          className="animate-spin inline-block"
+          style={{ color: "var(--sv-ink)" }}
+        />
+        <p
+          className="mt-3"
+          style={{
+            fontFamily: "var(--sv-mono)",
+            fontSize: 10.5,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: "var(--sv-muted)",
+          }}
+        >
+          Carregando sessão
+        </p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
     return (
       <div className="mx-auto max-w-[600px] py-12">
         <p style={{ fontFamily: "var(--sv-mono)", color: "var(--sv-muted)" }}>
@@ -388,6 +441,24 @@ export default function AdminPage() {
         </div>
       )}
 
+      {stats?.queryErrors && (
+        <div
+          className="mt-4 p-3"
+          style={{
+            border: "1.5px solid #c94f3b",
+            background: "#fff8e5",
+            color: "#7a2a1a",
+            fontFamily: "var(--sv-sans)",
+            fontSize: 12,
+          }}
+        >
+          <strong>Alguns dados vieram parciais:</strong>{" "}
+          {Object.entries(stats.queryErrors)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(" · ")}
+        </div>
+      )}
+
       {!stats && fetching && (
         <div className="mt-10 text-center">
           <Loader2
@@ -415,7 +486,14 @@ export default function AdminPage() {
 // ───────────────────────────────── Overview ─────────────────────────────
 
 function OverviewTab({ stats }: { stats: AdminStats }) {
-  const maxDaily = Math.max(...stats.dailySeries.map((d) => d.count), 1);
+  // Fallbacks defensivos: se o endpoint devolveu stats parciais (ex: uma
+  // query Supabase falhou e veio `queryErrors`), os campos aninhados
+  // podem estar vazios. Nunca acessar direto sem default.
+  const dailySeries = stats.dailySeries ?? [];
+  const typeBreakdown = stats.typeBreakdown ?? {};
+  const carouselStatus = stats.summary?.carouselStatus ?? {};
+  const planCounts = stats.summary?.planCounts ?? {};
+  const maxDaily = Math.max(...dailySeries.map((d) => d.count), 1);
 
   return (
     <>
@@ -454,7 +532,7 @@ function OverviewTab({ stats }: { stats: AdminStats }) {
           label="Carrosséis"
           value={fmtNum(stats.summary.totalCarousels)}
           sub={
-            Object.entries(stats.summary.carouselStatus)
+            Object.entries(carouselStatus)
               .map(([k, v]) => `${k}: ${v}`)
               .join(" · ") || "—"
           }
@@ -482,7 +560,7 @@ function OverviewTab({ stats }: { stats: AdminStats }) {
             className="flex items-end gap-1"
             style={{ height: 120 }}
           >
-            {stats.dailySeries.map((d) => {
+            {dailySeries.map((d) => {
               const pct = (d.count / maxDaily) * 100;
               return (
                 <div
@@ -508,8 +586,8 @@ function OverviewTab({ stats }: { stats: AdminStats }) {
               letterSpacing: "0.12em",
             }}
           >
-            <span>{stats.dailySeries[0]?.date.slice(5)}</span>
-            <span>{stats.dailySeries[stats.dailySeries.length - 1]?.date.slice(5)}</span>
+            <span>{dailySeries[0]?.date?.slice(5)}</span>
+            <span>{dailySeries[dailySeries.length - 1]?.date?.slice(5)}</span>
           </div>
         </div>
       </section>
@@ -518,7 +596,7 @@ function OverviewTab({ stats }: { stats: AdminStats }) {
       <section className="mt-8">
         <SectionLabel>Custo por tipo de prompt</SectionLabel>
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3">
-          {Object.entries(stats.typeBreakdown)
+          {Object.entries(typeBreakdown)
             .sort(([, a], [, b]) => b.cost - a.cost)
             .map(([t, data]) => (
               <div
@@ -573,7 +651,7 @@ function OverviewTab({ stats }: { stats: AdminStats }) {
       <section className="mt-8">
         <SectionLabel>Distribuição de planos</SectionLabel>
         <div className="flex flex-wrap gap-2">
-          {Object.entries(stats.summary.planCounts).map(([plan, count]) => (
+          {Object.entries(planCounts).map(([plan, count]) => (
             <span
               key={plan}
               className="uppercase"

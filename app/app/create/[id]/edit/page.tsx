@@ -34,7 +34,7 @@ import type {
  * evita pesar a landing e o shell global.
  */
 const DISPLAY_FONTS_HREF =
-  "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Anton&family=Oswald:wght@500;700&family=Barlow+Condensed:wght@600;700;800&family=Instrument+Serif:ital@0;1&display=swap";
+  "https://fonts.googleapis.com/css2?family=Inter:wght@900&family=Archivo+Black&family=Bebas+Neue&family=Anton&family=Oswald:wght@500;700&family=Barlow+Condensed:wght@600;700;800&family=Instrument+Serif:ital@0;1&display=swap";
 
 function useInjectDisplayFonts() {
   useEffect(() => {
@@ -125,7 +125,16 @@ const ACCENT_SWATCHES_DEFAULT = [
 // Fonts (ver <link> em `app/app/layout.tsx`).
 // Fontes display do editor — priorizam caixa alta/condensada pra título
 // cinematográfico editorial. Atelier (Kaleidos) foi removida.
+// Default novo do Futurista: Inter 900 (curvas humanistas, bate com
+// referência BrandsDecoded).
 const FONT_OPTS = [
+  {
+    id: "inter-black",
+    label: "Inter Black",
+    family: '"Inter", system-ui, sans-serif',
+    italic: false,
+    uppercase: true,
+  },
   {
     id: "archivo",
     label: "Archivo Black",
@@ -175,8 +184,8 @@ function familyFromFontId(id: string | null | undefined): string | undefined {
   return FONT_OPTS.find((f) => f.id === id)?.family;
 }
 function fontIdFromFamily(family: string | undefined): string {
-  if (!family) return "archivo";
-  return FONT_OPTS.find((f) => f.family === family)?.id ?? "archivo";
+  if (!family) return "inter-black";
+  return FONT_OPTS.find((f) => f.family === family)?.id ?? "inter-black";
 }
 
 function buildPreviewProfile(profile: {
@@ -286,7 +295,7 @@ export default function EditPage(props: {
   const [activeIndex, setActiveIndex] = useState(0);
   const [kicker, setKicker] = useState("");
   const [handle, setHandle] = useState("@seuhandle");
-  const [fontId, setFontId] = useState<string>("archivo");
+  const [fontId, setFontId] = useState<string>("inter-black");
   const [accent, setAccent] = useState<string>("#7CF067");
   const [textScale, setTextScale] = useState(1);
   const [mobileTab, setMobileTab] = useState<MobileTab>("canvas");
@@ -582,6 +591,41 @@ export default function EditPage(props: {
       if (res.appliedUrl) {
         updateSlide(targetIndex, { imageUrl: res.appliedUrl });
         toast.success("Imagem gerada.");
+      }
+    } catch {
+      if (imagesHook.error) toast.error(imagesHook.error);
+    }
+  }
+
+  /**
+   * Regenera a CAPA com pipeline 2-pass (Gemini planeja cena → Imagen 4).
+   * Só faz sentido no slide 0 e quando templateId !== "twitter". Demora
+   * ~45s — toast avisa.
+   */
+  async function handleRegenCover() {
+    const s = slides[0];
+    if (!s) return;
+    const query =
+      (s.heading && s.heading.trim()) ||
+      (s.imageQuery && s.imageQuery.trim()) ||
+      title;
+    if (!query) {
+      toast.error("A capa precisa de um título antes de gerar.");
+      return;
+    }
+    toast.info("Gerando capa cinematográfica (~45s). IA planeja a cena e renderiza.");
+    try {
+      const res = await imagesHook.refetchImage(0, {
+        query,
+        contextHeading: s.heading,
+        contextBody: s.body,
+        mode: "generate",
+        designTemplate: templateId,
+        isCover: true,
+      });
+      if (res.appliedUrl) {
+        updateSlide(0, { imageUrl: res.appliedUrl });
+        toast.success("Nova capa pronta.");
       }
     } catch {
       if (imagesHook.error) toast.error(imagesHook.error);
@@ -1465,6 +1509,33 @@ export default function EditPage(props: {
       >
         ⏎ busca · shift+⏎ gera IA
       </div>
+
+      {/* Botão especial "Nova capa" — só no slide 0 do template editorial
+          (pipeline 2-pass: cena planejada → Imagen). Destaque em verde. */}
+      {activeIndex === 0 && templateId !== "twitter" && (
+        <button
+          type="button"
+          onClick={() => void handleRegenCover()}
+          disabled={imagesHook.loadingIndex === 0}
+          className="sv-btn"
+          style={{
+            width: "100%",
+            justifyContent: "center",
+            padding: "10px 12px",
+            fontSize: 10.5,
+            background: "var(--sv-green)",
+            border: "1.5px solid var(--sv-ink)",
+            boxShadow: "3px 3px 0 0 var(--sv-ink)",
+            fontWeight: 700,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+          }}
+        >
+          {imagesHook.loadingIndex === 0
+            ? "Gerando capa (~45s)..."
+            : "✦ Gerar nova capa"}
+        </button>
+      )}
 
       <div className="grid gap-1.5" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <button

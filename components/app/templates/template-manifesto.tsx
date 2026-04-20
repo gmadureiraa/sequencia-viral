@@ -11,15 +11,28 @@ import {
 } from "./utils";
 
 /**
- * Template 01 — Manifesto Editorial
+ * Template 01 — Futurista (id interno `manifesto`)
  *
- * Paleta: preto + creme + verde lime / pink alternando por slide. Display
- * em Atelier com italic estrutural. Borda 3px preta, kicker mono topo,
- * wordmark de rodapé. Se `imageUrl` estiver presente, trata como "cover"
- * ocupando todo o canvas com overlay escuro (gradiente).
+ * Ref visual: @brandsdecoded (Instagram). Padrão de capa cinematográfica
+ * com imagem full-bleed + título CAPS no terço inferior sobre shadow
+ * localizada + handle pill centralizado. Variantes internas:
  *
- * Suporta `variant` por-slide (cover / headline / photo / quote / split / cta).
+ * - cover: full-bleed image + handle pill + title CAPS bottom third
+ * - photo: bg preto, eyebrow + title CAPS + imagem meio + body bottom
+ * - headline: bg preto puro, título huge CAPS + body (sem imagem)
+ * - split: text + imagem meio + text (antes vs depois)
+ * - quote: fallback → headline
+ * - cta: último slide, accent button + seguir handle
  */
+
+const ACCENT_DEFAULT = "#FF4500";
+const INK = "#0A0A0A";
+const PAPER = "#F7F5EF";
+const DEFAULT_EDITORIAL_HEADER = "Sequência Viral";
+const DEFAULT_DISPLAY_STACK =
+  '"Inter", "Archivo Black", system-ui, sans-serif';
+const SERIF_STACK = '"Instrument Serif", Georgia, "Times New Roman", serif';
+const SANS_STACK = '"Inter", system-ui, sans-serif';
 
 const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
   function TemplateManifesto(
@@ -49,52 +62,39 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
     const showBody = layers?.body !== false;
     const showBg = layers?.bg !== false;
 
-    // Alterna accent por slide: slides ímpares em verde lime, pares em pink.
-    const defaultAccent = slideNumber % 2 === 1 ? "#7CF067" : "#D262B2";
-    const accent = accentOverride || defaultAccent;
-    const paper = "#F7F5EF";
-    const ink = "#0A0A0A";
+    const accent = accentOverride || ACCENT_DEFAULT;
+    // Editorial header (customizável por user em settings → brand_analysis.__editorial_header)
+    const editorialHeader = DEFAULT_EDITORIAL_HEADER;
+    const currentYear = new Date().getFullYear();
+    const handleLabel = (profile.handle || "").replace(/^@/, "").trim();
+    const handleDisplay = handleLabel ? `@${handleLabel}` : "@seuhandle";
 
-    // "cover": foto preenche canvas; "photo": foto ocupa metade inferior;
-    // "split": texto à esquerda, imagem à direita; "quote": texto gigante
-    // centrado em italic; "cta": destaque no botão; "headline": default.
+    // Variantes
     const isCoverLike =
-      variant === "cover" || (variant === "headline" && hasImage && slideNumber === 1);
-    const isSplit = variant === "split" && hasImage;
+      variant === "cover" ||
+      (variant === "headline" && hasImage && slideNumber === 1);
+    const isSplit = variant === "split";
     const isPhoto = variant === "photo" && hasImage;
     const isQuote = variant === "quote";
     const isCta = variant === "cta";
 
-    // Prioridade: bgColor (per-slide) > variant (cover escuro) > style global.
-    const styleIsDark = style === "dark";
-    const resolvedBg = bgColor || (isCoverLike ? ink : styleIsDark ? ink : paper);
+    // Background sempre escuro por padrão (BrandsDecoded style). Light mode
+    // disponível via `style: "white"` ou `bgColor` custom.
+    const styleIsDark = style !== "white";
+    const resolvedBg =
+      bgColor || (isCoverLike ? INK : styleIsDark ? INK : PAPER);
     const resolvedFg = bgColor
       ? pickFgForBg(bgColor)
       : isCoverLike || styleIsDark
-        ? paper
-        : ink;
+        ? PAPER
+        : INK;
 
-    // Default agora é Archivo Black (caixa alta cinematográfica).
-    // displayFontOverride ainda permite user trocar pra outra.
-    const defaultDisplayStack =
-      '"Archivo Black", "Bebas Neue", "Anton", system-ui, sans-serif';
-    const displayStack = displayFontOverride || defaultDisplayStack;
-    const serifStack =
-      '"Instrument Serif", Georgia, "Times New Roman", serif';
+    const displayStack = displayFontOverride || DEFAULT_DISPLAY_STACK;
     const ts = Math.max(0.6, Math.min(1.6, textScale));
-    // Se a fonte é italic (serif), NÃO aplica uppercase. Senão força caps
-    // — o display editorial fica mais impactante.
     const displayIsItalic = /Instrument Serif/i.test(displayStack);
-    const displayTransform = displayIsItalic ? "none" : "uppercase";
-
-    // Kicker editorial: só o handle do user + contador. Sem marca d'água
-    // BrandsDecoded e sem "Sequência Viral" — user posta como dele.
-    const handleLabel = (profile.handle || "").replace(/^@/, "").trim();
-    const kickerText = handleLabel
-      ? `● @${handleLabel}`
-      : `● Nº ${String(slideNumber).padStart(2, "0")}`;
-
-    const coverBgImage = showBg && hasImage && (isCoverLike || isPhoto);
+    const displayTransform: "uppercase" | "none" = displayIsItalic
+      ? "none"
+      : "uppercase";
 
     return (
       <div
@@ -118,16 +118,15 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
             transformOrigin: "top left",
             background: resolvedBg,
             color: resolvedFg,
-            border: `3px solid ${ink}`,
             boxSizing: "border-box",
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
-            fontFamily: serifStack,
+            fontFamily: SANS_STACK,
           }}
         >
-          {/* Cover image + dark gradient overlay quando variant cover/photo ou fallback */}
-          {coverBgImage && (
+          {/* ═══════ COVER IMAGE FULL-BLEED ═══════ */}
+          {isCoverLike && showBg && hasImage && (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -138,115 +137,268 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                   position: "absolute",
                   inset: 0,
                   width: "100%",
-                  height: isPhoto ? "55%" : "100%",
-                  top: isPhoto ? "auto" : 0,
-                  bottom: isPhoto ? 0 : "auto",
+                  height: "100%",
                   objectFit: "cover",
                   zIndex: 0,
                 }}
               />
-              {!isPhoto && (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    background:
-                      // Overlay mais forte pra garantir legibilidade do texto
-                      // sobre qualquer imagem — estilo BrandsDecoded (zona de
-                      // texto no terço inferior fica bem preta).
-                      "linear-gradient(180deg, rgba(10,10,10,0.35) 0%, rgba(10,10,10,0.55) 40%, rgba(10,10,10,0.85) 70%, rgba(10,10,10,0.98) 100%)",
-                    zIndex: 1,
-                  }}
-                />
-              )}
+              {/* Shadow LOCALIZADA no terço inferior — não é gradient linear
+                  vertical simples. Zona alta fica clean, zona baixa fica quase
+                  preta onde o título mora. */}
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background:
+                    "linear-gradient(180deg, transparent 0%, transparent 45%, rgba(10,10,10,0.35) 58%, rgba(10,10,10,0.78) 72%, rgba(10,10,10,0.95) 86%, rgba(10,10,10,0.98) 100%)",
+                  zIndex: 1,
+                }}
+              />
             </>
           )}
 
-          {/* Kicker topo */}
+          {/* ═══════ HEADER ROW TOPO ═══════ */}
           <div
             style={{
               position: "relative",
-              zIndex: 2,
-              padding: "78px 90px 0",
-              fontFamily: MONO_STACK,
-              fontSize: 22 * ts,
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              color: isCoverLike ? accent : resolvedFg,
-              fontWeight: 700,
+              zIndex: 3,
+              padding: "40px 60px 0",
+              display: "grid",
+              gridTemplateColumns: "1fr auto 1fr",
+              gap: 16,
+              fontFamily: SANS_STACK,
+              fontSize: 20,
+              fontWeight: 600,
+              letterSpacing: "0.02em",
+              color: isCoverLike
+                ? "rgba(247,245,239,0.85)"
+                : "rgba(247,245,239,0.55)",
+              textTransform: "none",
+              lineHeight: 1,
             }}
           >
-            {kickerText}
+            <div>{editorialHeader}</div>
+            <div style={{ textAlign: "center", opacity: 0.8 }}>
+              {handleDisplay}
+            </div>
+            <div style={{ textAlign: "right", opacity: 0.7 }}>
+              {currentYear} //
+            </div>
           </div>
 
-          {/* Counter agora vive só no footer — removido daqui pra evitar duplicação. */}
+          {/* ═══════ CONTEÚDO CENTRAL POR VARIANT ═══════ */}
 
-          {/* Conteúdo central — layouts diferentes por variante */}
-          {isSplit ? (
+          {isCoverLike ? (
+            // ─── COVER: título CAPS bottom third + handle pill ───
             <div
               style={{
                 position: "relative",
                 zIndex: 2,
                 flex: "1 1 0",
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 40,
-                padding: "40px 90px 40px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-end",
+                padding: "0 70px 110px",
+                gap: 20,
                 minHeight: 0,
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "center",
-                  gap: 28,
-                }}
-              >
-                {showTitle && (
-                  <h1
-                    style={{
-                      fontFamily: displayStack,
-                      fontSize: 86 * ts,
-                      fontWeight: 700,
-                      lineHeight: 1,
-                      letterSpacing: displayIsItalic ? "-0.02em" : "-0.01em",
-                      margin: 0,
-                      color: resolvedFg,
-                      fontStyle: displayIsItalic && slideNumber % 2 === 0 ? "italic" : "normal",
-                      textTransform: displayTransform as "uppercase" | "none",
-                    }}
-                  >
-                    {renderRichText(heading, accent)}
-                  </h1>
-                )}
-                {showBody && (
-                  <p
-                    style={{
-                      fontFamily: serifStack,
-                      fontSize: 30 * ts,
-                      lineHeight: 1.42,
-                      margin: 0,
-                      color: resolvedFg,
-                      whiteSpace: "pre-line",
-                    }}
-                  >
-                    {renderRichText(body, accent)}
-                  </p>
-                )}
-              </div>
-              {showBg && (
+              {/* Handle pill centralizado acima do título */}
+              {handleLabel && (
                 <div
                   style={{
-                    background: hasImage
-                      ? `url(${bodyImgSrc}) center/cover`
-                      : `repeating-linear-gradient(45deg, ${accent}, ${accent} 12px, ${ink} 12px, ${ink} 24px)`,
-                    border: `3px solid ${ink}`,
+                    alignSelf: "center",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "10px 22px 10px 18px",
+                    background: "rgba(10,10,10,0.55)",
+                    border: "1.5px solid rgba(247,245,239,0.22)",
+                    borderRadius: 999,
+                    fontFamily: SANS_STACK,
+                    fontSize: 22,
+                    fontWeight: 600,
+                    color: PAPER,
+                    backdropFilter: "blur(8px)",
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill={accent}>
+                    <path d="M12 2l2.2 6.8H22l-6.4 4.6 2.4 7.4L12 16.4l-6 4.4 2.4-7.4L2 8.8h7.8z" />
+                  </svg>
+                  @{handleLabel}
+                  {/* verified badge */}
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill={accent}
+                  >
+                    <path d="M12 2l2 2.5 3-.5.5 3 2.5 2-1.5 2.5 1.5 2.5-2.5 2-.5 3-3-.5L12 22l-2-2.5-3 .5-.5-3L4 15l1.5-2.5L4 10l2.5-2 .5-3 3 .5z" />
+                    <path
+                      d="M9 12l2 2 4-4"
+                      stroke="#fff"
+                      strokeWidth="2"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+              )}
+
+              {showTitle && (
+                <h1
+                  style={{
+                    fontFamily: displayStack,
+                    fontWeight: 900,
+                    fontSize: 82 * ts,
+                    lineHeight: 1,
+                    letterSpacing: "-0.02em",
+                    margin: 0,
+                    color: PAPER,
+                    textAlign: "center",
+                    textTransform: displayTransform,
+                    textShadow:
+                      "0 4px 24px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.5)",
+                  }}
+                >
+                  {renderRichText(heading, accent)}
+                </h1>
+              )}
+            </div>
+          ) : isSplit ? (
+            // ─── SPLIT: text top + image middle + text bottom ───
+            <div
+              style={{
+                position: "relative",
+                zIndex: 2,
+                flex: "1 1 0",
+                display: "flex",
+                flexDirection: "column",
+                padding: "40px 60px 60px",
+                gap: 28,
+                minHeight: 0,
+              }}
+            >
+              {showTitle && (
+                <p
+                  style={{
+                    fontFamily: SANS_STACK,
+                    fontSize: 40 * ts,
+                    fontWeight: 700,
+                    lineHeight: 1.25,
+                    letterSpacing: "-0.01em",
+                    margin: 0,
+                    color: resolvedFg,
+                  }}
+                >
+                  {renderRichText(heading, accent)}
+                </p>
+              )}
+              {showBg && hasImage && (
+                <div
+                  style={{
+                    flex: "1 1 0",
+                    minHeight: 0,
+                    width: "100%",
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    background: `url(${bodyImgSrc}) center/cover`,
                   }}
                 />
               )}
+              {showBody && (
+                <p
+                  style={{
+                    fontFamily: SANS_STACK,
+                    fontSize: 34 * ts,
+                    fontWeight: 600,
+                    lineHeight: 1.35,
+                    margin: 0,
+                    color: resolvedFg,
+                    whiteSpace: "pre-line",
+                  }}
+                >
+                  {renderRichText(body, accent)}
+                </p>
+              )}
+            </div>
+          ) : isPhoto ? (
+            // ─── PHOTO: eyebrow + title CAPS top + imagem meio + body bottom ───
+            <div
+              style={{
+                position: "relative",
+                zIndex: 2,
+                flex: "1 1 0",
+                display: "flex",
+                flexDirection: "column",
+                padding: "40px 60px 60px",
+                gap: 28,
+                minHeight: 0,
+              }}
+            >
+              {!isLastSlide && (
+                <div
+                  style={{
+                    fontFamily: SANS_STACK,
+                    fontSize: 18,
+                    fontWeight: 700,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    color: "rgba(247,245,239,0.55)",
+                  }}
+                >
+                  {slideEyebrowFor(slideNumber, totalSlides)}
+                </div>
+              )}
+              {showTitle && (
+                <h2
+                  style={{
+                    fontFamily: displayStack,
+                    fontWeight: 900,
+                    fontSize: 100 * ts,
+                    lineHeight: 0.98,
+                    letterSpacing: "-0.02em",
+                    margin: 0,
+                    color: resolvedFg,
+                    textTransform: displayTransform,
+                  }}
+                >
+                  {renderRichText(heading, accent)}
+                </h2>
+              )}
+              {showBg && hasImage && (
+                <div
+                  style={{
+                    width: "100%",
+                    height: 380,
+                    flexShrink: 0,
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    background: `url(${bodyImgSrc}) center/cover`,
+                  }}
+                />
+              )}
+              {showBody && (
+                <p
+                  style={{
+                    fontFamily: SANS_STACK,
+                    fontSize: 30 * ts,
+                    fontWeight: 400,
+                    lineHeight: 1.45,
+                    margin: 0,
+                    color: styleIsDark
+                      ? "rgba(247,245,239,0.82)"
+                      : "rgba(10,10,10,0.8)",
+                    whiteSpace: "pre-line",
+                  }}
+                >
+                  {renderRichText(body, accent)}
+                </p>
+              )}
             </div>
           ) : isQuote ? (
+            // ─── QUOTE: mantido como visualização editorial centered ───
             <div
               style={{
                 position: "relative",
@@ -258,12 +410,12 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                 alignItems: "center",
                 padding: "40px 120px",
                 textAlign: "center",
-                gap: 36,
+                gap: 32,
               }}
             >
               <div
                 style={{
-                  fontFamily: displayStack,
+                  fontFamily: SERIF_STACK,
                   fontSize: 220,
                   lineHeight: 0.8,
                   color: accent,
@@ -275,15 +427,14 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
               {showTitle && (
                 <h1
                   style={{
-                    fontFamily: displayStack,
-                    fontSize: 96 * ts,
-                    fontWeight: 700,
-                    fontStyle: displayIsItalic ? "italic" : "normal",
-                    lineHeight: 1.08,
-                    letterSpacing: displayIsItalic ? "-0.02em" : "-0.01em",
+                    fontFamily: SERIF_STACK,
+                    fontSize: 86 * ts,
+                    fontStyle: "italic",
+                    fontWeight: 400,
+                    lineHeight: 1.12,
+                    letterSpacing: "-0.01em",
                     margin: 0,
                     color: resolvedFg,
-                    textTransform: displayTransform as "uppercase" | "none",
                   }}
                 >
                   {renderRichText(heading, accent)}
@@ -292,14 +443,12 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
               {showBody && (
                 <p
                   style={{
-                    fontFamily: serifStack,
-                    fontSize: 30 * ts,
-                    lineHeight: 1.42,
+                    fontFamily: SANS_STACK,
+                    fontSize: 26 * ts,
+                    lineHeight: 1.45,
                     margin: 0,
                     color: resolvedFg,
                     maxWidth: 720,
-                    whiteSpace: "pre-line",
-                    fontStyle: "italic",
                   }}
                 >
                   {renderRichText(body, accent)}
@@ -307,6 +456,7 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
               )}
             </div>
           ) : (
+            // ─── HEADLINE: só tipografia, bg sólido ───
             <div
               style={{
                 position: "relative",
@@ -314,37 +464,58 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                 flex: "1 1 0",
                 display: "flex",
                 flexDirection: "column",
-                justifyContent: isCoverLike ? "flex-end" : "center",
-                padding: isCoverLike ? "0 90px 180px" : "40px 90px 40px",
-                gap: 36,
+                justifyContent: "center",
+                padding: "60px 60px 100px",
+                gap: 40,
                 minHeight: 0,
               }}
             >
-              {/* Tick accent bar para slides editoriais (sem imagem) */}
-              {!isCoverLike && !isLastSlide && showBg && (
+              {!isLastSlide && (
                 <div
                   style={{
-                    width: 96,
-                    height: 8,
-                    background: accent,
+                    fontFamily: SANS_STACK,
+                    fontSize: 18,
+                    fontWeight: 700,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    color: "rgba(247,245,239,0.55)",
                   }}
-                />
+                >
+                  {slideEyebrowFor(slideNumber, totalSlides)}
+                </div>
               )}
+
+              {/* Número da seção tenue ao fundo direita */}
+              <div
+                style={{
+                  position: "absolute",
+                  right: 40,
+                  bottom: 100,
+                  fontFamily: displayStack,
+                  fontWeight: 900,
+                  fontSize: 360,
+                  lineHeight: 0.8,
+                  color: PAPER,
+                  opacity: 0.04,
+                  pointerEvents: "none",
+                  textTransform: displayTransform,
+                }}
+                aria-hidden
+              >
+                {String(slideNumber).padStart(2, "0")}
+              </div>
 
               {showTitle && (
                 <h1
                   style={{
                     fontFamily: displayStack,
-                    fontSize: (isCoverLike ? 130 : 118) * ts,
-                    fontWeight: 700,
-                    lineHeight: 0.98,
-                    letterSpacing: displayIsItalic ? "-0.02em" : "-0.01em",
+                    fontWeight: 900,
+                    fontSize: (isLastSlide ? 110 : 130) * ts,
+                    lineHeight: 0.95,
+                    letterSpacing: "-0.025em",
                     margin: 0,
                     color: resolvedFg,
-                    fontStyle: displayIsItalic && slideNumber % 2 === 0 ? "italic" : "normal",
-                    textTransform: displayTransform as "uppercase" | "none",
-                    // Sombra sutil quando tem imagem de fundo pra melhorar contraste.
-                    textShadow: isCoverLike && hasImage ? "0 4px 24px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.4)" : undefined,
+                    textTransform: displayTransform,
                   }}
                 >
                   {renderRichText(heading, accent)}
@@ -354,97 +525,63 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
               {showBody && (
                 <p
                   style={{
-                    fontFamily: serifStack,
-                    fontSize: 36 * ts,
-                    lineHeight: 1.42,
+                    fontFamily: SANS_STACK,
+                    fontSize: 30 * ts,
+                    fontWeight: 400,
+                    lineHeight: 1.45,
                     margin: 0,
-                    // Subtítulo: branco puro quando em cover com imagem ou bg escuro.
-                    color: (isCoverLike || styleIsDark) ? "#FFFFFF" : resolvedFg,
+                    color: styleIsDark
+                      ? "rgba(247,245,239,0.78)"
+                      : "rgba(10,10,10,0.75)",
                     maxWidth: 860,
                     whiteSpace: "pre-line",
-                    textShadow: isCoverLike && hasImage ? "0 2px 12px rgba(0,0,0,0.6)" : undefined,
                   }}
                 >
                   {renderRichText(body, accent)}
                 </p>
               )}
 
-              {(isCta || isLastSlide) && (
+              {(isCta || isLastSlide) && handleLabel && (
                 <div
                   style={{
-                    marginTop: 24,
+                    marginTop: 16,
                     display: "inline-flex",
                     alignSelf: "flex-start",
                     alignItems: "center",
-                    gap: 18,
-                    padding: "26px 46px",
+                    gap: 16,
+                    padding: "22px 38px",
                     background: accent,
-                    color: ink,
-                    fontFamily: MONO_STACK,
-                    fontSize: 26,
+                    color: INK,
+                    fontFamily: SANS_STACK,
+                    fontSize: 24,
                     fontWeight: 700,
-                    letterSpacing: "0.08em",
+                    letterSpacing: "0.04em",
                     textTransform: "uppercase",
-                    border: `3px solid ${ink}`,
-                    boxShadow: isCta ? `8px 8px 0 ${ink}` : undefined,
+                    borderRadius: 999,
                   }}
                 >
-                  Seguir {profile.handle}
-                  <span style={{ fontSize: 30 }}>→</span>
+                  Seguir @{handleLabel}
+                  <span style={{ fontSize: 28 }}>→</span>
                 </div>
               )}
             </div>
           )}
 
-          {/* Footer: só contador de slide (user posta como dele, sem marca SV). */}
-          <div
-            style={{
-              position: "relative",
-              zIndex: 2,
-              padding: "0 90px 70px",
-              display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "flex-end",
-              color: isCoverLike ? paper : ink,
-            }}
-          >
-            <div
-              style={{
-                fontFamily: MONO_STACK,
-                fontSize: 22,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: isCoverLike
-                  ? "rgba(247,245,239,0.75)"
-                  : "rgba(10,10,10,0.6)",
-              }}
-            >
-              {String(slideNumber).padStart(2, "0")} / {String(totalSlides).padStart(2, "0")}
-            </div>
-          </div>
-
-          {/* Seta no primeiro slide */}
-          {slideNumber === 1 && !isLastSlide && variant !== "quote" && (
+          {/* ═══════ SLIDE COUNTER BOTTOM-RIGHT ═══════ */}
+          {!isCoverLike && (
             <div
               style={{
                 position: "absolute",
-                right: 90,
-                bottom: 160,
+                right: 60,
+                bottom: 30,
                 zIndex: 3,
-                width: 96,
-                height: 96,
-                borderRadius: "50%",
-                background: accent,
-                border: `3px solid ${ink}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: ink,
-                fontSize: 48,
-                fontWeight: 900,
+                fontFamily: SANS_STACK,
+                fontSize: 18,
+                fontWeight: 600,
+                color: "rgba(247,245,239,0.45)",
               }}
             >
-              →
+              {slideNumber}/{totalSlides}
             </div>
           )}
         </div>
@@ -454,9 +591,26 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
 );
 
 /**
- * Se o bgColor for escuro usa paper, se claro usa ink. Thresholded na
- * luminância perceptual (ITU BT.601).
+ * Eyebrow por slide — etiqueta curta editorial. Gera genérico por default,
+ * mas poderia vir do body/heading no futuro.
  */
+function slideEyebrowFor(slideNumber: number, total: number): string {
+  if (slideNumber === 1) return "A CAPA";
+  if (slideNumber === total) return "O FECHO";
+  const labels = [
+    "O QUE MUDOU",
+    "O SINTOMA",
+    "O MECANISMO",
+    "O DADO",
+    "O CONTRASTE",
+    "O PRINCÍPIO",
+    "A APLICAÇÃO",
+    "O RISCO",
+  ];
+  return labels[(slideNumber - 2) % labels.length];
+}
+
+/** Contraste automático bg/fg por luminância. */
 function pickFgForBg(hex: string): string {
   const m = hex.trim().match(/^#?([0-9a-f]{6}|[0-9a-f]{3})$/i);
   if (!m) return "#0A0A0A";

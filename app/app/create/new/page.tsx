@@ -200,9 +200,9 @@ export default function NewCarouselPage() {
     total: number;
   } | null>(null);
 
-  // Countdown ETA enquanto /api/generate roda. Target 30s (geração texto +
-  // batch de imagens em paralelo). Se terminar antes, ótimo.
-  const ETA_TARGET_SEC = 30;
+  // Countdown ETA enquanto /api/generate roda. Target 60s — capa
+  // cinematográfica demora ~45s (2-pass: scene planning + Imagen 4).
+  const ETA_TARGET_SEC = 60;
   const [etaElapsed, setEtaElapsed] = useState(0);
   const etaStartedRef = useRef<number | null>(null);
   useEffect(() => {
@@ -520,8 +520,13 @@ export default function NewCarouselPage() {
                 // Flag extra pra /api/images reforçar o prompt do Imagen quando cover.
                 isCover,
               }),
-              // Imagen demora mais que Serper — timeout maior pra gerar.
-              signal: AbortSignal.timeout(imageMode === "generate" ? 45_000 : 12_000),
+              // Imagen demora mais que Serper. Capa tem 2-pass (scene + imagen)
+              // então timeout maior ainda — ~50s pra fluxo completo.
+              signal: AbortSignal.timeout(
+                imageMode === "generate"
+                  ? isCover ? 75_000 : 45_000
+                  : 12_000
+              ),
             });
             if (!res.ok) throw new Error(`images ${res.status}`);
             const data = (await res.json()) as {
@@ -1432,7 +1437,9 @@ export default function NewCarouselPage() {
                 {phase === "generating"
                   ? "Nº 01 · Escrevendo os slides"
                   : phase === "images"
-                    ? "Nº 02 · Buscando imagens"
+                    ? designTemplate === "twitter"
+                      ? "Nº 02 · Buscando imagens"
+                      : "Nº 02 · Criando capa cinematográfica"
                     : "Nº 03 · Finalizando"}
               </div>
               <div
@@ -1450,9 +1457,15 @@ export default function NewCarouselPage() {
                     Lendo sua <em>referência</em> e escrevendo…
                   </>
                 ) : phase === "images" ? (
-                  <>
-                    Buscando <em>imagens</em> pra cada slide…
-                  </>
+                  designTemplate === "twitter" ? (
+                    <>
+                      Buscando <em>imagens</em> pra cada slide…
+                    </>
+                  ) : (
+                    <>
+                      Planejando a <em>cena da capa</em>…
+                    </>
+                  )
                 ) : (
                   <>
                     Salvando <em>rascunho</em>…
@@ -1471,9 +1484,11 @@ export default function NewCarouselPage() {
                 {phase === "generating"
                   ? "Se você mandou link, estou extraindo o conteúdo. Depois gero 6-10 slides."
                   : phase === "images"
-                    ? imagesProgress
-                      ? `${imagesProgress.done}/${imagesProgress.total} slides com imagem. Rolando em paralelo.`
-                      : "Buscando stock alinhado ao conteúdo de cada slide…"
+                    ? designTemplate === "twitter"
+                      ? imagesProgress
+                        ? `${imagesProgress.done}/${imagesProgress.total} slides com imagem. Rolando em paralelo.`
+                        : "Buscando stock alinhado ao conteúdo de cada slide…"
+                      : "A IA planeja a cena (3s) + Imagen 4 gera (~45s). Vale a pena — capa é a primeira impressão."
                     : "Preparando o editor."}
               </p>
               <div

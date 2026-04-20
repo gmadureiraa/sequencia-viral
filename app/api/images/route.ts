@@ -180,8 +180,57 @@ export async function POST(request: Request) {
           const cinematicBase = isTwitterTpl
             ? ""
             : "CINEMATIC SHOT: make this a scroll-stopping cinematic frame. Intentional lighting (red/amber glow, blue hour, hard window light, neon reflection). High contrast, emotional framing, visual tension. This must look like a Netflix poster, Vogue editorial, or BrandsDecoded carousel cover — NOT a stock photo.";
+
+          // COVER 2-PASS: pra capa de template editorial, chama Gemini Flash
+          // primeiro pra planejar uma cena narrativa rica, depois injeta como
+          // prompt principal no Imagen. Resultado é MUITO melhor que só
+          // reforçar o prompt generico.
+          let coverScenePrompt = "";
+          const shouldUseCoverScene = isCover && !isTwitterTpl;
+          if (shouldUseCoverScene) {
+            try {
+              const sceneRes = await fetch(
+                new URL("/api/generate/cover-scene", request.url).toString(),
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: request.headers.get("Authorization") || "",
+                  },
+                  body: JSON.stringify({
+                    heading: contextHeading ?? query,
+                    body: contextBody,
+                    niche,
+                    tone,
+                    brandAesthetic: brandAesthetic || undefined,
+                  }),
+                  signal: AbortSignal.timeout(12_000),
+                }
+              );
+              if (sceneRes.ok) {
+                const scene = (await sceneRes.json()) as {
+                  sceneDescription?: string;
+                  lighting?: string;
+                  mood?: string;
+                  paletteHints?: string[];
+                };
+                if (scene.sceneDescription) {
+                  coverScenePrompt = `CINEMATIC COVER SCENE (primary directive — follow this composition exactly): ${scene.sceneDescription}${scene.lighting ? ` Lighting: ${scene.lighting}.` : ""}${scene.mood ? ` Mood: ${scene.mood}.` : ""}${Array.isArray(scene.paletteHints) && scene.paletteHints.length ? ` Dominant palette: ${scene.paletteHints.join(", ")}.` : ""}`;
+                }
+              }
+            } catch (err) {
+              console.warn(
+                "[images] cover-scene falhou, seguindo com prompt default:",
+                err instanceof Error ? err.message : err
+              );
+            }
+          }
+
           const coverBoost = isCover && !isTwitterTpl
-            ? " COVER SHOT: this is the OPENING SLIDE — the viewer must stop scrolling in 0.3 seconds. Maximum drama. Subject dead-centered or composed with rule of thirds. The single strongest composition from the slide theme."
+            ? (coverScenePrompt
+                ? " " + coverScenePrompt
+                : " COVER SHOT: this is the OPENING SLIDE — the viewer must stop scrolling in 0.3 seconds. Maximum drama. Subject dead-centered or composed with rule of thirds. The single strongest composition from the slide theme.") +
+              " CRITICAL COMPOSITION: leave the BOTTOM THIRD of the frame visually simpler and darker — text overlay will sit there. Subject in center-upper or middle third."
             : "";
           const imagePrompt = [
             // 1. Estética dominante (brand + template style guide)

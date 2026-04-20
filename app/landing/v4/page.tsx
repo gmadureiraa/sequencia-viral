@@ -1,3 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-export { default } from "../../page";
+// Variante descontinuada — consolidada na landing principal + v2.
+export default function DeprecatedV4() {
+  redirect("/landing");
+}

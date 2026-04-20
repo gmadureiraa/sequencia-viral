@@ -251,8 +251,8 @@ export default function DashboardPage() {
           {isUnlimited ? (
             <>
               Você tem <b style={{ color: "var(--sv-ink)" }}>uso ilimitado</b> neste ciclo.{" "}
-              <b style={{ color: "var(--sv-ink)" }}>{drafts.length}</b>{" "}
-              {drafts.length === 1 ? "rascunho" : "rascunhos"} em aberto.
+              <b style={{ color: "var(--sv-ink)" }}>{carousels.length}</b>{" "}
+              {carousels.length === 1 ? "carrossel criado" : "carrosséis criados"} até agora.
             </>
           ) : (
             <>
@@ -260,9 +260,7 @@ export default function DashboardPage() {
               <b style={{ color: "var(--sv-ink)" }}>
                 {usageCount}/{usageLimit}
               </b>{" "}
-              carrosséis neste ciclo.{" "}
-              <b style={{ color: "var(--sv-ink)" }}>{drafts.length}</b>{" "}
-              {drafts.length === 1 ? "rascunho" : "rascunhos"} em aberto.
+              carrosséis criados neste ciclo.
             </>
           )}
         </p>
@@ -390,17 +388,19 @@ export default function DashboardPage() {
               }
             />
 
-            {/* Rascunhos */}
+            {/* Total de carrosséis — não existe mais "rascunho" no produto,
+                todo carrossel que passou pela geração (e consumiu quota) é
+                um carrossel criado. */}
             <StatTile
               variant="paper"
-              kicker="RASCUNHOS"
-              big={String(drafts.length)}
-              sub={`última: ${lastDraftRel}`}
+              kicker="CARROSSÉIS"
+              big={String(carousels.length)}
+              sub={`último: ${lastDraftRel}`}
             />
           </motion.section>
 
           {/* ──────────────────────────────────────────────────────────────────
-               3. RASCUNHOS
+               3. SEUS CARROSSÉIS (unificado — sem distinção draft/published)
              ────────────────────────────────────────────────────────────────── */}
           <motion.section
             initial={{ opacity: 0, y: 16 }}
@@ -410,17 +410,17 @@ export default function DashboardPage() {
             style={{ marginBottom: 64 }}
           >
             <SectionHead
-              kicker="● Nº 02 · EM ABERTO"
-              title={<>Seus <em>rascunhos</em>.</>}
+              kicker="● Nº 02 · RECENTES"
+              title={<>Seus <em>carrosséis</em>.</>}
               sub={
-                drafts.length > 0
-                  ? `Continue de onde parou · ${drafts.length} em aberto`
-                  : "Nenhum rascunho no momento"
+                carousels.length > 0
+                  ? `${carousels.length} criados · abra e continue de onde parou`
+                  : "Nenhum carrossel criado ainda"
               }
               action={
-                drafts.length > 4 ? (
+                carousels.length > 8 ? (
                   <Link href="/app/carousels" className="sv-btn sv-btn-outline">
-                    Ver tudo →
+                    Ver biblioteca →
                   </Link>
                 ) : null
               }
@@ -430,9 +430,9 @@ export default function DashboardPage() {
               <CarouselListSkeleton count={4} />
             ) : carouselError ? (
               <ErrorBanner message={carouselError} onRetry={() => void loadCarousels()} />
-            ) : recentDrafts.length === 0 ? (
+            ) : carousels.length === 0 ? (
               <EmptyInline
-                title="Nenhum rascunho em aberto."
+                title="Você ainda não criou nenhum carrossel."
                 cta={
                   <Link href="/app/create/new" className="sv-btn sv-btn-primary">
                     + Novo carrossel
@@ -447,70 +447,19 @@ export default function DashboardPage() {
                   gap: 20,
                 }}
               >
-                {recentDrafts.map((c, i) => (
+                {carousels.slice(0, 8).map((c, i) => (
                   <CarouselTile
                     key={c.id}
                     carousel={c}
                     index={i}
-                    badgeColor="var(--sv-pink)"
-                    badgeLabel="RASCUNHO"
-                  />
-                ))}
-              </div>
-            )}
-          </motion.section>
-
-          {/* ──────────────────────────────────────────────────────────────────
-               4. PUBLICADOS RECENTES
-             ────────────────────────────────────────────────────────────────── */}
-          <motion.section
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.1 }}
-            transition={{ duration: 0.5 }}
-            style={{ marginBottom: 64 }}
-          >
-            <SectionHead
-              kicker="● Nº 03 · NO AR"
-              title={<>Publicados <em>recentes</em>.</>}
-              sub={
-                published.length > 0
-                  ? `Últimos publicados · ${published.length} no total`
-                  : "Ainda sem publicações"
-              }
-              action={
-                published.length > 4 ? (
-                  <Link href="/app/carousels" className="sv-btn sv-btn-outline">
-                    Ver biblioteca →
-                  </Link>
-                ) : null
-              }
-            />
-
-            {carouselLoading ? null : recentPublished.length === 0 ? (
-              <EmptyInline
-                title="Você ainda não publicou nenhum carrossel."
-                cta={
-                  <Link href="/app/create/new" className="sv-btn sv-btn-ink">
-                    Criar e publicar →
-                  </Link>
-                }
-              />
-            ) : (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-                  gap: 20,
-                }}
-              >
-                {recentPublished.map((c, i) => (
-                  <CarouselTile
-                    key={c.id}
-                    carousel={c}
-                    index={i}
-                    badgeColor="var(--sv-green)"
-                    badgeLabel="♥ PUBLICADO"
+                    badgeColor={
+                      c.status === "published"
+                        ? "var(--sv-green)"
+                        : "var(--sv-ink)"
+                    }
+                    badgeLabel={
+                      c.status === "published" ? "♥ PUBLICADO" : "CRIADO"
+                    }
                   />
                 ))}
               </div>

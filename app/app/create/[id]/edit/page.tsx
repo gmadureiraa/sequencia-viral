@@ -15,6 +15,7 @@ import { useDraft, useAutoSaveDraft } from "@/lib/create/use-draft";
 import { useImages } from "@/lib/create/use-images";
 import CarouselFeedbackPanel from "@/components/app/carousel-feedback";
 import { DiscountPopup } from "@/components/app/discount-popup";
+import { ImagePicker } from "@/components/app/image-picker";
 import { supabase } from "@/lib/supabase";
 import type {
   CreateSlide,
@@ -259,6 +260,8 @@ export default function EditPage(props: {
   // Query customizada pra busca/geração de imagem (quando preenchida,
   // sobrescreve o imageQuery padrão do slide).
   const [customImageQuery, setCustomImageQuery] = useState("");
+  // Image picker modal: abre grid do Google Images pra o user escolher.
+  const [pickerFor, setPickerFor] = useState<number | null>(null);
 
   const imagesHook = useImages(session);
 
@@ -1540,7 +1543,7 @@ export default function EditPage(props: {
       <div className="grid gap-1.5" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <button
           type="button"
-          onClick={() => void handleSearchImage(activeIndex)}
+          onClick={() => setPickerFor(activeIndex)}
           disabled={imagesHook.loadingIndex === activeIndex}
           className="sv-btn sv-btn-outline"
           style={{
@@ -1549,8 +1552,9 @@ export default function EditPage(props: {
             padding: "8px 10px",
             fontSize: 9.5,
           }}
+          title="Abre grid de imagens do Google pra você clicar na que quiser"
         >
-          {imagesHook.loadingIndex === activeIndex ? "..." : "Buscar"}
+          🔍 Escolher
         </button>
         <button
           type="button"
@@ -1669,6 +1673,28 @@ export default function EditPage(props: {
       {/* Popup 30% off — usuário acabou de ver o primeiro carrossel pronto,
           momento perfeito pra oferta. Só dispara pra plano free, 1x. */}
       <DiscountPopup trigger="post-first-carousel" />
+
+      {pickerFor !== null && (
+        <ImagePicker
+          initialQuery={(() => {
+            const s = slides[pickerFor];
+            return (
+              customImageQuery.trim() ||
+              (s?.imageQuery && s.imageQuery.trim()) ||
+              (s?.heading && s.heading.trim()) ||
+              title ||
+              ""
+            );
+          })()}
+          session={session}
+          onPick={(url) => {
+            updateSlide(pickerFor, { imageUrl: url });
+            setPickerFor(null);
+            toast.success("Imagem aplicada.");
+          }}
+          onClose={() => setPickerFor(null)}
+        />
+      )}
 
       {/* Topbar do editor */}
       <div

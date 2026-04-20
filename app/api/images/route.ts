@@ -56,6 +56,7 @@ export async function POST(request: Request) {
       contextBody,
       peopleMode: peopleModeRaw,
       isCover,
+      count,
     } = body as {
       query?: string;
       mode?: "search" | "generate";
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
       contextBody?: string;
       peopleMode?: ImagePeopleMode;
       isCover?: boolean;
+      count?: number;
     };
 
     // Rate limit dividido por modo: generate (Imagen, $0.04/imagem) é
@@ -352,6 +354,12 @@ export async function POST(request: Request) {
 
     // Strategy 1: Serper.dev Google Image Search
     const serperKey = process.env.SERPER_API_KEY;
+    // Count: default 5 pro fluxo automático; picker na UI pede count=24 pra
+    // grid de seleção manual. Cap em 40 (limite Serper free).
+    const desiredCount = Math.max(
+      1,
+      Math.min(40, typeof count === "number" && count > 0 ? count : 5)
+    );
     if (serperKey) {
       try {
         const resp = await fetch("https://google.serper.dev/images", {
@@ -360,26 +368,31 @@ export async function POST(request: Request) {
             "X-API-KEY": serperKey,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ q: searchQuery, num: 5 }),
+          body: JSON.stringify({ q: searchQuery, num: desiredCount }),
           signal: AbortSignal.timeout(10_000),
         });
 
         if (resp.ok) {
           const data = await resp.json();
           const images = (data.images || [])
-            .slice(0, 5)
+            .slice(0, desiredCount)
             .map(
               (img: {
                 imageUrl?: string;
+                thumbnailUrl?: string;
                 title?: string;
                 source?: string;
+                link?: string;
               }) => ({
                 url: img.imageUrl || "",
+                thumbnailUrl: img.thumbnailUrl || img.imageUrl || "",
                 title: img.title || "",
                 source: img.source || "",
+                link: img.link || "",
                 generated: false,
               })
-            );
+            )
+            .filter((img: { url: string }) => !!img.url);
 
           return Response.json({ images });
         }

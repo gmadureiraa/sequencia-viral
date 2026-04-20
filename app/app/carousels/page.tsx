@@ -418,7 +418,7 @@ export default function CarouselsPage() {
               {(
                 [
                   ["all", "Todos", counts.all],
-                  ["drafts", "Rascunhos", counts.drafts],
+                  ["drafts", "Em edição", counts.drafts],
                   ["published", "Publicados", counts.published],
                   ["archived", "Arquivados", counts.archived],
                 ] as const
@@ -794,7 +794,7 @@ function CarouselCard({
                 border: "1px solid var(--sv-ink)",
               }}
             />
-            {isPublished ? "Publicado" : "Rascunho"} · {rel}
+            {isPublished ? "Publicado" : "Criado"} · {rel}
           </span>
           <span
             className="sv-kicker-sm"

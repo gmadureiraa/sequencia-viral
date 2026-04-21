@@ -123,6 +123,8 @@ ${aesthetic ? `ESTÉTICA DA MARCA (seguir fielmente):\n${aesthetic}\n\n` : ""}
 
 5. **Paleta de 2-3 cores dominantes** que saturem a cena sem ficar look "IA genérica".
 
+6. **NUNCA DESCREVA TEXTO NA CENA** — regra obrigatória. Jamais sugira placas escritas, títulos visíveis, jornais abertos, telas com UI legível, logotipos, letreiros de loja, letreiros luminosos, letras no quadro, letras no chão, letras em roupas, watermarks. Se o conceito exigir superfície que normalmente teria texto (revista, livro, quadro-negro, painel), descreva a superfície como "blank", "illegible", "blurred beyond recognition" ou apenas "abstract shapes" — NUNCA com palavras ou letras visíveis. Texto é renderizado depois como overlay no front; a imagem tem que sair 100% livre de qualquer caractere legível.
+
 ## OUTPUT
 
 Retorne APENAS JSON válido:

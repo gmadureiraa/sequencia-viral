@@ -266,9 +266,9 @@ export async function POST(request: Request) {
             isTwitterTpl
               ? "Technical: sharp focus on subject, natural color, believable shadows, 8K detail, documentary realism."
               : "Technical: ultra-sharp focus, cinematic color grading, dramatic shadows, subtle film grain, 8K detail, shallow depth of field, editorial magazine photography.",
-            // 8. NO-TEXT constraint (CRÍTICO — Imagen às vezes coloca
-            //    letras borradas no fundo). Reforçamos 3x pra pesar.
-            "ABSOLUTELY NO TEXT, NO LETTERS, NO NUMBERS, NO WORDS in the image. No signs, no labels, no billboards with readable content, no newspaper headlines, no street signs. No logos, no watermarks, no UI mockups. If the scene would normally contain text (e.g. a screen, a book, a poster), render those surfaces BLANK or BLURRED beyond recognition. This is a hard constraint — any readable character is a failure.",
+            // 8. NO-TEXT constraint (REGRA OBRIGATÓRIA — qualquer texto é falha).
+            //    Imagen às vezes coloca letras borradas no fundo. Reforçamos 4x.
+            "ABSOLUTELY NO TEXT, NO LETTERS, NO NUMBERS, NO WORDS, NO ALPHABET, NO CHARACTERS, NO TYPOGRAPHY anywhere in the image. No signs, no labels, no titles, no captions, no billboards with readable content, no newspaper headlines, no book covers, no magazine covers, no street signs, no shop signs, no neon signs, no screen text, no phone UI, no laptop UI, no app UI, no website mockups. No logos, no watermarks, no brand names, no monograms, no insignias. If the scene would normally contain text (e.g. a screen, a book, a poster, a t-shirt print, a road sign), render those surfaces COMPLETELY BLANK or BLURRED BEYOND RECOGNITION — never with legible characters. This is a HARD OUTPUT CONSTRAINT: any readable character anywhere in the frame = failed generation.",
           ]
             .filter(Boolean)
             .join(" ");

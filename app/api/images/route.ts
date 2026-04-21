@@ -113,12 +113,19 @@ export async function POST(request: Request) {
     const tmplMeta = getDesignTemplateMeta(tmplId);
     const peopleMode = normalizeImagePeopleMode(peopleModeRaw);
     const peopleSearch = imagePeopleModeSearchSuffix(peopleMode);
-    const searchQuery = clip(
-      `${mergedSearch} ${tmplMeta.imageSearchStyleHint} ${peopleSearch}`
-        .replace(/\s+/g, " ")
-        .trim(),
-      MAX_QUERY_LEN
-    );
+
+    // Picker manual (count > 10) não deve sobrescrever a query do user com
+    // hints de template — isso gera resultados vazios quando user busca algo
+    // específico. Only append hints quando é fetch automático pelo template.
+    const isManualPicker = typeof count === "number" && count > 10;
+    const searchQuery = isManualPicker
+      ? clip(query.trim(), MAX_QUERY_LEN)
+      : clip(
+          `${mergedSearch} ${tmplMeta.imageSearchStyleHint} ${peopleSearch}`
+            .replace(/\s+/g, " ")
+            .trim(),
+          MAX_QUERY_LEN
+        );
     const slideThemeHint = [heading, bodyCtx]
       .filter(Boolean)
       .join(" — ")

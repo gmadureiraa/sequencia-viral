@@ -119,9 +119,31 @@ function parseExportAssets(raw: unknown): CarouselExportAssets | undefined {
 }
 
 export function rowToSavedCarousel(row: CarouselRow): SavedCarousel {
-  const slides = Array.isArray(row.slides)
-    ? (row.slides as CarouselSlide[])
-    : [];
+  // Quando vem do fetch LIST (CAROUSEL_LIST_FIELDS), `slides` não existe.
+  // Em vez disso vem `heading`, `body`, `imageUrl` flat (do primeiro slide).
+  // Reconstruímos um slide sintético pra manter compatibilidade com a UI
+  // (dashboard renderiza carousel.slides[0]).
+  let slides: CarouselSlide[];
+  if (Array.isArray(row.slides)) {
+    slides = row.slides as CarouselSlide[];
+  } else {
+    const flatRow = row as unknown as {
+      heading?: string;
+      body?: string;
+      imageUrl?: string;
+    };
+    if (flatRow.heading || flatRow.body) {
+      slides = [
+        {
+          heading: flatRow.heading ?? "",
+          body: flatRow.body ?? "",
+          imageUrl: flatRow.imageUrl ?? "",
+        } as CarouselSlide,
+      ];
+    } else {
+      slides = [];
+    }
+  }
   const styleObj =
     row.style && typeof row.style === "object"
       ? (row.style as Record<string, unknown>)
@@ -272,10 +294,22 @@ export async function updateCarouselTags(
   if (error) throw error;
 }
 
-const CAROUSEL_LIST_FIELDS =
+// Pra FETCH individual (edit/preview) — inclui slides completos.
+const CAROUSEL_DETAIL_FIELDS =
   "id,title,slides,style,status,created_at,updated_at,export_assets,thumbnail_url";
-const CAROUSEL_LIST_FIELDS_FALLBACK =
+const CAROUSEL_DETAIL_FIELDS_FALLBACK =
   "id,title,slides,style,status,created_at,updated_at,thumbnail_url";
+
+// Pra FETCH em LISTA (dashboard, /carousels) — EXCLUI slides completos porque
+// muitos carrosséis têm imagens base64 inline (até 10MB por row). Puxar 30+
+// carrosséis com slides completos = centenas de MB, derruba o browser.
+// Em vez disso, pegamos só os campos do PRIMEIRO slide (heading/body) via
+// PostgREST JSON path + slide_count computado do lado cliente como 0.
+// Edit page ainda usa CAROUSEL_DETAIL_FIELDS pra ter dados completos.
+const CAROUSEL_LIST_FIELDS =
+  "id,title,style,status,created_at,updated_at,export_assets,thumbnail_url,slides->0->>heading,slides->0->>body,slides->0->>imageUrl";
+const CAROUSEL_LIST_FIELDS_FALLBACK =
+  "id,title,style,status,created_at,updated_at,thumbnail_url,slides->0->>heading,slides->0->>body,slides->0->>imageUrl";
 
 function isMissingColumnError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
@@ -308,23 +342,26 @@ export async function fetchUserCarousels(
     console.error("[fetchUserCarousels] error:", error.message, error.details, error.hint);
     throw error;
   }
-  return (data || []).map((row) => rowToSavedCarousel(row as CarouselRow));
+  return (data || []).map((row) =>
+    rowToSavedCarousel(row as unknown as CarouselRow)
+  );
 }
 
 export async function fetchUserCarousel(
   client: SupabaseClient,
   id: string
 ): Promise<SavedCarousel | null> {
+  // SELECT DETAIL: edit page precisa dos slides completos.
   let { data, error } = await client
     .from("carousels")
-    .select(CAROUSEL_LIST_FIELDS)
+    .select(CAROUSEL_DETAIL_FIELDS)
     .eq("id", id)
     .maybeSingle();
 
   if (error && isMissingColumnError(error)) {
     const retry = await client
       .from("carousels")
-      .select(CAROUSEL_LIST_FIELDS_FALLBACK)
+      .select(CAROUSEL_DETAIL_FIELDS_FALLBACK)
       .eq("id", id)
       .maybeSingle();
     data = (retry.data as unknown) as typeof data;
@@ -332,7 +369,7 @@ export async function fetchUserCarousel(
   }
 
   if (error || !data) return null;
-  return rowToSavedCarousel(data as CarouselRow);
+  return rowToSavedCarousel(data as unknown as CarouselRow);
 }
 
 export async function upsertUserCarousel(
@@ -461,7 +498,7 @@ export async function upsertUserCarousel(
       })
       .eq("id", payload.id)
       .eq("user_id", userId)
-      .select(CAROUSEL_LIST_FIELDS)
+      .select(CAROUSEL_DETAIL_FIELDS)
       .single();
 
     if (error && isMissingColumnError(error)) {
@@ -475,7 +512,7 @@ export async function upsertUserCarousel(
         })
         .eq("id", payload.id)
         .eq("user_id", userId)
-        .select(CAROUSEL_LIST_FIELDS_FALLBACK)
+        .select(CAROUSEL_DETAIL_FIELDS_FALLBACK)
         .single();
       data = (retry.data as unknown) as typeof data;
       error = retry.error;
@@ -485,7 +522,7 @@ export async function upsertUserCarousel(
       console.error("[upsertUserCarousel] update error:", error.message, error.details, error.hint);
       throw error;
     }
-    return { row: data as CarouselRow, inserted: false };
+    return { row: data as unknown as CarouselRow, inserted: false };
   }
 
   if (payload.imagePeopleMode) {
@@ -514,7 +551,7 @@ export async function upsertUserCarousel(
         style,
         status: payload.status,
       })
-      .select(CAROUSEL_LIST_FIELDS_FALLBACK)
+      .select(CAROUSEL_DETAIL_FIELDS_FALLBACK)
       .single();
     data = (retry.data as unknown) as typeof data;
     error = retry.error;
@@ -524,7 +561,7 @@ export async function upsertUserCarousel(
     console.error("[upsertUserCarousel] insert error:", error.message, error.details, error.hint);
     throw error;
   }
-  return { row: data as CarouselRow, inserted: true };
+  return { row: data as unknown as CarouselRow, inserted: true };
 }
 
 export async function deleteUserCarousel(

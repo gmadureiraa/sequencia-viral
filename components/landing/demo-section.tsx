@@ -165,6 +165,8 @@ export function DemoSection(props: DemoSectionProps = {}) {
               src={`${BASE_ASSET}/demo-cutout.png`}
               alt=""
               aria-hidden
+              loading="lazy"
+              decoding="async"
               className="sv-anim-float absolute"
               style={
                 {

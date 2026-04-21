@@ -121,6 +121,8 @@ export function HowItWorks(props: HowItWorksProps = {}) {
                     src={`${BASE_ASSET}/${s.img}`}
                     alt=""
                     aria-hidden
+                    loading="lazy"
+                    decoding="async"
                     className="h-full w-full object-contain"
                     style={{
                       filter: "drop-shadow(3px 3px 0 rgba(0,0,0,.15))",

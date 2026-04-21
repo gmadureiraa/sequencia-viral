@@ -3,12 +3,6 @@ import {
   Plus_Jakarta_Sans,
   Instrument_Serif,
   JetBrains_Mono,
-  DM_Serif_Display,
-  Playfair_Display,
-  Outfit,
-  Inter,
-  Source_Sans_3,
-  Literata,
 } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -18,9 +12,15 @@ import "./globals.css";
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
+// ── Fontes root layout: apenas 3 (Jakarta sans, Instrument Serif display, JetBrains mono).
+// Fontes editoriais extras (DM Serif, Playfair, Outfit, Inter, Source Sans 3, Literata)
+// eram carregadas eager no root mesmo sem uso real — foram removidas pra reduzir
+// LCP da landing. Se algum futuro editor quiser oferecê-las como opção, usar
+// Next/Font DENTRO do layout `/app/create/[id]/edit` em vez do root.
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const instrumentSerif = Instrument_Serif({
@@ -28,48 +28,14 @@ const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
   weight: "400",
   style: ["normal", "italic"],
+  display: "swap",
 });
 
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
   weight: ["400", "500"],
-});
-
-const dmSerifDisplay = DM_Serif_Display({
-  variable: "--font-dm-serif",
-  subsets: ["latin"],
-  weight: "400",
-});
-
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
-
-const outfit = Outfit({
-  variable: "--font-outfit",
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-});
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const sourceSans = Source_Sans_3({
-  variable: "--font-source-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const literata = Literata({
-  variable: "--font-literata",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -185,7 +151,7 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       suppressHydrationWarning
-      className={`${jakarta.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${dmSerifDisplay.variable} ${playfair.variable} ${outfit.variable} ${inter.variable} ${sourceSans.variable} ${literata.variable} antialiased`}
+      className={`${jakarta.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} antialiased`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: `try{if(localStorage.getItem("sequencia-viral_theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}` }} />

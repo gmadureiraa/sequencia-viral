@@ -360,6 +360,8 @@ export function Hero(props: HeroProps = {}) {
             src={`${BASE_ASSET}/hero-mandala.png`}
             alt=""
             aria-hidden
+            loading="lazy"
+            decoding="async"
             className="sv-anim-spin-slow pointer-events-none absolute"
             style={{ top: "8%", left: "8%", width: "28%", opacity: 0.12, zIndex: 1 }}
           />
@@ -368,6 +370,8 @@ export function Hero(props: HeroProps = {}) {
             src={`${BASE_ASSET}/hero-mouth.png`}
             alt=""
             aria-hidden
+            decoding="async"
+            fetchPriority="high"
             className="sv-anim-float-slow absolute"
             style={
               {
@@ -385,6 +389,8 @@ export function Hero(props: HeroProps = {}) {
             src={`${BASE_ASSET}/hero-brain.png`}
             alt=""
             aria-hidden
+            loading="lazy"
+            decoding="async"
             className="sv-anim-float absolute"
             style={
               {
@@ -402,6 +408,8 @@ export function Hero(props: HeroProps = {}) {
             src={`${BASE_ASSET}/hero-ear.png`}
             alt=""
             aria-hidden
+            loading="lazy"
+            decoding="async"
             className="sv-anim-drift absolute"
             style={
               {
@@ -419,6 +427,8 @@ export function Hero(props: HeroProps = {}) {
             src={`${BASE_ASSET}/hero-hand.png`}
             alt=""
             aria-hidden
+            loading="lazy"
+            decoding="async"
             className="sv-anim-float absolute"
             style={
               {
@@ -436,6 +446,8 @@ export function Hero(props: HeroProps = {}) {
             src={`${BASE_ASSET}/hero-megaphone.png`}
             alt=""
             aria-hidden
+            loading="lazy"
+            decoding="async"
             className="sv-anim-float-slow absolute"
             style={
               {
@@ -453,6 +465,8 @@ export function Hero(props: HeroProps = {}) {
             src={`${BASE_ASSET}/star-lg.png`}
             alt=""
             aria-hidden
+            loading="lazy"
+            decoding="async"
             className="sv-anim-spin-med pointer-events-none absolute"
             style={{ top: "10%", left: "42%", width: 40, zIndex: 7 }}
           />
@@ -460,6 +474,8 @@ export function Hero(props: HeroProps = {}) {
             src={`${BASE_ASSET}/star-sm.png`}
             alt=""
             aria-hidden
+            loading="lazy"
+            decoding="async"
             className="pointer-events-none absolute"
             style={{
               bottom: "6%",

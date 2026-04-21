@@ -902,7 +902,7 @@ select:focus-visible {
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-inter, "Inter"), ui-sans-serif, system-ui, sans-serif;
 }
 
 /* ───────────────────────────────────────────────────────────────

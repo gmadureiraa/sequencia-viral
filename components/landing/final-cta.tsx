@@ -49,6 +49,8 @@ export function FinalCTA(props: FinalCTAProps = {}) {
         src={`${BASE_ASSET}/hero-megaphone.png`}
         alt=""
         aria-hidden
+        loading="lazy"
+        decoding="async"
         className="sv-anim-float-slow absolute"
         style={
           {
@@ -65,6 +67,8 @@ export function FinalCTA(props: FinalCTAProps = {}) {
         src={`${BASE_ASSET}/step-typewriter.png`}
         alt=""
         aria-hidden
+        loading="lazy"
+        decoding="async"
         className="sv-anim-float absolute"
         style={
           {
@@ -81,6 +85,8 @@ export function FinalCTA(props: FinalCTAProps = {}) {
         src={`${BASE_ASSET}/star-lg.png`}
         alt=""
         aria-hidden
+        loading="lazy"
+        decoding="async"
         className="sv-anim-spin-med pointer-events-none absolute"
         style={{ top: "18%", left: "12%", width: 48 }}
       />

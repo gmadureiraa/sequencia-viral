@@ -350,9 +350,9 @@ export default function LandingVelocidade() {
           ],
           [
             "Custo pra postar todo dia",
-            "$9.90/mês",
-            "$15/mês + seu tempo",
-            "$20/mês + seu tempo",
+            "R$ 49/mês",
+            "R$ 80/mês + seu tempo",
+            "R$ 110/mês + seu tempo",
             "Seu fim de semana inteiro",
           ],
         ]}
@@ -513,7 +513,7 @@ export default function LandingVelocidade() {
                 Posso <em>cancelar</em> quando quiser?
               </>
             ),
-            a: "Sem fidelidade. Cancela em 2 cliques pelo painel. Cancelou no mesmo mês que assinou, devolvemos integral. No plano Agência, rateio proporcional. A gente cobra pela velocidade — se não entregou velocidade, não fica com seu dinheiro.",
+            a: "Sem fidelidade. Cancela em 2 cliques pelo painel. Cancelou no mesmo mês que assinou, devolvemos integral. No plano Pro, rateio proporcional. A gente cobra pela velocidade — se não entregou velocidade, não fica com seu dinheiro.",
           },
         ]}
       />

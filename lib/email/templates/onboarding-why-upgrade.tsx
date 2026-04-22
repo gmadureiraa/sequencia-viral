@@ -7,7 +7,7 @@ import {
 } from "./_layout";
 
 /**
- * D+7 — Por que upgrade: mostra limitações do free e o valor do Pro.
+ * D+7 — Por que upgrade: mostra limitações do free e o valor do Creator/Pro.
  */
 export function OnboardingWhyUpgradeEmail({
   name,
@@ -18,14 +18,14 @@ export function OnboardingWhyUpgradeEmail({
 }) {
   const firstName = (name || "").trim().split(" ")[0] || "creator";
   return (
-    <EmailLayout preview="Por que ir pro Pro: 30 carrosséis, zero marca d'água, estilos extras.">
+    <EmailLayout preview="Por que ir pro Creator: 15 carrosséis, zero marca d'água, estilos extras.">
       <EmailKicker>Dia 7 · Upgrade</EmailKicker>
       <EmailHeadline>
         {firstName}, 1 semana de Sequência Viral. Vale um plano pago?
       </EmailHeadline>
       <EmailText>
         Depende. Se você publica 1 carrossel por semana, o grátis resolve.
-        Se sua meta é <strong>crescer de verdade</strong>, o Pro foi feito
+        Se sua meta é <strong>crescer de verdade</strong>, o Creator foi feito
         pro seu ritmo.
       </EmailText>
       <EmailText>
@@ -35,15 +35,15 @@ export function OnboardingWhyUpgradeEmail({
         <strong>Grátis</strong>: 5 carrosséis/mês, marca d&apos;água discreta,
         estilo branco.
         <br />
-        <strong>Pro · $9,90/mês</strong>: 30 carrosséis, zero marca
+        <strong>Creator · R$ 49/mês</strong>: 15 carrosséis, zero marca
         d&apos;água, claro+escuro, imagens com IA/busca, 1 perfil.
         <br />
-        <strong>Agência · $29,90/mês</strong>: 150 carrosséis, 3 seats,
-        API, analytics, custom branding.
+        <strong>Pro · R$ 97/mês</strong>: 60 carrosséis, imagens IA + stock,
+        cache inteligente, suporte prioritário.
       </EmailText>
       <EmailText>
         Matemática simples: 1 carrossel postado = 1 oportunidade de
-        aparecer. 30 carrosséis/mês = 30 chances vs 5. Não é sobre
+        aparecer. 15 carrosséis/mês = 15 chances vs 5. Não é sobre
         quantidade bruta, é sobre <strong>cadência</strong>.
       </EmailText>
       <EmailButton href={`${appUrl}/app/plans`}>

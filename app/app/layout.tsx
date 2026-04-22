@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import {
@@ -850,62 +851,90 @@ function DisabledNavItem({
   tooltip?: { title: string; body: string };
 }) {
   const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(
+    null
+  );
+  const itemRef = useRef<HTMLDivElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  function handleEnter() {
+    if (!tooltip) return;
+    const rect = itemRef.current?.getBoundingClientRect();
+    if (rect) {
+      // Position fixa (portal) — escapa do overflow-y-auto do sidebar.
+      setCoords({
+        top: rect.top + rect.height / 2,
+        left: rect.right + 12,
+      });
+    }
+    setOpen(true);
+  }
+
   return (
     <div
+      ref={itemRef}
       aria-disabled
       className="nav-disabled relative flex items-center gap-2.5 rounded-lg px-2.5 py-[9px] select-none"
       style={commonStyle}
-      onMouseEnter={() => tooltip && setOpen(true)}
+      onMouseEnter={handleEnter}
       onMouseLeave={() => setOpen(false)}
     >
       {content}
-      {tooltip && open && (
-        <div
-          role="tooltip"
-          className="pointer-events-none absolute"
-          style={{
-            left: "calc(100% + 12px)",
-            top: "50%",
-            transform: "translateY(-50%)",
-            minWidth: 220,
-            maxWidth: 280,
-            padding: "12px 14px",
-            background: "var(--sv-ink)",
-            color: "var(--sv-paper)",
-            border: "1.5px solid var(--sv-ink)",
-            borderRadius: 8,
-            boxShadow: "3px 3px 0 0 rgba(0,0,0,0.35)",
-            zIndex: 50,
-          }}
-        >
+      {mounted &&
+        tooltip &&
+        open &&
+        coords &&
+        createPortal(
           <div
-            className="uppercase"
+            role="tooltip"
+            className="pointer-events-none"
             style={{
-              fontFamily: "var(--sv-mono)",
-              fontSize: "9px",
-              letterSpacing: "0.18em",
-              color: "var(--sv-green)",
-              fontWeight: 800,
-              marginBottom: 6,
+              position: "fixed",
+              top: coords.top,
+              left: coords.left,
+              transform: "translateY(-50%)",
+              minWidth: 220,
+              maxWidth: 280,
+              padding: "12px 14px",
+              background: "var(--sv-ink)",
+              color: "var(--sv-paper)",
+              border: "1.5px solid var(--sv-ink)",
+              borderRadius: 8,
+              boxShadow: "3px 3px 0 0 rgba(0,0,0,0.35)",
+              zIndex: 9999,
             }}
           >
-            ● Em breve · {tooltip.title}
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--sv-sans)",
-              fontSize: "12px",
-              lineHeight: 1.5,
-              letterSpacing: 0,
-              textTransform: "none",
-              color: "rgba(247,245,239,0.9)",
-              fontWeight: 400,
-            }}
-          >
-            {tooltip.body}
-          </div>
-        </div>
-      )}
+            <div
+              className="uppercase"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.18em",
+                color: "var(--sv-green)",
+                fontWeight: 800,
+                marginBottom: 6,
+              }}
+            >
+              ● Em breve · {tooltip.title}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--sv-sans)",
+                fontSize: "12px",
+                lineHeight: 1.5,
+                letterSpacing: 0,
+                textTransform: "none",
+                color: "rgba(247,245,239,0.9)",
+                fontWeight: 400,
+              }}
+            >
+              {tooltip.body}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

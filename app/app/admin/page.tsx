@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
+import AnalyticsTab from "./AnalyticsTab";
+import { BarChart3 } from "lucide-react";
 
 /**
  * Painel admin. Acessível apenas pra emails em ADMIN_EMAILS (server-side
@@ -35,6 +37,7 @@ const ADMIN_EMAILS = ["gf.madureiraa@gmail.com", "gf.madureira@hotmail.com"];
 
 type TabId =
   | "overview"
+  | "analytics"
   | "users"
   | "generations"
   | "apis"
@@ -43,6 +46,7 @@ type TabId =
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "overview", label: "Overview", icon: <Activity size={13} /> },
+  { id: "analytics", label: "Analytics", icon: <BarChart3 size={13} /> },
   { id: "users", label: "Usuários", icon: <Users size={13} /> },
   { id: "generations", label: "Gerações", icon: <Zap size={13} /> },
   { id: "feedback", label: "Feedback", icon: <ThumbsUp size={13} /> },
@@ -472,6 +476,7 @@ export default function AdminPage() {
       {stats && (
         <div className="mt-6">
           {activeTab === "overview" && <OverviewTab stats={stats} />}
+          {activeTab === "analytics" && <AnalyticsTab session={session} />}
           {activeTab === "users" && <UsersTab stats={stats} />}
           {activeTab === "generations" && <GenerationsTab stats={stats} />}
           {activeTab === "feedback" && <FeedbackTab stats={stats} />}

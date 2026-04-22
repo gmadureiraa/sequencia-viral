@@ -35,9 +35,9 @@ export function PlanLimitEmail({
           : `${firstName}, só ${remaining} ${remaining === 1 ? "carrossel" : "carrosséis"} até o fim do ciclo.`}
       </EmailHeadline>
       <EmailText>
-        O plano <strong>Creator</strong> (R$ 49/mês) libera 15 carrosséis e
+        O plano <strong>Creator</strong> (R$ 49/mês) libera 10 carrosséis e
         remove a marca d&apos;água. O <strong>Pro</strong> (R$ 97/mês)
-        libera 60/mês — pensado pra quem publica todo dia.
+        libera 30/mês — pensado pra quem publica todo dia.
       </EmailText>
       <EmailButton href={`${appUrl}/app/checkout?plan=pro`}>
         Assinar Creator e continuar publicando

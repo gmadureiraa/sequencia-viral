@@ -39,15 +39,16 @@ export const PLANS = {
     // Product ID do Stripe — criado manualmente no dashboard. DB key 'pro'
     // mapeia pro produto cujo display name e "Creator" (confuso mas legado).
     stripeProductId: "prod_UNrg0hsyOm447P",
-    carouselsPerMonth: 15,
+    carouselsPerMonth: 10,
     features: [
-      "15 carrosséis/mês",
+      "10 carrosséis/mês",
+      "Carrosséis de até 12 slides",
       "Todas as origens (YouTube, blog, Instagram, ideia)",
       "Sem marca d'água",
       "Templates Futurista + Twitter",
       "Export PNG pronto pra postar",
       "1 perfil de voz/marca",
-      "Imagens geradas com IA (Imagen 4) + busca (stock)",
+      "Imagens IA (Imagen 4) + busca (stock)",
       "Suporte por email",
     ],
   },
@@ -58,9 +59,10 @@ export const PLANS = {
     priceAnchor: 14900, // R$ 149 preco normal
     // Product ID do Stripe. DB key 'business' mapeia pro produto "Pro".
     stripeProductId: "prod_UNrgO9pSZYSveR",
-    carouselsPerMonth: 60,
+    carouselsPerMonth: 30,
     features: [
-      "60 carrosséis/mês",
+      "30 carrosséis/mês",
+      "Carrosséis de até 12 slides",
       "Todas as origens",
       "Sem marca d'água",
       "Templates Futurista + Twitter",

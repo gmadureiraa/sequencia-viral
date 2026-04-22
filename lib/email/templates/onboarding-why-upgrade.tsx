@@ -18,7 +18,7 @@ export function OnboardingWhyUpgradeEmail({
 }) {
   const firstName = (name || "").trim().split(" ")[0] || "creator";
   return (
-    <EmailLayout preview="Por que ir pro Creator: 15 carrosséis, zero marca d'água, estilos extras.">
+    <EmailLayout preview="Por que ir pro Creator: 10 carrosséis, zero marca d'água, até 12 slides.">
       <EmailKicker>Dia 7 · Upgrade</EmailKicker>
       <EmailHeadline>
         {firstName}, 1 semana de Sequência Viral. Vale um plano pago?
@@ -35,15 +35,15 @@ export function OnboardingWhyUpgradeEmail({
         <strong>Grátis</strong>: 5 carrosséis/mês, marca d&apos;água discreta,
         estilo branco.
         <br />
-        <strong>Creator · R$ 49/mês</strong>: 15 carrosséis, zero marca
-        d&apos;água, claro+escuro, imagens com IA/busca, 1 perfil.
+        <strong>Creator · R$ 49/mês</strong>: 10 carrosséis, até 12 slides,
+        zero marca d&apos;água, claro+escuro, imagens com IA/busca, 1 perfil.
         <br />
-        <strong>Pro · R$ 97/mês</strong>: 60 carrosséis, imagens IA + stock,
-        cache inteligente, suporte prioritário.
+        <strong>Pro · R$ 97/mês</strong>: 30 carrosséis, até 12 slides, imagens
+        IA + stock, cache inteligente, suporte prioritário.
       </EmailText>
       <EmailText>
         Matemática simples: 1 carrossel postado = 1 oportunidade de
-        aparecer. 15 carrosséis/mês = 15 chances vs 5. Não é sobre
+        aparecer. 10 carrosséis/mês = 10 chances vs 5. Não é sobre
         quantidade bruta, é sobre <strong>cadência</strong>.
       </EmailText>
       <EmailButton href={`${appUrl}/app/plans`}>

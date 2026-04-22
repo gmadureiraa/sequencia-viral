@@ -313,13 +313,13 @@ export function PricingSection() {
             anchor={isAnnual ? `${creatorMonth}/mês no mensal` : creatorAnchor}
             annualSaving={isAnnual ? `Cobrado ${creatorYearTotal}` : undefined}
             features={[
-              "15 carrosséis/mês",
+              "10 carrosséis/mês",
+              "Até 12 slides por carrossel",
               "Voz da IA configurável",
               "Export PNG pronto pra postar",
               "Templates Futurista + Twitter",
               "1 perfil de marca",
               "Transcrição de vídeos",
-              "Histórico completo",
             ]}
             cta={isAnnual ? "Assinar Creator anual →" : "Assinar Creator →"}
             ctaHref={`/app/checkout?plan=pro${isAnnual ? "&interval=year" : ""}`}
@@ -334,7 +334,8 @@ export function PricingSection() {
             anchor={isAnnual ? `${proMonth}/mês no mensal` : proAnchor}
             annualSaving={isAnnual ? `Cobrado ${proYearTotal}` : undefined}
             features={[
-              "60 carrosséis/mês",
+              "30 carrosséis/mês",
+              "Até 12 slides por carrossel",
               "Voz da IA configurável",
               "Imagens IA + stock + cache inteligente",
               "Export PNG + PDF",

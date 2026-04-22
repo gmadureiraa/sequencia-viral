@@ -2922,7 +2922,8 @@ function StepDone({
                 lineHeight: 1.6,
               }}
             >
-              <li>30 carrosséis / mês</li>
+              <li>10 carrosséis / mês</li>
+              <li>Até 12 slides por carrossel</li>
               <li>Todos os templates</li>
               <li>Edição ilimitada</li>
             </ul>
@@ -2975,7 +2976,7 @@ function StepDone({
                 color: "var(--sv-ink)",
               }}
             >
-              R$ 99<span style={{ fontSize: 14 }}>/mês</span>
+              R$ 97<span style={{ fontSize: 14 }}>/mês</span>
             </div>
             <ul
               style={{
@@ -2987,10 +2988,10 @@ function StepDone({
                 lineHeight: 1.6,
               }}
             >
-              <li>Carrosséis ilimitados</li>
-              <li>Imagens Imagen 4 sem limite</li>
-              <li>Voz customizada</li>
-              <li>Agendamento + publish</li>
+              <li>30 carrosséis / mês</li>
+              <li>Até 12 slides por carrossel</li>
+              <li>Imagens IA + stock + cache</li>
+              <li>Suporte prioritário</li>
             </ul>
           </div>
         </div>

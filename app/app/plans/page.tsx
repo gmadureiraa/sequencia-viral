@@ -117,7 +117,7 @@ const FAQ = [
   },
   {
     q: "Qual a diferença entre Creator e Pro?",
-    a: "Creator é pra quem publica toda semana (15 carrosséis/mês). Pro é pra quem publica todo dia ou gerencia mais de uma marca (60 carrosséis/mês + suporte prioritário).",
+    a: "Creator é pra quem publica 2-3× por semana (10 carrosséis/mês). Pro é pra quem publica todo dia ou gerencia mais de uma marca (30 carrosséis/mês + suporte prioritário). Ambos geram carrosséis de até 12 slides.",
   },
 ];
 

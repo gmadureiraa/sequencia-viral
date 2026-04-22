@@ -60,11 +60,11 @@ const HEADLINE: Record<Trigger, React.ReactNode> = {
 
 const SUBLINE: Record<Trigger, string> = {
   "post-onboarding":
-    "Agora que você configurou voz e marca, o Creator (R$ 49/mês · R$ 34 com 30% off) libera 15 carrosséis por mês e destrava tudo.",
+    "Agora que você configurou voz e marca, o Creator (R$ 49/mês · R$ 34 com 30% off) libera 10 carrosséis por mês e destrava tudo.",
   "post-first-carousel":
-    "Gostou? Creator te dá 15 carrosséis/mês por R$ 49 (R$ 34 no primeiro mês com 30% off). Cupom só válido agora.",
+    "Gostou? Creator te dá 10 carrosséis/mês por R$ 49 (R$ 34 no primeiro mês com 30% off). Cupom só válido agora.",
   "limit-reached":
-    "Você usou seus 5 grátis. Upgrade agora pro Creator (R$ 49/mês, R$ 34 no 1º mês) e libera 15 carrosséis/mês.",
+    "Você usou seus 5 grátis. Upgrade agora pro Creator (R$ 49/mês, R$ 34 no 1º mês) e libera 10 carrosséis/mês.",
 };
 
 export function DiscountPopup({ trigger }: { trigger: Trigger }) {

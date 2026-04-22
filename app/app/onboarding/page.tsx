@@ -107,20 +107,20 @@ const IMAGE_STYLES = [
   {
     id: "photo",
     label: "Fotografia editorial",
-    desc: "Cenas reais, luz natural, profundidade de campo",
-    swatches: ["#6E7E4E", "#C9B78C", "#4A3C2E"],
+    desc: "Cenas reais, luz natural, grana",
+    preview: "/onboarding-styles/photo.jpg",
   },
   {
     id: "illus",
     label: "Ilustração",
     desc: "Traço limpo, cores planas, geometria",
-    swatches: ["#FFB380", "#FF6B6B", "#4ECDC4"],
+    preview: "/onboarding-styles/illus.jpg",
   },
   {
     id: "iso3d",
     label: "3D isométrico",
-    desc: "Objetos e cenas em perspectiva isométrica",
-    swatches: ["#8C7AE6", "#6FE7DD", "#E6B8FF"],
+    desc: "Objetos em perspectiva, gradiente pastel",
+    preview: "/onboarding-styles/iso3d.jpg",
   },
 ] as const;
 
@@ -214,7 +214,6 @@ export default function OnboardingPage() {
 
   // ideas
   const [ideas, setIdeas] = useState<Suggestion[]>([]);
-  const [ideaIndex, setIdeaIndex] = useState(0);
   const [ideasLoading, setIdeasLoading] = useState(false);
   const [approvedIdeas, setApprovedIdeas] = useState<Suggestion[]>([]);
 
@@ -449,7 +448,7 @@ export default function OnboardingPage() {
       }
       const body = (await res.json()) as { items?: Suggestion[] };
       setIdeas((body.items ?? []).slice(0, 6));
-      setIdeaIndex(0);
+      setApprovedIdeas([]);
     } catch {
       setIdeas([]);
     } finally {
@@ -461,21 +460,14 @@ export default function OnboardingPage() {
     if (step === "ideas" && ideas.length === 0) void regenIdeas();
   }, [step, ideas.length, regenIdeas]);
 
-  const approveIdea = () => {
-    const current = ideas[ideaIndex];
-    if (!current) return;
-    setApprovedIdeas((prev) => [...prev, current]);
-    setIdeaIndex((i) => i + 1);
+  const toggleIdea = (idea: Suggestion) => {
+    setApprovedIdeas((prev) => {
+      const exists = prev.find((i) => i.id === idea.id);
+      if (exists) return prev.filter((i) => i.id !== idea.id);
+      if (prev.length >= 3) return prev;
+      return [...prev, idea];
+    });
   };
-  const rejectIdea = () => setIdeaIndex((i) => i + 1);
-
-  useEffect(() => {
-    if (step !== "ideas") return;
-    if (approvedIdeas.length >= 3) {
-      const t = setTimeout(() => goto("generating"), 400);
-      return () => clearTimeout(t);
-    }
-  }, [approvedIdeas.length, step, goto]);
 
   // ─── Save profile + generate 3 carousels ───
   const generationStartedRef = useRef(false);
@@ -716,15 +708,12 @@ export default function OnboardingPage() {
               <StepIdeas
                 key="ideas"
                 ideas={ideas}
-                idx={ideaIndex}
+                approvedIdeas={approvedIdeas}
                 loading={ideasLoading}
-                approvedCount={approvedIdeas.length}
-                onApprove={approveIdea}
-                onReject={rejectIdea}
+                onToggle={toggleIdea}
                 onRegen={regenIdeas}
                 onBack={() => goto("visual")}
                 onNext={() => goto("generating")}
-                onSkip={() => goto("generating")}
               />
             )}
             {step === "generating" && (
@@ -740,6 +729,7 @@ export default function OnboardingPage() {
                 generated={
                   genProgress.filter((p) => p.status === "done").length
                 }
+                approvedIdeas={approvedIdeas}
                 onGoDashboard={() => router.push("/app")}
                 onGoCreate={() => router.push("/app/create/new")}
                 firstCarouselId={
@@ -2124,10 +2114,43 @@ function StepVisual({
               >
                 <div
                   style={{
-                    height: 90,
-                    background: `linear-gradient(135deg, ${s.swatches[0]}, ${s.swatches[1]}, ${s.swatches[2]})`,
+                    height: 120,
+                    position: "relative",
+                    overflow: "hidden",
+                    background: "var(--sv-soft)",
                   }}
-                />
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={s.preview}
+                    alt={s.label}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                  />
+                  {on && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 6,
+                        right: 6,
+                        width: 20,
+                        height: 20,
+                        borderRadius: "50%",
+                        background: "var(--sv-green)",
+                        border: "1.5px solid var(--sv-ink)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Check size={11} color="var(--sv-ink)" strokeWidth={3} />
+                    </span>
+                  )}
+                </div>
                 <div
                   style={{
                     padding: 14,
@@ -2225,49 +2248,77 @@ function DesignCard({
       {id === "manifesto" ? (
         <div
           style={{
-            height: 160,
-            background: "#0B0F1E",
-            padding: 18,
+            height: 200,
+            background:
+              "radial-gradient(circle at 30% 20%, #1a2142 0%, #0B0F1E 70%)",
+            padding: 20,
             color: "#fff",
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
             position: "relative",
+            overflow: "hidden",
           }}
         >
-          <span
-            className="uppercase"
+          {/* grid lines sutis ao fundo */}
+          <div
             style={{
-              fontFamily: "var(--sv-mono)",
-              fontSize: 9,
-              letterSpacing: "0.18em",
-              color: accent,
-              fontWeight: 700,
+              position: "absolute",
+              inset: 0,
+              backgroundImage:
+                "linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)",
+              backgroundSize: "22px 22px",
+              opacity: 0.5,
+              pointerEvents: "none",
             }}
-          >
-            MANIFESTO // 01
-          </span>
-          <div>
+          />
+          <div className="flex items-center justify-between relative">
+            <span
+              className="uppercase"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: 9,
+                letterSpacing: "0.22em",
+                color: accent,
+                fontWeight: 700,
+              }}
+            >
+              MANIFESTO // 01
+            </span>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: accent,
+                boxShadow: `0 0 12px ${accent}`,
+              }}
+            />
+          </div>
+          <div className="relative">
             <div
               style={{
                 fontFamily: "var(--sv-display)",
-                fontSize: 24,
-                lineHeight: 1.1,
+                fontSize: 28,
+                lineHeight: 1.05,
                 color: "#fff",
+                letterSpacing: "-0.02em",
               }}
             >
-              A máquina já <em className="italic">aprendeu</em>.
+              A máquina já <em className="italic" style={{ color: accent }}>
+                aprendeu
+              </em>.
             </div>
             <span
-              className="uppercase mt-2 inline-block"
+              className="uppercase mt-3 inline-block"
               style={{
                 fontFamily: "var(--sv-mono)",
                 fontSize: 8,
-                letterSpacing: "0.18em",
-                color: "rgba(255,255,255,.6)",
+                letterSpacing: "0.22em",
+                color: "rgba(255,255,255,.5)",
               }}
             >
-              @SEUHANDLE
+              @SEUHANDLE · 01 / 05
             </span>
           </div>
           <span
@@ -2276,7 +2327,7 @@ function DesignCard({
               left: 0,
               bottom: 0,
               width: "100%",
-              height: 3,
+              height: 4,
               background: accent,
             }}
           />
@@ -2284,41 +2335,59 @@ function DesignCard({
       ) : (
         <div
           style={{
-            height: 160,
+            height: 200,
             background: "#F7F5EF",
-            padding: 18,
+            padding: 20,
             display: "flex",
             flexDirection: "column",
-            gap: 10,
+            gap: 12,
             color: "var(--sv-ink)",
             position: "relative",
           }}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span
               style={{
-                width: 28,
-                height: 28,
+                width: 36,
+                height: 36,
                 borderRadius: "50%",
                 background: accent,
                 border: "1.5px solid var(--sv-ink)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "var(--sv-display)",
+                fontSize: 14,
+                color: "var(--sv-ink)",
               }}
-            />
+            >
+              @
+            </span>
             <div className="flex flex-col">
               <span
+                className="flex items-center gap-1"
                 style={{
                   fontFamily: "var(--sv-sans)",
                   fontWeight: 700,
-                  fontSize: 11,
+                  fontSize: 12,
                   color: "var(--sv-ink)",
                 }}
               >
                 Seu Nome
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill={accent}
+                  style={{ display: "inline" }}
+                >
+                  <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-4-3.818-4-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5c-1.51 0-2.816.917-3.437 2.25-.415-.165-.866-.25-1.336-.25-2.11 0-3.818 1.79-3.818 4 0 .495.083.965.237 1.4-1.272.65-2.147 2.02-2.147 3.6 0 1.58.875 2.95 2.147 3.6-.154.435-.237.905-.237 1.4 0 2.21 1.708 4 3.818 4 .47 0 .92-.086 1.336-.25.62 1.334 1.926 2.25 3.437 2.25 1.51 0 2.818-.916 3.437-2.25.415.163.865.248 1.336.248 2.11 0 3.818-1.79 3.818-4 0-.495-.084-.965-.237-1.4 1.272-.65 2.147-2.02 2.147-3.6zm-11.79 3.375L6.25 12.5l1.708-1.75 2.002 1.998 4.666-4.916L16.5 9.75l-5.78 6.125z" />
+                </svg>
               </span>
               <span
                 style={{
                   fontFamily: "var(--sv-mono)",
-                  fontSize: 9,
+                  fontSize: 10,
                   color: "var(--sv-muted)",
                 }}
               >
@@ -2330,20 +2399,32 @@ function DesignCard({
             style={{
               fontFamily: "var(--sv-sans)",
               fontSize: 13,
-              lineHeight: 1.4,
+              lineHeight: 1.5,
               color: "var(--sv-ink)",
             }}
           >
-            Tweet formatado aqui em texto limpo, pronto pra ser slide de
-            carrossel. 3-4 linhas e manda bala.
+            O tweet vira slide. 3 linhas por card, design limpo, avatar e handle
+            como assinatura.
           </p>
+          <div
+            className="flex items-center gap-4 mt-auto"
+            style={{
+              fontFamily: "var(--sv-mono)",
+              fontSize: 10,
+              color: "var(--sv-muted)",
+            }}
+          >
+            <span>♥ 1,2k</span>
+            <span>🔁 324</span>
+            <span>💬 87</span>
+          </div>
           <span
             style={{
               position: "absolute",
               left: 0,
               bottom: 0,
               width: "100%",
-              height: 3,
+              height: 4,
               background: accent,
             }}
           />
@@ -2385,37 +2466,32 @@ function DesignCard({
 // ──────────────────────────────────────────────────────────────────
 function StepIdeas({
   ideas,
-  idx,
+  approvedIdeas,
   loading,
-  approvedCount,
-  onApprove,
-  onReject,
+  onToggle,
   onRegen,
   onBack,
   onNext,
-  onSkip,
 }: {
   ideas: Suggestion[];
-  idx: number;
+  approvedIdeas: Suggestion[];
   loading: boolean;
-  approvedCount: number;
-  onApprove: () => void;
-  onReject: () => void;
+  onToggle: (idea: Suggestion) => void;
   onRegen: () => void;
   onBack: () => void;
   onNext: () => void;
-  onSkip: () => void;
 }) {
-  const current = ideas[idx];
+  const approvedCount = approvedIdeas.length;
+  const approvedIds = new Set(approvedIdeas.map((i) => i.id));
   return (
     <Card>
       <Eyebrow>● Passo 06 · Ideias</Eyebrow>
       <H1>
-        Aprove <em className="italic">3 ideias</em>.
+        Escolha <em className="italic">3 temas</em> pra virar carrossel.
       </H1>
       <Sub>
-        Geradas em cima do DNA que você acabou de validar. Vamos usar elas pra
-        criar os seus 3 primeiros carrosséis de verdade.
+        Geradas em cima do DNA que você acabou de validar. A gente cria os 3
+        carrosséis de verdade agora mesmo.
       </Sub>
 
       <div
@@ -2444,158 +2520,119 @@ function StepIdeas({
             }}
           />
         </div>
-        <span>{approvedCount} de 3</span>
+        <span>{approvedCount} de 3 selecionados</span>
       </div>
 
-      <AnimatePresence mode="wait">
-        {loading && (
-          <motion.div
-            key="loading"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex flex-col items-center justify-center"
+      {loading && ideas.length === 0 ? (
+        <div
+          className="flex flex-col items-center justify-center"
+          style={{
+            height: 280,
+            border: "1.5px solid var(--sv-ink)",
+            background: "var(--sv-soft)",
+          }}
+        >
+          <Loader2
+            size={22}
+            className="animate-spin"
+            style={{ color: "var(--sv-ink)" }}
+          />
+          <span
+            className="uppercase mt-3"
             style={{
-              height: 220,
-              border: "1.5px solid var(--sv-ink)",
-              background: "var(--sv-soft)",
+              fontFamily: "var(--sv-mono)",
+              fontSize: 10,
+              letterSpacing: "0.2em",
+              color: "var(--sv-ink)",
             }}
           >
-            <Loader2
-              size={22}
-              className="animate-spin"
-              style={{ color: "var(--sv-ink)" }}
-            />
-            <span
-              className="uppercase mt-3"
-              style={{
-                fontFamily: "var(--sv-mono)",
-                fontSize: 10,
-                letterSpacing: "0.2em",
-                color: "var(--sv-ink)",
-              }}
-            >
-              Gerando com base no seu DNA…
-            </span>
-          </motion.div>
-        )}
-        {current && !loading && (
-          <motion.div
-            key={current.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.25 }}
-            className="flex flex-col items-center justify-center text-center"
-            style={{
-              padding: 32,
-              minHeight: 220,
-              border: "1.5px solid var(--sv-ink)",
-              background: "var(--sv-white)",
-              boxShadow: "4px 4px 0 0 var(--sv-ink)",
-            }}
-          >
-            <div
-              className="uppercase mb-3"
-              style={{
-                fontFamily: "var(--sv-mono)",
-                fontSize: 10,
-                letterSpacing: "0.2em",
-                color: "var(--sv-muted)",
-              }}
-            >
-              Ideia {idx + 1} / {Math.max(ideas.length, 3)}
-            </div>
-            <h2
-              style={{
-                fontFamily: "var(--sv-display)",
-                fontSize: "clamp(20px, 3vw, 26px)",
-                lineHeight: 1.25,
-                color: "var(--sv-ink)",
-                marginBottom: 10,
-                maxWidth: 600,
-              }}
-            >
-              {current.title}
-            </h2>
-            <p
-              style={{
-                fontFamily: "var(--sv-sans)",
-                fontSize: 13,
-                color: "var(--sv-muted)",
-                maxWidth: 520,
-                lineHeight: 1.55,
-              }}
-            >
-              {current.angle}
-            </p>
-          </motion.div>
-        )}
-        {!current && !loading && (
-          <motion.div
-            key="empty"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center"
-            style={{
-              padding: 24,
-              border: "1.5px solid var(--sv-ink)",
-              background: "var(--sv-soft)",
-            }}
-          >
-            <p
-              className="uppercase"
-              style={{
-                fontFamily: "var(--sv-mono)",
-                fontSize: 11,
-                letterSpacing: "0.18em",
-                color: "var(--sv-muted)",
-              }}
-            >
-              {approvedCount >= 3
-                ? "3 ideias aprovadas! Bora gerar."
-                : "Acabaram as sugestões. Regenere ou segue com o que aprovou."}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {current && !loading && (
-        <div className="flex items-center justify-center gap-3 mt-5">
-          <button
-            onClick={onReject}
-            className="sv-btn sv-btn-ghost"
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: "50%",
-              padding: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              border: "1.5px solid var(--sv-ink)",
-              background: "var(--sv-white)",
-            }}
-            aria-label="Descartar"
-          >
-            <X size={20} />
-          </button>
-          <button
-            onClick={onApprove}
-            className="sv-btn sv-btn-primary"
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: "50%",
-              padding: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            aria-label="Aprovar"
-          >
-            <Check size={22} strokeWidth={3} />
-          </button>
+            Gerando com base no seu DNA…
+          </span>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {ideas.slice(0, 6).map((idea) => {
+            const selected = approvedIds.has(idea.id);
+            const canSelect = selected || approvedCount < 3;
+            return (
+              <button
+                key={idea.id}
+                onClick={() => canSelect && onToggle(idea)}
+                disabled={!canSelect}
+                className="text-left"
+                style={{
+                  padding: 18,
+                  background: selected ? "var(--sv-green)" : "var(--sv-white)",
+                  border: "1.5px solid var(--sv-ink)",
+                  boxShadow: selected ? "4px 4px 0 0 var(--sv-ink)" : "none",
+                  transform: selected ? "translate(-1px, -1px)" : "none",
+                  cursor: canSelect ? "pointer" : "not-allowed",
+                  opacity: canSelect ? 1 : 0.4,
+                  position: "relative",
+                  transition: "transform .15s, box-shadow .15s",
+                  minHeight: 150,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 10,
+                    right: 10,
+                    width: 22,
+                    height: 22,
+                    borderRadius: "50%",
+                    border: "1.5px solid var(--sv-ink)",
+                    background: selected ? "var(--sv-ink)" : "var(--sv-white)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {selected && (
+                    <Check size={12} color="#fff" strokeWidth={3} />
+                  )}
+                </div>
+                <div
+                  className="uppercase"
+                  style={{
+                    fontFamily: "var(--sv-mono)",
+                    fontSize: 9,
+                    letterSpacing: "0.2em",
+                    color: "var(--sv-muted)",
+                    paddingRight: 30,
+                  }}
+                >
+                  {idea.style ?? "Carrossel"}
+                </div>
+                <h3
+                  style={{
+                    fontFamily: "var(--sv-display)",
+                    fontSize: 18,
+                    lineHeight: 1.2,
+                    color: "var(--sv-ink)",
+                    paddingRight: 10,
+                  }}
+                >
+                  {idea.title}
+                </h3>
+                {idea.angle && (
+                  <p
+                    style={{
+                      fontFamily: "var(--sv-sans)",
+                      fontSize: 12,
+                      color: "var(--sv-muted)",
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {idea.angle}
+                  </p>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -2626,28 +2663,18 @@ function StepIdeas({
           >
             <RefreshCw size={12} /> Regerar
           </button>
-          {approvedCount < 3 && (
-            <button
-              onClick={onSkip}
-              disabled={approvedCount === 0}
-              className="sv-btn sv-btn-ghost"
-              style={{ padding: "10px 14px", fontSize: 11 }}
-            >
-              Seguir com {approvedCount} →
-            </button>
-          )}
           <button
             onClick={onNext}
-            disabled={approvedCount < 1}
+            disabled={approvedCount < 3}
             className="sv-btn sv-btn-primary"
             style={{
               padding: "14px 22px",
               fontSize: 12,
-              opacity: approvedCount < 1 ? 0.5 : 1,
+              opacity: approvedCount < 3 ? 0.5 : 1,
             }}
           >
             {approvedCount >= 3
-              ? "Gerar carrosséis →"
+              ? "Gerar 3 carrosséis →"
               : `Faltam ${3 - approvedCount}`}
           </button>
         </div>
@@ -2800,12 +2827,165 @@ function StepDone({
   onGoDashboard,
   onGoCreate,
   firstCarouselId,
+  approvedIdeas,
 }: {
   generated: number;
   onGoDashboard: () => void;
   onGoCreate: () => void;
   firstCarouselId: string | null;
+  approvedIdeas: Suggestion[];
 }) {
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  if (showPaywall) {
+    return (
+      <Card>
+        <Eyebrow>● Último passo · Plano</Eyebrow>
+        <H1>
+          <em className="italic">Destrave</em> a sequência inteira.
+        </H1>
+        <Sub>
+          Os 3 primeiros carrosséis já consumiram o limite gratuito. Pra
+          continuar publicando no ritmo certo, escolha um plano.
+        </Sub>
+
+        <div className="grid sm:grid-cols-2 gap-3 mt-3">
+          <div
+            style={{
+              padding: 22,
+              border: "1.5px solid var(--sv-ink)",
+              background: "var(--sv-white)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            <span
+              className="uppercase"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: 10,
+                letterSpacing: "0.2em",
+                color: "var(--sv-muted)",
+              }}
+            >
+              Creator
+            </span>
+            <div
+              style={{
+                fontFamily: "var(--sv-display)",
+                fontSize: 32,
+                color: "var(--sv-ink)",
+              }}
+            >
+              R$ 49<span style={{ fontSize: 14 }}>/mês</span>
+            </div>
+            <ul
+              style={{
+                fontFamily: "var(--sv-sans)",
+                fontSize: 13,
+                color: "var(--sv-ink)",
+                paddingLeft: 18,
+                listStyle: "disc",
+                lineHeight: 1.6,
+              }}
+            >
+              <li>30 carrosséis / mês</li>
+              <li>Todos os templates</li>
+              <li>Edição ilimitada</li>
+            </ul>
+          </div>
+          <div
+            style={{
+              padding: 22,
+              border: "1.5px solid var(--sv-ink)",
+              background: "var(--sv-green)",
+              boxShadow: "4px 4px 0 0 var(--sv-ink)",
+              transform: "translate(-1px, -1px)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              position: "relative",
+            }}
+          >
+            <span
+              className="uppercase"
+              style={{
+                position: "absolute",
+                top: 10,
+                right: 10,
+                background: "var(--sv-ink)",
+                color: "#fff",
+                padding: "3px 8px",
+                fontFamily: "var(--sv-mono)",
+                fontSize: 9,
+                letterSpacing: "0.18em",
+                fontWeight: 700,
+              }}
+            >
+              Popular
+            </span>
+            <span
+              className="uppercase"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: 10,
+                letterSpacing: "0.2em",
+                color: "var(--sv-ink)",
+              }}
+            >
+              Pro
+            </span>
+            <div
+              style={{
+                fontFamily: "var(--sv-display)",
+                fontSize: 32,
+                color: "var(--sv-ink)",
+              }}
+            >
+              R$ 99<span style={{ fontSize: 14 }}>/mês</span>
+            </div>
+            <ul
+              style={{
+                fontFamily: "var(--sv-sans)",
+                fontSize: 13,
+                color: "var(--sv-ink)",
+                paddingLeft: 18,
+                listStyle: "disc",
+                lineHeight: 1.6,
+              }}
+            >
+              <li>Carrosséis ilimitados</li>
+              <li>Imagens Imagen 4 sem limite</li>
+              <li>Voz customizada</li>
+              <li>Agendamento + publish</li>
+            </ul>
+          </div>
+        </div>
+
+        <div
+          className="mt-8 flex items-center justify-between gap-3"
+          style={{ borderTop: "1.5px solid var(--sv-ink)", paddingTop: 20 }}
+        >
+          <button
+            onClick={onGoDashboard}
+            className="sv-btn sv-btn-ghost"
+            style={{ padding: "10px 14px", fontSize: 11 }}
+          >
+            Continuar grátis por enquanto
+          </button>
+          <button
+            onClick={() => (window.location.href = "/app/plans")}
+            className="sv-btn sv-btn-primary"
+            style={{ padding: "14px 22px", fontSize: 12 }}
+          >
+            Ver planos completos →
+          </button>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <Eyebrow>● Passo 08 · Pronto</Eyebrow>
@@ -2814,13 +2994,70 @@ function StepDone({
         {generated === 1 ? "" : "éis"} gerado{generated === 1 ? "" : "s"}.
       </H1>
       <Sub>
-        Cada um já está no seu editor com slides, título e imagem. Abre e
-        refina o texto do jeito que você quer.
+        Cada um já está no seu editor com slides, título e imagem. Abre, refina
+        o texto e posta.
       </Sub>
+
+      {approvedIdeas.length > 0 && (
+        <div
+          className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-1"
+          style={{ marginBottom: 10 }}
+        >
+          {approvedIdeas.slice(0, 3).map((idea, i) => (
+            <div
+              key={idea.id}
+              style={{
+                padding: 14,
+                border: "1.5px solid var(--sv-ink)",
+                background: "var(--sv-white)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                minHeight: 140,
+              }}
+            >
+              <span
+                className="uppercase"
+                style={{
+                  fontFamily: "var(--sv-mono)",
+                  fontSize: 9,
+                  letterSpacing: "0.2em",
+                  color: "var(--sv-muted)",
+                }}
+              >
+                Carrossel {i + 1}
+              </span>
+              <h4
+                style={{
+                  fontFamily: "var(--sv-display)",
+                  fontSize: 16,
+                  lineHeight: 1.2,
+                  color: "var(--sv-ink)",
+                }}
+              >
+                {idea.title}
+              </h4>
+              {idea.angle && (
+                <p
+                  style={{
+                    fontFamily: "var(--sv-sans)",
+                    fontSize: 11,
+                    color: "var(--sv-muted)",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {idea.angle.slice(0, 100)}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div
         className="flex flex-col gap-3 mt-2"
         style={{
-          padding: 20,
+          padding: 18,
           background: "var(--sv-soft)",
           border: "1.5px solid var(--sv-ink)",
         }}
@@ -2834,7 +3071,7 @@ function StepDone({
             color: "var(--sv-ink)",
           }}
         >
-          Próximo passo
+          Heads up
         </span>
         <span
           style={{
@@ -2843,21 +3080,15 @@ function StepDone({
             color: "var(--sv-ink)",
           }}
         >
-          Abra o primeiro carrossel pra conferir. Dá pra editar título, corpo,
-          trocar imagens e baixar o zip pronto.
+          Esses 3 carrosséis já consumiram seu limite gratuito. Continuar
+          publicando com frequência = plano Creator ou Pro.
         </span>
       </div>
+
       <div
         className="mt-8 flex items-center justify-between gap-3"
         style={{ borderTop: "1.5px solid var(--sv-ink)", paddingTop: 20 }}
       >
-        <button
-          onClick={onGoDashboard}
-          className="sv-btn sv-btn-ghost"
-          style={{ padding: "10px 14px", fontSize: 11 }}
-        >
-          Ir pro dashboard
-        </button>
         <button
           onClick={
             firstCarouselId
@@ -2865,10 +3096,17 @@ function StepDone({
                   (window.location.href = `/app/create/${firstCarouselId}/edit`)
               : onGoCreate
           }
+          className="sv-btn sv-btn-ghost"
+          style={{ padding: "10px 14px", fontSize: 11 }}
+        >
+          Editar primeiro carrossel
+        </button>
+        <button
+          onClick={() => setShowPaywall(true)}
           className="sv-btn sv-btn-primary"
           style={{ padding: "14px 22px", fontSize: 12 }}
         >
-          Editar primeiro carrossel →
+          Continuar →
         </button>
       </div>
     </Card>

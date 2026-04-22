@@ -17,6 +17,8 @@ import {
   Search,
   Shield,
   ImageIcon,
+  CalendarClock,
+  Rocket,
 } from "lucide-react";
 import Link from "next/link";
 import { Toaster } from "@/components/ui/sonner";
@@ -26,6 +28,7 @@ type NavItem = {
   label: string;
   icon: typeof LayoutDashboard;
   badge?: string;
+  disabled?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -35,6 +38,20 @@ const NAV_ITEMS: NavItem[] = [
   // Galeria temporariamente oculta (/app/gallery, /api/gallery ainda existem).
   // Pra reativar, descomentar a linha abaixo.
   // { href: "/app/gallery", label: "Galeria", icon: ImageIcon },
+  {
+    href: "#",
+    label: "Planejamento",
+    icon: CalendarClock,
+    badge: "Em breve",
+    disabled: true,
+  },
+  {
+    href: "#",
+    label: "Piloto automático",
+    icon: Rocket,
+    badge: "Em breve",
+    disabled: true,
+  },
   { href: "/app/plans", label: "Assinar", icon: Sparkles, badge: "Pro" },
   { href: "/app/help", label: "Guia", icon: BookOpen },
   { href: "/app/roadmap", label: "Roadmap", icon: Map },
@@ -236,25 +253,72 @@ function SidebarContent({
         const items = isAdmin ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS;
         return (
           <nav className="flex flex-col gap-[2px]">
-            {items.map(({ href, label, icon: Icon, badge }) => {
+            {items.map(({ href, label, icon: Icon, badge, disabled }, idx) => {
           const active =
-            href === "/app" ? pathname === "/app" : pathname.startsWith(href);
+            !disabled &&
+            (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
+          const commonStyle = {
+            fontFamily: "var(--sv-mono)",
+            fontSize: "10.5px",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase" as const,
+            fontWeight: 600,
+            background: active ? "var(--sv-green)" : "transparent",
+            color: disabled
+              ? "rgba(247,245,239,0.36)"
+              : active
+                ? "var(--sv-ink)"
+                : "rgba(247,245,239,0.72)",
+            boxShadow: active ? "2px 2px 0 0 rgba(0,0,0,0.3)" : "none",
+            cursor: disabled ? "not-allowed" : "pointer",
+          };
+          const content = (
+            <>
+              <Icon size={15} strokeWidth={1.8} className="shrink-0" />
+              <span className="flex-1 whitespace-nowrap">{label}</span>
+              {badge && (
+                <span
+                  className="shrink-0 rounded-full px-1.5 py-[1px]"
+                  style={{
+                    fontSize: "8px",
+                    fontWeight: 800,
+                    letterSpacing: "0.1em",
+                    background:
+                      disabled
+                        ? "rgba(247,245,239,0.14)"
+                        : active
+                          ? "rgba(0,0,0,0.15)"
+                          : "var(--sv-green)",
+                    color: disabled
+                      ? "rgba(247,245,239,0.55)"
+                      : "var(--sv-ink)",
+                  }}
+                >
+                  {badge}
+                </span>
+              )}
+            </>
+          );
+          if (disabled) {
+            return (
+              <div
+                key={`${href}-${idx}`}
+                aria-disabled
+                title={`${label} — em breve`}
+                className="flex items-center gap-2.5 rounded-lg px-2.5 py-[9px] select-none"
+                style={commonStyle}
+              >
+                {content}
+              </div>
+            );
+          }
           return (
             <Link
               key={href}
               href={href}
               onClick={onNavigate}
               className="flex items-center gap-2.5 rounded-lg px-2.5 py-[9px] transition-all duration-150"
-              style={{
-                fontFamily: "var(--sv-mono)",
-                fontSize: "10.5px",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                fontWeight: 600,
-                background: active ? "var(--sv-green)" : "transparent",
-                color: active ? "var(--sv-ink)" : "rgba(247,245,239,0.72)",
-                boxShadow: active ? "2px 2px 0 0 rgba(0,0,0,0.3)" : "none",
-              }}
+              style={commonStyle}
               onMouseEnter={(e) => {
                 if (!active) {
                   e.currentTarget.style.background = "rgba(255,255,255,0.06)";
@@ -268,24 +332,7 @@ function SidebarContent({
                 }
               }}
             >
-              <Icon size={15} strokeWidth={1.8} className="shrink-0" />
-              <span className="flex-1 whitespace-nowrap">{label}</span>
-              {badge && (
-                <span
-                  className="shrink-0 rounded-full px-1.5 py-[1px]"
-                  style={{
-                    fontSize: "8px",
-                    fontWeight: 800,
-                    letterSpacing: "0.1em",
-                    background: active
-                      ? "rgba(0,0,0,0.15)"
-                      : "var(--sv-green)",
-                    color: active ? "var(--sv-ink)" : "var(--sv-ink)",
-                  }}
-                >
-                  {badge}
-                </span>
-              )}
+              {content}
             </Link>
           );
         })}

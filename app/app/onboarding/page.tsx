@@ -475,6 +475,11 @@ export default function OnboardingPage() {
     if (step !== "generating" || generationStartedRef.current) return;
     generationStartedRef.current = true;
     void runGeneration();
+    // Reset quando sair de "generating" — se user voltar ou remount, tenta
+    // de novo em vez de skip silencioso.
+    return () => {
+      if (step !== "generating") generationStartedRef.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
@@ -527,76 +532,103 @@ export default function OnboardingPage() {
     }
     setSaving(false);
 
-    const queue = approvedIdeas.slice(0, 3);
-    while (queue.length < 3 && ideas[queue.length])
-      queue.push(ideas[queue.length]);
-    if (queue.length === 0) {
+    const pickedIdeas = approvedIdeas.slice(0, 3);
+    while (pickedIdeas.length < 3 && ideas[pickedIdeas.length])
+      pickedIdeas.push(ideas[pickedIdeas.length]);
+    if (pickedIdeas.length === 0) {
       goto("done");
       return;
     }
 
+    // Pre-aloca UUIDs: se /api/generate falhar no meio do retry, o upsert
+    // usa o mesmo id e NAO duplica carrossel na gallery.
+    const randomId = (): string => {
+      const g = globalThis as unknown as {
+        crypto?: { randomUUID?: () => string };
+      };
+      if (g.crypto?.randomUUID) return g.crypto.randomUUID();
+      // Fallback muito basico se crypto.randomUUID nao existir (Node < 19).
+      return (
+        Math.random().toString(36).slice(2, 10) +
+        "-" +
+        Math.random().toString(36).slice(2, 10) +
+        "-" +
+        Date.now().toString(36)
+      );
+    };
+    const queue = pickedIdeas.map((idea) => ({
+      idea,
+      carouselId: randomId(),
+    }));
+
     setGenProgress(
-      queue.map((q) => ({ title: q.title, status: "queued" as const }))
+      queue.map(({ idea }) => ({
+        title: idea.title,
+        status: "queued" as const,
+      }))
     );
 
-    await Promise.allSettled(
-      queue.map(async (idea, i) => {
-        setGenProgress((prev) =>
-          prev.map((p, idx) => (idx === i ? { ...p, status: "running" } : p))
-        );
-        try {
-          const res = await fetch("/api/generate", {
-            method: "POST",
-            headers: jsonWithAuth(session),
-            body: JSON.stringify({
-              topic:
-                idea.title + (idea.angle ? ` — ${idea.angle}` : ""),
-              sourceType: "idea",
-              niche: dnaNiches[0] ?? "",
-              tone: dnaTone,
-              language: "pt-br",
-              designTemplate: designId,
-            }),
+    // Serializa: 3 chamadas em sequencia. Evita race da quota check atomica
+    // no fallback non-RPC (3 paralelos podem ler usage_count<limit e todos
+    // insertam, estourando o free tier).
+    for (let i = 0; i < queue.length; i++) {
+      const { idea, carouselId } = queue[i];
+      setGenProgress((prev) =>
+        prev.map((p, idx) => (idx === i ? { ...p, status: "running" } : p))
+      );
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: jsonWithAuth(session),
+          body: JSON.stringify({
+            topic: idea.title + (idea.angle ? ` — ${idea.angle}` : ""),
+            sourceType: "idea",
+            niche: dnaNiches[0] ?? "",
+            tone: dnaTone,
+            language: "pt-br",
+            designTemplate: designId,
+          }),
+        });
+        if (!res.ok) {
+          const b = await res.json().catch(() => null);
+          throw new Error(
+            typeof b?.error === "string" ? b.error : "Falha na geração"
+          );
+        }
+        const body = await res.json();
+        if (supabase && user) {
+          const slides = Array.isArray(body.slides) ? body.slides : [];
+          const saved = await upsertUserCarousel(supabase, user.id, {
+            id: carouselId,
+            title: body.title || idea.title,
+            slides,
+            slideStyle: "white",
+            status: "draft",
+            designTemplate: designId,
+            creationMode: "quick",
+            accentOverride: colorHex,
           });
-          if (!res.ok) {
-            const b = await res.json().catch(() => null);
-            throw new Error(
-              typeof b?.error === "string" ? b.error : "Falha na geração"
-            );
-          }
-          const body = await res.json();
-          if (supabase && user) {
-            const slides = Array.isArray(body.slides) ? body.slides : [];
-            const saved = await upsertUserCarousel(supabase, user.id, {
-              title: body.title || idea.title,
-              slides,
-              slideStyle: "white",
-              status: "draft",
-              designTemplate: designId,
-              creationMode: "quick",
-              accentOverride: colorHex,
-            });
-            setGenProgress((prev) =>
-              prev.map((p, idx) =>
-                idx === i
-                  ? { ...p, status: "done", carouselId: saved.row.id }
-                  : p
-              )
-            );
-            return saved.row.id;
-          }
-          return null;
-        } catch (err) {
           setGenProgress((prev) =>
             prev.map((p, idx) =>
-              idx === i ? { ...p, status: "error" } : p
+              idx === i
+                ? { ...p, status: "done", carouselId: saved.row.id }
+                : p
             )
           );
-          console.error("[onboarding-generate] idea failed:", err);
-          return null;
         }
-      })
-    );
+      } catch (err) {
+        setGenProgress((prev) =>
+          prev.map((p, idx) => (idx === i ? { ...p, status: "error" } : p))
+        );
+        const msg = err instanceof Error ? err.message : "Erro desconhecido";
+        console.error("[onboarding-generate] idea failed:", err);
+        toast.error(
+          `Carrossel "${idea.title.slice(0, 40)}${
+            idea.title.length > 40 ? "…" : ""
+          }" falhou: ${msg.slice(0, 80)}`
+        );
+      }
+    }
 
     setTimeout(() => goto("done"), 600);
   }

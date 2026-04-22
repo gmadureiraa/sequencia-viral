@@ -12,6 +12,12 @@ import { toast } from "sonner";
 
 async function waitForImagesInElement(el: HTMLElement): Promise<void> {
   const imgs = el.querySelectorAll("img");
+  // BUG FIX: cross-origin images com CORS bloqueado as vezes nao disparam
+  // 'load' nem 'error' de forma confiavel em webkit — export ficava preso
+  // em "Preparando export..." infinito. Hard cap 3s por imagem: se nao
+  // carregou nem deu erro em 3s, segue em frente. Imagem pode ficar em branco
+  // mas pelo menos o export nao trava.
+  const IMG_TIMEOUT_MS = 3000;
   await Promise.all(
     Array.from(imgs).map(
       (img) =>
@@ -20,7 +26,11 @@ async function waitForImagesInElement(el: HTMLElement): Promise<void> {
             resolve();
             return;
           }
-          const done = () => resolve();
+          const done = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          const timer = setTimeout(done, IMG_TIMEOUT_MS);
           img.addEventListener("load", done, { once: true });
           img.addEventListener("error", done, { once: true });
         })
@@ -181,10 +191,69 @@ export function useExport(totalSlides: number) {
     [totalSlides, waitRender, captureSlideAsPng]
   );
 
+  // Export .zip real: capta todos slides, empacota via JSZip e downloa 1 arquivo.
+  // Antes, o botao 'Baixar .zip' chamava exportPng() que na verdade fazia
+  // N downloads separados — confuso e lento. Agora e 1 .zip de verdade.
+  const exportZip = useCallback(
+    async (filename = "sequencia-viral-carrossel") => {
+      setIsExporting(true);
+      setProgress("Preparando .zip...");
+      try {
+        await waitRender();
+        const { default: JSZip } = await import("jszip");
+        const zip = new JSZip();
+        let added = 0;
+        for (let i = 0; i < totalSlides; i++) {
+          setProgress(`Gerando slide ${i + 1}/${totalSlides}...`);
+          try {
+            const dataUrl = await captureSlideAsPng(i);
+            // dataURL = "data:image/png;base64,..." — extrai base64
+            const base64 = dataUrl.split(",")[1] ?? "";
+            if (base64) {
+              zip.file(`slide-${String(i + 1).padStart(2, "0")}.png`, base64, {
+                base64: true,
+              });
+              added++;
+            }
+          } catch (slideErr) {
+            console.warn(`[ZIP] Falha slide ${i + 1}:`, slideErr);
+          }
+        }
+        if (added === 0) {
+          toast.error("Nenhum slide pra empacotar.");
+          return;
+        }
+        setProgress("Empacotando .zip...");
+        const blob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${filename
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .slice(0, 50)}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success(`.zip com ${added} slides baixado.`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        console.error("Export ZIP error:", err);
+        toast.error(`Falha .zip. ${msg}`.trim());
+      } finally {
+        setProgress("");
+        setIsExporting(false);
+      }
+    },
+    [totalSlides, waitRender, captureSlideAsPng]
+  );
+
   return {
     exportRefs,
     exportPng,
     exportPdf,
+    exportZip,
     isExporting,
     progress,
   };

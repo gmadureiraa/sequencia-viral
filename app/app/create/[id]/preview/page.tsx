@@ -11,6 +11,7 @@ import { useExport } from "@/lib/create/use-export";
 import { useCaption } from "@/lib/create/use-caption";
 import { supabase } from "@/lib/supabase";
 import { upsertUserCarousel } from "@/lib/carousel-storage";
+import CarouselFeedbackPanel from "@/components/app/carousel-feedback";
 
 // Mesmo injector que o edit usa — garante que a fonte display escolhida
 // esteja disponível no momento do export PNG/PDF.
@@ -118,9 +119,8 @@ export default function PreviewPage(props: {
 
   const slideStyle = draft?.style === "dark" ? "dark" : "white";
 
-  const { exportRefs, exportPng, exportPdf, isExporting, progress } = useExport(
-    slides.length
-  );
+  const { exportRefs, exportPng, exportPdf, exportZip, isExporting, progress } =
+    useExport(slides.length);
 
   const {
     generate: generateCaption,
@@ -675,7 +675,7 @@ export default function PreviewPage(props: {
             </h4>
             <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
               {[
-                { label: "Baixar .zip", hi: true, onClick: () => void exportPng() },
+                { label: "Baixar .zip", hi: true, onClick: () => void exportZip(draft.title) },
                 { label: `PNG × ${slides.length}`, onClick: () => void exportPng() },
                 { label: "PDF", onClick: () => void exportPdf(draft.title) },
                 { label: "Copiar", onClick: () => void handleClipboard() },
@@ -1021,6 +1021,27 @@ export default function PreviewPage(props: {
           </div>
         </div>
       </div>
+
+      {/* Feedback do carrossel — aparece só aqui (pos-finalizacao). Antes
+          ficava no editor, mas atrapalhava o foco de edicao. */}
+      {draft && user?.id && (
+        <section
+          className="mt-10"
+          style={{
+            padding: "20px 22px",
+            border: "1.5px solid var(--sv-ink)",
+            boxShadow: "3px 3px 0 0 var(--sv-ink)",
+            background: "var(--sv-white)",
+          }}
+        >
+          <CarouselFeedbackPanel
+            carouselId={draft.id}
+            userId={user.id}
+            supabase={supabase}
+            initial={draft.feedback ?? null}
+          />
+        </section>
+      )}
 
       {/* Export render hidden container: 1080×1350 full scale. */}
       <div

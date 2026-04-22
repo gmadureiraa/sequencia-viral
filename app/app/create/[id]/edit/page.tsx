@@ -2,6 +2,7 @@
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -13,7 +14,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { useDraft, useAutoSaveDraft } from "@/lib/create/use-draft";
 import { useImages } from "@/lib/create/use-images";
-import CarouselFeedbackPanel from "@/components/app/carousel-feedback";
+// CarouselFeedbackPanel removido — agora so aparece em /app/create/[id]/preview.
 import { DiscountPopup } from "@/components/app/discount-popup";
 import { ImagePicker } from "@/components/app/image-picker";
 import { supabase } from "@/lib/supabase";
@@ -1192,63 +1193,40 @@ export default function EditPage(props: {
 
   const BrandingCol = (
     <div className="flex flex-col gap-4">
-      <h4
+      {/*
+        Branding (nome + handle + accent) removidos intencionalmente do editor
+        — sao propriedades do BRAND do user, nao do carrossel individual.
+        Editaveis só em /app/settings (aba Perfil). Aqui mostramos readonly
+        lock + link pra ajustar no lugar certo.
+      */}
+      <div
         style={{
+          padding: "10px 12px",
+          border: "1.5px dashed var(--sv-ink)",
+          background: "rgba(0,0,0,0.03)",
           fontFamily: "var(--sv-mono)",
-          fontSize: 9.5,
-          letterSpacing: "0.2em",
+          fontSize: 9,
+          letterSpacing: "0.14em",
           textTransform: "uppercase",
           color: "var(--sv-muted)",
-          fontWeight: 700,
+          lineHeight: 1.5,
         }}
       >
-        Branding
-      </h4>
-      <div>
-        <label
+        <div style={{ fontWeight: 800, color: "var(--sv-ink)", marginBottom: 4 }}>
+          ● {kicker || "Seu nome"} · @{(handle || "seuhandle").replace(/^@/, "")}
+        </div>
+        Nome, @ e cor de destaque vem do seu{" "}
+        <Link
+          href="/app/settings"
           style={{
-            display: "block",
-            fontFamily: "var(--sv-mono)",
-            fontSize: 9,
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-            color: "var(--sv-muted)",
-            marginBottom: 6,
-            fontWeight: 700,
+            color: "var(--sv-ink)",
+            textDecoration: "underline",
+            textUnderlineOffset: 3,
           }}
         >
-          Kicker (nome)
-        </label>
-        <input
-          type="text"
-          value={kicker}
-          onChange={(e) => setKicker(e.target.value)}
-          className="sv-input"
-          style={{ width: "100%", fontSize: 13 }}
-        />
-      </div>
-      <div>
-        <label
-          style={{
-            display: "block",
-            fontFamily: "var(--sv-mono)",
-            fontSize: 9,
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-            color: "var(--sv-muted)",
-            marginBottom: 6,
-            fontWeight: 700,
-          }}
-        >
-          @ Handle
-        </label>
-        <input
-          type="text"
-          value={handle}
-          onChange={(e) => setHandle(e.target.value)}
-          className="sv-input"
-          style={{ width: "100%", fontSize: 13 }}
-        />
+          perfil
+        </Link>
+        .
       </div>
 
       <h4
@@ -1259,7 +1237,7 @@ export default function EditPage(props: {
           textTransform: "uppercase",
           color: "var(--sv-muted)",
           fontWeight: 700,
-          marginTop: 10,
+          marginTop: 6,
         }}
       >
         Fonte display
@@ -1292,43 +1270,7 @@ export default function EditPage(props: {
         ))}
       </div>
 
-      <h4
-        style={{
-          fontFamily: "var(--sv-mono)",
-          fontSize: 9.5,
-          letterSpacing: "0.2em",
-          textTransform: "uppercase",
-          color: "var(--sv-muted)",
-          fontWeight: 700,
-          marginTop: 10,
-        }}
-      >
-        Cor de destaque
-      </h4>
-      <div className="flex flex-wrap gap-1.5">
-        {accentSwatches.map((color) => (
-          <button
-            key={color}
-            type="button"
-            onClick={() => {
-              setAccent(color);
-              setAccentTouched(true);
-            }}
-            style={{
-              width: 26,
-              height: 26,
-              background: color,
-              border: "1.5px solid var(--sv-ink)",
-              cursor: "pointer",
-              boxShadow:
-                accent === color && accentTouched
-                  ? "0 0 0 2px var(--sv-paper) inset, 0 0 0 4px var(--sv-ink)"
-                  : "none",
-            }}
-            aria-label={`Accent ${color}`}
-          />
-        ))}
-      </div>
+      {/* Cor de destaque removida — locked no brand color do user (settings). */}
 
       <h4
         style={{
@@ -1563,21 +1505,11 @@ export default function EditPage(props: {
         Template: <strong>{selectedMeta?.name ?? templateId}</strong>
       </div>
 
-      <div
-        style={{
-          marginTop: 14,
-          paddingTop: 14,
-          borderTop: "1px dashed var(--sv-ink)",
-        }}
-      >
-        <CarouselFeedbackPanel
-          carouselId={draft?.id ?? null}
-          userId={user?.id}
-          supabase={supabase}
-          initial={draft?.feedback ?? null}
-          compact
-        />
-      </div>
+      {/*
+        Feedback panel removido do editor — aparece agora so no preview/export
+        (tela pos-finalizacao onde o user avalia o resultado). Editor deve
+        focar em edicao, nao em avaliacao.
+      */}
     </div>
   );
 

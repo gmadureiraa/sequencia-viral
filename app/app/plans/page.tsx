@@ -24,14 +24,26 @@ type PlanCard = {
 };
 
 const FREE_FEATURES = [
-  `${FREE_PLAN_USAGE_LIMIT} carrosséis por mês`,
+  `${FREE_PLAN_USAGE_LIMIT} carrosséis grátis pra testar`,
+  "Até 12 slides por carrossel",
   "Todas as origens (YouTube, blog, Instagram, ideia)",
   "Editor completo e export PNG",
   "Templates Futurista + Twitter",
 ];
 
-const CREATOR_FEATURES = PLANS.pro.features.slice(0, 6);
-const PRO_FEATURES = PLANS.business.features.slice(0, 6);
+const CREATOR_FEATURES = PLANS.pro.features.slice(0, 7);
+// Pro features construidas manualmente pra enfatizar 'Tudo que Creator tem' +
+// diferenciais reais (acesso antecipado, agendamento, suporte prioritario).
+// Nao puxamos de PLANS.business.features — aquele e mais detalhado e repetia
+// coisas do Creator.
+const PRO_FEATURES = [
+  "30 carrosséis/mês",
+  "Tudo que o Creator tem",
+  "Acesso antecipado a novos templates",
+  "Agendamento + publicação automática (em breve)",
+  "Export PNG + PDF",
+  "Suporte prioritário",
+];
 
 function buildCards(interval: Interval): PlanCard[] {
   const annual = interval === "year";

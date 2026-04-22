@@ -36,7 +36,11 @@ export type SlideVariant =
   | "photo"
   | "quote"
   | "split"
-  | "cta";
+  | "cta"
+  // Novas variantes BrandsDecoded overhaul (2026-04-22)
+  | "solid-brand"
+  | "text-only"
+  | "full-photo-bottom";
 
 export interface PreviewProfile {
   name: string;

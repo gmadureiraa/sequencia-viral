@@ -66,33 +66,19 @@ export function Footer() {
           style={{ gridTemplateColumns: "1.4fr 1fr 1fr 1fr" }}
         >
           <div>
-            <div className="mb-[14px] flex items-center gap-[10px]">
-              <span
-                className="sv-anim-float-slow inline-flex h-[36px] w-[36px] items-center justify-center rounded-full"
+            <div className="mb-[14px]">
+              {/* Logo completo ransom-note — centraliza o brand no footer */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/logo-sv-full.png"
+                alt="Sequência Viral"
                 style={{
-                  border: "1.5px solid var(--sv-ink)",
-                  background: "var(--sv-green)",
+                  height: 72,
+                  width: "auto",
+                  objectFit: "contain",
+                  display: "block",
                 }}
-                aria-hidden
-              >
-                <span
-                  style={{
-                    fontFamily: "var(--sv-display)",
-                    fontStyle: "italic",
-                    fontSize: 16,
-                    color: "var(--sv-ink)",
-                    lineHeight: 1,
-                  }}
-                >
-                  SV
-                </span>
-              </span>
-              <span
-                className="sv-display"
-                style={{ fontSize: 18, letterSpacing: "-0.01em" }}
-              >
-                Sequência <em>Viral</em>
-              </span>
+              />
             </div>
             <p
               style={{

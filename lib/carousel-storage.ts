@@ -23,7 +23,16 @@ export type CarouselSlide = {
   imageQuery: string;
   imageUrl?: string;
   /** Variante de layout — definida pela IA ou pelo usuário no editor. */
-  variant?: "cover" | "headline" | "photo" | "quote" | "split" | "cta";
+  variant?:
+    | "cover"
+    | "headline"
+    | "photo"
+    | "quote"
+    | "split"
+    | "cta"
+    | "solid-brand"
+    | "text-only"
+    | "full-photo-bottom";
   /** Cor de fundo custom (sobrescreve slideStyle). */
   bgColor?: string;
   /** Camadas visíveis no render (title/body/bg). */

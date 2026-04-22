@@ -292,11 +292,11 @@ export function PricingSection() {
             price="R$ 0"
             unit=""
             features={[
-              "5 carrosséis/mês",
+              "5 carrosséis grátis pra testar",
+              "Até 12 slides por carrossel",
               "Export PNG em alta",
               "Modo rápido + avançado",
               "Templates Futurista + Twitter",
-              "1 perfil de marca",
             ]}
             cta="Começar agora"
             ctaHref="/app/login"
@@ -335,12 +335,10 @@ export function PricingSection() {
             annualSaving={isAnnual ? `Cobrado ${proYearTotal}` : undefined}
             features={[
               "30 carrosséis/mês",
-              "Até 12 slides por carrossel",
-              "Voz da IA configurável",
-              "Imagens IA + stock + cache inteligente",
-              "Export PNG + PDF",
-              "Perfis de voz/marca (múltiplos, em breve)",
+              "Tudo que o Creator tem",
+              "Acesso antecipado a novos templates",
               "Agendamento + publicação (em breve)",
+              "Export PNG + PDF",
               "Suporte prioritário",
             ]}
             cta={isAnnual ? "Assinar Pro anual" : "Assinar Pro"}

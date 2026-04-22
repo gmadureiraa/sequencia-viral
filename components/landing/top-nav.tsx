@@ -31,26 +31,18 @@ export function TopNav() {
     >
       <div className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-3">
         <Link href="/" className="flex items-center gap-[10px]">
-          <span
-            className="sv-anim-float-slow inline-flex h-[30px] w-[30px] items-center justify-center rounded-full"
+          {/* Logo ransom-note SV — so as letras, combina com nav clean */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/logo-sv-mark.png"
+            alt="SV"
+            className="sv-anim-float-slow"
             style={{
-              border: "1.5px solid var(--sv-ink)",
-              background: "var(--sv-green)",
+              width: 38,
+              height: 38,
+              objectFit: "contain",
             }}
-            aria-hidden
-          >
-            <span
-              style={{
-                fontFamily: "var(--sv-display)",
-                fontStyle: "italic",
-                fontSize: 14,
-                color: "var(--sv-ink)",
-                lineHeight: 1,
-              }}
-            >
-              SV
-            </span>
-          </span>
+          />
           <span className="flex flex-col leading-none">
             <span
               className="sv-display"

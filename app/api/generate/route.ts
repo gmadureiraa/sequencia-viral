@@ -113,7 +113,17 @@ interface GenerateRequest {
   mode?: GenerationMode;
 }
 
-type SlideVariant = "cover" | "headline" | "photo" | "quote" | "split" | "cta";
+type SlideVariant =
+  | "cover"
+  | "headline"
+  | "photo"
+  | "quote"
+  | "split"
+  | "cta"
+  // Novas variantes BrandsDecoded overhaul (2026-04-22)
+  | "solid-brand"
+  | "text-only"
+  | "full-photo-bottom";
 
 interface Slide {
   heading: string;
@@ -131,37 +141,69 @@ const VALID_VARIANTS: readonly SlideVariant[] = [
   "quote",
   "split",
   "cta",
+  "solid-brand",
+  "text-only",
+  "full-photo-bottom",
 ] as const;
 
 /**
  * Distribuição narrativa default quando o modelo esquece de preencher variant
- * ou devolve um valor inválido. A lógica é: primeiro slide sempre cover,
- * último sempre cta, e no meio alterna entre formatos pra evitar monotonia
- * visual (headline domina, com photo/split/quote como quebras de ritmo).
+ * ou devolve um valor inválido.
+ *
+ * Overhaul 2026-04-22: ritmo BrandsDecoded fixo. Primeiro slide = cover,
+ * último = cover (CTA/closing com handle pill centralizado). Entre eles,
+ * alterna entre `solid-brand` (fundo cor da marca, texto CAPS topo, imagem
+ * quadrada meio) e `full-photo-bottom` (foto full-bleed, texto no bottom 1/3),
+ * com `text-only` pulando quando o conteúdo pede denso.
  */
 function fallbackVariant(index: number, total: number): SlideVariant {
   // Edge: 1 slide → só cover; 2 slides → cover + cta.
   if (total <= 1) return "cover";
   if (index === 0) return "cover";
-  if (index === total - 1) return "cta";
-  const middle = index - 1;
+  // Slide final: cover (fecha com mesma energia da capa + handle pill).
+  if (index === total - 1) return "cover";
+  // Penúltimo: foto impactante.
+  if (index === total - 2) return "full-photo-bottom";
+
+  // Ritmo fixo slide a slide (alternância BrandsDecoded):
+  // 2 → solid-brand, 3 → full-photo-bottom, 4 → solid-brand,
+  // 5 → full-photo-bottom, 6 → text-only (denso), 7 → solid-brand, ...
   const rotation: SlideVariant[] = [
-    "headline",
-    "split",
-    "headline",
-    "photo",
-    "headline",
-    "quote",
-    "headline",
-    "photo",
+    "solid-brand",         // slide 2
+    "full-photo-bottom",   // slide 3
+    "solid-brand",         // slide 4
+    "full-photo-bottom",   // slide 5
+    "text-only",           // slide 6
+    "solid-brand",         // slide 7
+    "full-photo-bottom",   // slide 8
   ];
-  return rotation[middle % rotation.length];
+  return rotation[(index - 1) % rotation.length];
+}
+
+/**
+ * Mapeia variantes legacy (do Gemini antigo ou rascunhos) para as novas
+ * variantes overhaul. Garante que nenhum slide fique com layout obsoleto.
+ */
+function mapLegacyVariant(v: SlideVariant): SlideVariant {
+  switch (v) {
+    case "photo":
+      return "full-photo-bottom";
+    case "headline":
+      return "solid-brand";
+    case "quote":
+      return "text-only";
+    case "split":
+      return "solid-brand";
+    // cover, cta, solid-brand, text-only, full-photo-bottom passam
+    default:
+      return v;
+  }
 }
 
 function normalizeVariant(raw: unknown, index: number, total: number): SlideVariant {
   if (typeof raw === "string") {
     const v = raw.toLowerCase().trim() as SlideVariant;
-    if (VALID_VARIANTS.includes(v)) return v;
+    if (VALID_VARIANTS.includes(v)) return mapLegacyVariant(v);
   }
   return fallbackVariant(index, total);
 }
@@ -1147,23 +1189,25 @@ Each slides array must have 6-10 items. Every slide MUST include a valid "varian
         return { heading, body, imageQuery, variant, ...(imageUrl ? { imageUrl } : {}) };
       });
 
-      // Anti-monotonia: se os 2 primeiros slides saíram com o mesmo variant
-      // (Gemini às vezes ignora regra), troca o segundo pelo mais contrastante.
-      if (variation.slides.length >= 2) {
-        const v1 = variation.slides[0].variant;
-        const v2 = variation.slides[1].variant;
-        if (v1 === v2) {
-          const contrast: Record<SlideVariant, SlideVariant> = {
-            cover: "split",
-            headline: "photo",
-            photo: "headline",
-            quote: "split",
-            split: "photo",
-            cta: "headline",
-          };
-          variation.slides[1] = {
-            ...variation.slides[1],
-            variant: contrast[v1] ?? "photo",
+      // Anti-monotonia: nunca 2 slides iguais consecutivos. Percorre toda
+      // a sequência e troca duplicatas pelo variant de maior contraste.
+      const contrast: Record<SlideVariant, SlideVariant> = {
+        cover: "solid-brand",
+        headline: "full-photo-bottom",
+        photo: "solid-brand",
+        quote: "solid-brand",
+        split: "full-photo-bottom",
+        cta: "solid-brand",
+        "solid-brand": "full-photo-bottom",
+        "full-photo-bottom": "solid-brand",
+        "text-only": "full-photo-bottom",
+      };
+      for (let i = 1; i < variation.slides.length; i++) {
+        if (variation.slides[i].variant === variation.slides[i - 1].variant) {
+          const prev = variation.slides[i - 1].variant;
+          variation.slides[i] = {
+            ...variation.slides[i],
+            variant: contrast[prev] ?? "solid-brand",
           };
         }
       }

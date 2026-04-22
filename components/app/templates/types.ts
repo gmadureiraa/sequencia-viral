@@ -13,7 +13,11 @@ export type SlideVariantName =
   | "photo"
   | "quote"
   | "split"
-  | "cta";
+  | "cta"
+  // Novas variantes BrandsDecoded overhaul (2026-04-22)
+  | "solid-brand"
+  | "text-only"
+  | "full-photo-bottom";
 
 export interface SlideLayerFlags {
   title: boolean;

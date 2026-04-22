@@ -18,11 +18,16 @@ import {
  * localizada + handle pill centralizado. Variantes internas:
  *
  * - cover: full-bleed image + handle pill + title CAPS bottom third
- * - photo: bg preto, eyebrow + title CAPS + imagem meio + body bottom
- * - headline: bg preto puro, título huge CAPS + body (sem imagem)
- * - split: text + imagem meio + text (antes vs depois)
- * - quote: fallback → headline
+ * - photo (legacy): bg preto, eyebrow + title CAPS + imagem meio + body bottom
+ * - headline (legacy): bg preto puro, título huge CAPS + body (sem imagem)
+ * - split (legacy): text + imagem meio + text (antes vs depois)
+ * - quote (legacy): fallback → headline
  * - cta: último slide, accent button + seguir handle
+ *
+ * Overhaul 2026-04-22 — 3 novas variantes BrandsDecoded style:
+ * - solid-brand: fundo cor da marca + título CAPS topo + imagem quadrada meio
+ * - text-only: bg escuro + kicker mono + parágrafos com divisória (sem título huge)
+ * - full-photo-bottom: imagem full-bleed + título + body no terço inferior sobre gradient
  */
 
 const ACCENT_DEFAULT = "#FF4500";
@@ -80,17 +85,39 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
     const isPhoto = variant === "photo" && hasImage;
     const isQuote = variant === "quote";
     const isCta = variant === "cta";
+    // Novas variantes BrandsDecoded overhaul
+    const isSolidBrand = variant === "solid-brand";
+    const isTextOnly = variant === "text-only";
+    const isFullPhotoBottom = variant === "full-photo-bottom" && hasImage;
 
     // Background sempre escuro por padrão (BrandsDecoded style). Light mode
     // disponível via `style: "white"` ou `bgColor` custom.
     const styleIsDark = style !== "white";
-    const resolvedBg =
-      bgColor || (isCoverLike ? INK : styleIsDark ? INK : PAPER);
+
+    // Para solid-brand: fundo = accent; fg decide por luminância da accent.
+    const solidBrandFg = isSolidBrand ? pickFgForBg(accent) : null;
+
+    const resolvedBg = bgColor
+      ? bgColor
+      : isSolidBrand
+        ? accent
+        : isCoverLike || isFullPhotoBottom
+          ? INK
+          : styleIsDark
+            ? INK
+            : PAPER;
     const resolvedFg = bgColor
       ? pickFgForBg(bgColor)
-      : isCoverLike || styleIsDark
-        ? PAPER
-        : INK;
+      : isSolidBrand
+        ? (solidBrandFg as string)
+        : isCoverLike || isFullPhotoBottom || styleIsDark
+          ? PAPER
+          : INK;
+    // Accent visível contra resolvedBg — se accent = bg (solid-brand), a bolinha
+    // vira ink ou paper conforme fg.
+    const dotColor = isSolidBrand
+      ? resolvedFg
+      : accent;
 
     const displayStack = displayFontOverride || DEFAULT_DISPLAY_STACK;
     const ts = Math.max(0.6, Math.min(1.6, textScale));
@@ -128,8 +155,8 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
             fontFamily: SANS_STACK,
           }}
         >
-          {/* ═══════ COVER IMAGE FULL-BLEED ═══════ */}
-          {isCoverLike && showBg && hasImage && (
+          {/* ═══════ COVER IMAGE FULL-BLEED (cover + full-photo-bottom) ═══════ */}
+          {(isCoverLike || isFullPhotoBottom) && showBg && hasImage && (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -147,47 +174,55 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
               />
               {/* Shadow LOCALIZADA no terço inferior — não é gradient linear
                   vertical simples. Zona alta fica clean, zona baixa fica quase
-                  preta onde o título mora. */}
+                  preta onde o título mora. Full-photo-bottom usa gradient mais
+                  forte e mais alto (40% da altura) pra acomodar título + body. */}
               <div
                 style={{
                   position: "absolute",
                   inset: 0,
-                  background:
-                    "linear-gradient(180deg, transparent 0%, transparent 45%, rgba(10,10,10,0.35) 58%, rgba(10,10,10,0.78) 72%, rgba(10,10,10,0.95) 86%, rgba(10,10,10,0.98) 100%)",
+                  background: isFullPhotoBottom
+                    ? "linear-gradient(180deg, transparent 0%, transparent 35%, rgba(10,10,10,0.25) 50%, rgba(10,10,10,0.72) 65%, rgba(10,10,10,0.93) 80%, rgba(10,10,10,0.98) 100%)"
+                    : "linear-gradient(180deg, transparent 0%, transparent 45%, rgba(10,10,10,0.35) 58%, rgba(10,10,10,0.78) 72%, rgba(10,10,10,0.95) 86%, rgba(10,10,10,0.98) 100%)",
                   zIndex: 1,
                 }}
               />
             </>
           )}
 
-          {/* ═══════ HEADER ROW TOPO ═══════ */}
-          <div
-            style={{
-              position: "relative",
-              zIndex: 3,
-              padding: "40px 60px 0",
-              display: "grid",
-              gridTemplateColumns: "1fr auto 1fr",
-              gap: 16,
-              fontFamily: SANS_STACK,
-              fontSize: 20,
-              fontWeight: 600,
-              letterSpacing: "0.02em",
-              color: isCoverLike
-                ? "rgba(247,245,239,0.85)"
-                : "rgba(247,245,239,0.55)",
-              textTransform: "none",
-              lineHeight: 1,
-            }}
-          >
-            <div>{editorialHeader}</div>
-            <div style={{ textAlign: "center", opacity: 0.8 }}>
-              {handleDisplay}
+          {/* ═══════ HEADER ROW TOPO (oculto em full-photo-bottom) ═══════ */}
+          {!isFullPhotoBottom && (
+            <div
+              style={{
+                position: "relative",
+                zIndex: 3,
+                padding: "40px 60px 0",
+                display: "grid",
+                gridTemplateColumns: "1fr auto 1fr",
+                gap: 16,
+                fontFamily: SANS_STACK,
+                fontSize: 20,
+                fontWeight: 600,
+                letterSpacing: "0.02em",
+                color: isSolidBrand
+                  ? resolvedFg === INK
+                    ? "rgba(10,10,10,0.78)"
+                    : "rgba(247,245,239,0.82)"
+                  : isCoverLike
+                    ? "rgba(247,245,239,0.85)"
+                    : "rgba(247,245,239,0.55)",
+                textTransform: "none",
+                lineHeight: 1,
+              }}
+            >
+              <div>{editorialHeader}</div>
+              <div style={{ textAlign: "center", opacity: 0.8 }}>
+                {handleDisplay}
+              </div>
+              <div style={{ textAlign: "right", opacity: 0.7 }}>
+                {currentYear} //
+              </div>
             </div>
-            <div style={{ textAlign: "right", opacity: 0.7 }}>
-              {currentYear} //
-            </div>
-          </div>
+          )}
 
           {/* ═══════ CONTEÚDO CENTRAL POR VARIANT ═══════ */}
 
@@ -255,8 +290,8 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                     fontFamily: displayStack,
                     fontWeight: 900,
                     fontSize: 70 * ts,
-                    lineHeight: 1,
-                    letterSpacing: "-0.02em",
+                    lineHeight: 0.95,
+                    letterSpacing: "-0.035em",
                     margin: 0,
                     color: PAPER,
                     textAlign: "center",
@@ -268,6 +303,206 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                   {renderRichText(heading, accent)}
                 </h1>
               )}
+            </div>
+          ) : isSolidBrand ? (
+            // ─── SOLID-BRAND: fundo cor da marca + título CAPS topo + imagem quadrada meio + body bottom ───
+            <div
+              style={{
+                position: "relative",
+                zIndex: 2,
+                flex: "1 1 0",
+                display: "flex",
+                flexDirection: "column",
+                padding: "50px 70px 80px",
+                gap: 36,
+                minHeight: 0,
+              }}
+            >
+              {showTitle && (
+                <h2
+                  style={{
+                    fontFamily: displayStack,
+                    fontWeight: 900,
+                    fontSize: 70 * ts,
+                    lineHeight: 0.95,
+                    letterSpacing: "-0.035em",
+                    margin: 0,
+                    color: resolvedFg,
+                    textAlign: "center",
+                    textTransform: displayTransform,
+                    maxWidth: "100%",
+                  }}
+                >
+                  {renderRichText(heading, dotColor)}
+                </h2>
+              )}
+              {showBg && hasImage && (
+                <div
+                  style={{
+                    width: "100%",
+                    height: 520,
+                    flexShrink: 0,
+                    overflow: "hidden",
+                    background: `url(${bodyImgSrc}) center/cover`,
+                  }}
+                />
+              )}
+              {showBody && body && (
+                <p
+                  style={{
+                    fontFamily: SANS_STACK,
+                    fontSize: 30 * ts,
+                    fontWeight: 500,
+                    lineHeight: 1.35,
+                    margin: 0,
+                    color: resolvedFg === INK
+                      ? "rgba(10,10,10,0.85)"
+                      : "rgba(247,245,239,0.92)",
+                    whiteSpace: "pre-line",
+                    textAlign: "center",
+                  }}
+                >
+                  {renderRichText(body, dotColor)}
+                </p>
+              )}
+            </div>
+          ) : isTextOnly ? (
+            // ─── TEXT-ONLY: bg escuro + kicker mono topo + parágrafos sans com divisória ───
+            <div
+              style={{
+                position: "relative",
+                zIndex: 2,
+                flex: "1 1 0",
+                display: "flex",
+                flexDirection: "column",
+                padding: "40px 70px 90px",
+                gap: 36,
+                minHeight: 0,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: MONO_STACK,
+                  fontSize: 18,
+                  fontWeight: 700,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  color: accent,
+                }}
+              >
+                {heading && heading.trim().length > 0
+                  ? heading.toUpperCase().slice(0, 40)
+                  : slideEyebrowFor(slideNumber, totalSlides)}
+              </div>
+              {showBody && body && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 28,
+                    fontFamily: SANS_STACK,
+                    fontSize: 32 * ts,
+                    fontWeight: 400,
+                    lineHeight: 1.4,
+                    color: resolvedFg,
+                  }}
+                >
+                  {splitParagraphs(body).map((para, i, arr) => (
+                    <div key={i}>
+                      <p
+                        style={{
+                          margin: 0,
+                          whiteSpace: "pre-line",
+                        }}
+                      >
+                        {renderRichText(para, accent)}
+                      </p>
+                      {i < arr.length - 1 && (
+                        <div
+                          style={{
+                            marginTop: 28,
+                            width: "100%",
+                            height: 0,
+                            borderTop: "1.5px solid rgba(247,245,239,0.2)",
+                          }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : isFullPhotoBottom ? (
+            // ─── FULL-PHOTO-BOTTOM: imagem full-bleed + título + body no terço inferior ───
+            <div
+              style={{
+                position: "relative",
+                zIndex: 2,
+                flex: "1 1 0",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-end",
+                padding: "0 70px 110px",
+                gap: 24,
+                minHeight: 0,
+              }}
+            >
+              {showTitle && (
+                <h2
+                  style={{
+                    fontFamily: displayStack,
+                    fontWeight: 900,
+                    fontSize: 50 * ts,
+                    lineHeight: 0.95,
+                    letterSpacing: "-0.035em",
+                    margin: 0,
+                    color: PAPER,
+                    textTransform: displayTransform,
+                    textShadow:
+                      "0 4px 24px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.5)",
+                  }}
+                >
+                  {renderRichText(heading, accent)}
+                </h2>
+              )}
+              {showBody && body && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 16,
+                    fontFamily: SANS_STACK,
+                    fontSize: 24 * ts,
+                    fontWeight: 400,
+                    lineHeight: 1.4,
+                    color: "rgba(247,245,239,0.92)",
+                  }}
+                >
+                  {splitParagraphs(body).map((para, i, arr) => (
+                    <div key={i}>
+                      <p
+                        style={{
+                          margin: 0,
+                          whiteSpace: "pre-line",
+                        }}
+                      >
+                        {renderRichText(para, accent)}
+                      </p>
+                      {i < arr.length - 1 && (
+                        <div
+                          style={{
+                            marginTop: 16,
+                            width: 72,
+                            height: 0,
+                            borderTop: "1.5px solid rgba(247,245,239,0.3)",
+                          }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Bolinha accent (rendering abaixo ainda — ver bloco comum) */}
             </div>
           ) : isSplit ? (
             // ─── SPLIT: text top + image middle + text bottom ───
@@ -289,8 +524,8 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                     fontFamily: SANS_STACK,
                     fontSize: 40 * ts,
                     fontWeight: 700,
-                    lineHeight: 1.25,
-                    letterSpacing: "-0.01em",
+                    lineHeight: 1.15,
+                    letterSpacing: "-0.025em",
                     margin: 0,
                     color: resolvedFg,
                   }}
@@ -360,8 +595,8 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                     fontFamily: displayStack,
                     fontWeight: 900,
                     fontSize: 80 * ts,
-                    lineHeight: 0.98,
-                    letterSpacing: "-0.02em",
+                    lineHeight: 0.95,
+                    letterSpacing: "-0.035em",
                     margin: 0,
                     color: resolvedFg,
                     textTransform: displayTransform,
@@ -499,7 +734,7 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                     fontWeight: 900,
                     fontSize: (isLastSlide ? 88 : 104) * ts,
                     lineHeight: 0.95,
-                    letterSpacing: "-0.025em",
+                    letterSpacing: "-0.035em",
                     margin: 0,
                     color: resolvedFg,
                     textTransform: displayTransform,
@@ -565,10 +800,32 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                 fontFamily: SANS_STACK,
                 fontSize: 18,
                 fontWeight: 600,
-                color: "rgba(247,245,239,0.45)",
+                color: isSolidBrand
+                  ? resolvedFg === INK
+                    ? "rgba(10,10,10,0.45)"
+                    : "rgba(247,245,239,0.55)"
+                  : "rgba(247,245,239,0.45)",
               }}
             >
               {slideNumber}/{totalSlides}
+            </div>
+          )}
+
+          {/* ═══════ BRANDSDECODED DOT — bolinha bottom-left nas novas variantes ═══════ */}
+          {(isSolidBrand || isTextOnly || isFullPhotoBottom) && (
+            <div
+              style={{
+                position: "absolute",
+                left: 60,
+                bottom: 26,
+                zIndex: 3,
+                fontFamily: SANS_STACK,
+                fontSize: 32,
+                lineHeight: 1,
+                color: dotColor,
+              }}
+            >
+              ●
             </div>
           )}
         </div>
@@ -576,6 +833,19 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
     );
   }
 );
+
+/**
+ * Quebra o body em parágrafos usando blank line (\n\n) como divisor.
+ * Retorna pelo menos 1 item; ignora parágrafos em branco.
+ */
+function splitParagraphs(body: string): string[] {
+  if (!body) return [""];
+  const parts = body
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return parts.length > 0 ? parts : [body];
+}
 
 /**
  * Eyebrow por slide — etiqueta curta editorial. Gera genérico por default,

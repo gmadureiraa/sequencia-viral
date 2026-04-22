@@ -122,30 +122,20 @@ function breadcrumbFor(pathname: string): { kicker: string; title: string } {
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/app" className="flex items-center gap-2.5 min-w-0">
-      <span
-        className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border-[1.5px]"
+      {/* Logo ransom-note — versao 'SV' só com letras colagem. Fundo escuro
+          do sidebar combina com o recorte das letras. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/brand/logo-sv-mark.png"
+        alt="SV"
+        className="shrink-0"
         style={{
-          background: "var(--sv-green)",
-          borderColor: "var(--sv-paper)",
+          width: 38,
+          height: 38,
+          objectFit: "contain",
+          filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.35))",
         }}
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <circle
-            cx="12"
-            cy="12"
-            r="9"
-            stroke="#0A0A0A"
-            strokeWidth="1.5"
-          />
-          <path
-            d="M8 12l3 3 5-6"
-            stroke="#0A0A0A"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </span>
+      />
       <span className="min-w-0 flex-1">
         <span
           className="block truncate text-[16px] leading-none tracking-[-0.01em]"

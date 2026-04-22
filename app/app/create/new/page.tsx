@@ -135,6 +135,44 @@ export default function NewCarouselPage() {
   const [idea, setIdea] = useState(() => searchParams?.get("idea") ?? "");
 
   useEffect(() => {
+    // Se user clicou "Usar ideia" no dashboard, o card grava um briefing
+    // completo na sessionStorage (title + hook + angle + style + theme).
+    // Substitui a query string curta por um prompt rico, porque: a IA
+    // produzia carrossel genérico com só o title no topic.
+    try {
+      const raw = sessionStorage.getItem("sv_active_idea");
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          title?: string;
+          hook?: string;
+          angle?: string;
+          style?: string;
+          theme?: string;
+          body?: string;
+        };
+        if (parsed.title) {
+          const brief = [
+            `Tema: ${parsed.title}`,
+            parsed.theme ? `Nicho/contexto: ${parsed.theme}` : "",
+            parsed.hook ? `Hook (abertura): ${parsed.hook}` : "",
+            parsed.angle ? `Ângulo: ${parsed.angle}` : "",
+            parsed.style ? `Estilo dominante: ${parsed.style}` : "",
+            parsed.body && parsed.body !== parsed.angle
+              ? `Direção: ${parsed.body}`
+              : "",
+            "",
+            "Crie um carrossel de 6-8 slides que explore exatamente esse ângulo, usando linguagem simples (criança de 12 entende) e o tom do perfil.",
+          ]
+            .filter(Boolean)
+            .join("\n");
+          setIdea(brief);
+          sessionStorage.removeItem("sv_active_idea");
+          return;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
     const q = searchParams?.get("idea");
     if (q && !idea) setIdea(q);
     // eslint-disable-next-line react-hooks/exhaustive-deps

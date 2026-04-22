@@ -117,33 +117,35 @@ export default function DashboardPage() {
     return () => window.clearTimeout(t);
   }, [loadCarousels]);
 
-  // Carrega ideias sugeridas reais (cache 24h via backend)
-  useEffect(() => {
-    if (!session) return;
-    let cancelled = false;
-    (async () => {
+  // Carrega ideias sugeridas reais (cache 24h via backend). Se user clicar
+  // 'Gerar mais ideias', chama com ?refresh=1 e substitui as atuais.
+  const loadIdeas = useCallback(
+    async (refresh = false) => {
+      if (!session) return;
       setIdeasLoading(true);
       try {
-        const res = await fetch("/api/suggestions", {
-          headers: jsonWithAuth(session),
-        });
+        const url = refresh ? "/api/suggestions?refresh=1" : "/api/suggestions";
+        const res = await fetch(url, { headers: jsonWithAuth(session) });
         const data = (await res.json().catch(() => ({}))) as {
           items?: RemoteIdea[];
           error?: string;
         };
-        if (!cancelled && res.ok && Array.isArray(data.items) && data.items.length > 0) {
+        if (res.ok && Array.isArray(data.items) && data.items.length > 0) {
           setRemoteIdeas(data.items.slice(0, 6));
         }
       } catch (err) {
         console.warn("[dashboard] suggestions failed:", err);
       } finally {
-        if (!cancelled) setIdeasLoading(false);
+        setIdeasLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [session]);
+    },
+    [session]
+  );
+
+  useEffect(() => {
+    if (!session) return;
+    void loadIdeas(false);
+  }, [session, loadIdeas]);
 
   // ─── Derivações ────────────────────────────────────────────────────────────
   const firstName = useMemo(() => {
@@ -191,13 +193,21 @@ export default function DashboardPage() {
         body:
           it.angle ||
           (it.hook ? it.hook.replace(/\s*\|\s*/, " — ") : "Ideia sugerida pela IA."),
+        // Preserva campos crus pro briefing completo em /app/create/new
+        hook: it.hook ?? "",
+        angle: it.angle ?? "",
+        style: it.style ?? "",
       }));
     }
-    if (!firstNiche) return IDEA_DECK;
+    if (!firstNiche)
+      return IDEA_DECK.map((i) => ({ ...i, hook: "", angle: "", style: "" }));
     const upper = firstNiche.toUpperCase();
     return IDEA_DECK.map((i, idx) => ({
       ...i,
       theme: idx === 0 ? upper : i.theme,
+      hook: "",
+      angle: "",
+      style: "",
     }));
   }, [firstNiche, remoteIdeas]);
   void ideasLoading; // reservado para spinner futuro
@@ -400,7 +410,153 @@ export default function DashboardPage() {
           </motion.section>
 
           {/* ──────────────────────────────────────────────────────────────────
-               3. SEUS CARROSSÉIS (unificado — sem distinção draft/published)
+               3. IDEIAS SUGERIDAS (MOVIDAS PRA ANTES DOS CARROSSEIS)
+             ────────────────────────────────────────────────────────────────── */}
+          <motion.section
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.1 }}
+            transition={{ duration: 0.5 }}
+            style={{ marginBottom: 56 }}
+          >
+            <SectionHead
+              kicker="● Nº 02 · PARA HOJE"
+              title={<>Ideias <em>sugeridas</em>.</>}
+              sub="Baseadas no seu nicho · atualizadas diariamente · arraste pro lado pra ver mais"
+              action={
+                <button
+                  type="button"
+                  onClick={() => void loadIdeas(true)}
+                  disabled={ideasLoading}
+                  className="sv-btn sv-btn-outline"
+                  style={{
+                    opacity: ideasLoading ? 0.5 : 1,
+                    cursor: ideasLoading ? "wait" : "pointer",
+                  }}
+                >
+                  {ideasLoading ? "Gerando…" : "↻ Gerar mais ideias"}
+                </button>
+              }
+            />
+
+            {/* Row horizontal scrollavel: 3 visiveis no desktop, arrasta pra ver
+                o resto. Mobile naturalmente scrolla 1 por vez. Snap pra
+                centralizar nos cards. */}
+            <div
+              className="sv-ideas-strip"
+              style={{
+                display: "flex",
+                overflowX: "auto",
+                overflowY: "hidden",
+                gap: 16,
+                paddingBottom: 10,
+                scrollSnapType: "x mandatory",
+                scrollbarWidth: "thin",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              {ideas.map((idea, i) => (
+                <motion.button
+                  key={idea.n}
+                  type="button"
+                  initial={{ opacity: 0, y: 14 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.1 }}
+                  transition={{ duration: 0.45, delay: i * 0.05 }}
+                  onClick={() => {
+                    // Grava briefing completo na sessionStorage e navega.
+                    // create/new le e pre-preenche form com hook + angle + style.
+                    try {
+                      sessionStorage.setItem(
+                        "sv_active_idea",
+                        JSON.stringify({
+                          title: idea.title,
+                          hook: idea.hook,
+                          angle: idea.angle,
+                          style: idea.style,
+                          theme: idea.theme,
+                          body: idea.body,
+                        })
+                      );
+                    } catch {
+                      /* ignore */
+                    }
+                    window.location.href = `/app/create/new?idea=${encodeURIComponent(idea.title)}`;
+                  }}
+                  className="sv-card text-left"
+                  style={{
+                    flex: "0 0 calc((100% - 32px) / 3)",
+                    minWidth: 260,
+                    scrollSnapAlign: "start",
+                    padding: 20,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                    cursor: "pointer",
+                    background: "var(--sv-white)",
+                    border: "1.5px solid var(--sv-ink)",
+                  }}
+                >
+                  <span className="sv-kicker">
+                    ● Nº {idea.n} · {idea.theme.slice(0, 26)}
+                  </span>
+                  <h3
+                    style={{
+                      fontFamily: "var(--sv-display)",
+                      fontStyle: "italic",
+                      fontSize: 19,
+                      lineHeight: 1.2,
+                      color: "var(--sv-ink)",
+                      margin: 0,
+                    }}
+                  >
+                    {idea.title}
+                  </h3>
+                  <p
+                    style={{
+                      fontFamily: "var(--sv-sans)",
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                      color: "var(--sv-muted)",
+                      margin: 0,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {idea.body}
+                  </p>
+                  <hr className="sv-divider" style={{ margin: "4px 0" }} />
+                  <span
+                    className="sv-kicker"
+                    style={{
+                      color: "var(--sv-ink)",
+                      letterSpacing: "0.16em",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      marginTop: "auto",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        background: "var(--sv-green)",
+                        border: "1px solid var(--sv-ink)",
+                        display: "inline-block",
+                      }}
+                    />
+                    USAR IDEIA →
+                  </span>
+                </motion.button>
+              ))}
+            </div>
+          </motion.section>
+
+          {/* ──────────────────────────────────────────────────────────────────
+               4. SEUS CARROSSÉIS (abaixo das ideias agora)
              ────────────────────────────────────────────────────────────────── */}
           <motion.section
             initial={{ opacity: 0, y: 16 }}
@@ -410,7 +566,7 @@ export default function DashboardPage() {
             style={{ marginBottom: 64 }}
           >
             <SectionHead
-              kicker="● Nº 02 · RECENTES"
+              kicker="● Nº 03 · RECENTES"
               title={<>Seus <em>carrosséis</em>.</>}
               sub={
                 carousels.length > 0
@@ -464,98 +620,6 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
-          </motion.section>
-
-          {/* ──────────────────────────────────────────────────────────────────
-               5. IDEIAS SUGERIDAS
-             ────────────────────────────────────────────────────────────────── */}
-          <motion.section
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.1 }}
-            transition={{ duration: 0.5 }}
-          >
-            <SectionHead
-              kicker="● Nº 04 · PARA HOJE"
-              title={<>Ideias <em>sugeridas</em>.</>}
-              sub="Baseadas no seu nicho e nos últimos dias"
-            />
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                gap: 20,
-              }}
-            >
-              {ideas.map((idea, i) => (
-                <motion.div
-                  key={idea.n}
-                  initial={{ opacity: 0, y: 14 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, amount: 0.2 }}
-                  transition={{ duration: 0.45, delay: i * 0.06 }}
-                  className="sv-card"
-                  style={{
-                    padding: 24,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 14,
-                  }}
-                >
-                  <span className="sv-kicker">
-                    ● Nº {idea.n} · {idea.theme}
-                  </span>
-                  <h3
-                    style={{
-                      fontFamily: "var(--sv-display)",
-                      fontStyle: "italic",
-                      fontSize: 22,
-                      lineHeight: 1.2,
-                      color: "var(--sv-ink)",
-                      margin: 0,
-                    }}
-                  >
-                    {idea.title}
-                  </h3>
-                  <p
-                    style={{
-                      fontFamily: "var(--sv-sans)",
-                      fontSize: 14,
-                      lineHeight: 1.55,
-                      color: "var(--sv-muted)",
-                      margin: 0,
-                    }}
-                  >
-                    {idea.body}
-                  </p>
-                  <hr className="sv-divider" style={{ margin: "4px 0" }} />
-                  <Link
-                    href={`/app/create/new?idea=${encodeURIComponent(idea.title)}`}
-                    className="sv-kicker"
-                    style={{
-                      color: "var(--sv-ink)",
-                      textDecoration: "none",
-                      letterSpacing: "0.16em",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        background: "var(--sv-green)",
-                        border: "1px solid var(--sv-ink)",
-                        display: "inline-block",
-                      }}
-                    />
-                    USAR IDEIA →
-                  </Link>
-                </motion.div>
-              ))}
-            </div>
           </motion.section>
         </>
       )}
@@ -813,13 +877,15 @@ function CarouselTile({
             SV · ED. {edN}
           </div>
 
-          {/* Título grande editorial */}
+          {/* Título grande editorial. Em tiles com padrao dotted, envolve o
+              titulo numa caixa semi-opaca pra legibilidade sem perder o padrao
+              de fundo. */}
           <h3
             style={{
               fontFamily: "var(--sv-display)",
               fontStyle: "italic",
-              fontSize: "clamp(18px, 2.4vw, 24px)",
-              lineHeight: 1.15,
+              fontSize: "clamp(17px, 2.2vw, 22px)",
+              lineHeight: 1.2,
               letterSpacing: "-0.01em",
               margin: 0,
               overflow: "hidden",
@@ -827,6 +893,16 @@ function CarouselTile({
               WebkitLineClamp: 3,
               WebkitBoxOrient: "vertical",
               color: palette.fg,
+              ...(palette.dotted
+                ? {
+                    background: palette.bg,
+                    padding: "10px 12px",
+                    border: `1.5px solid ${palette.fg}`,
+                    boxShadow: `3px 3px 0 0 ${palette.fg}`,
+                    alignSelf: "flex-start",
+                    maxWidth: "100%",
+                  }
+                : {}),
             }}
           >
             {title}

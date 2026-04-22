@@ -115,19 +115,24 @@ export async function GET(request: Request) {
       : `Respond in ${language}.`;
 
   const nicheHint = niche.length > 0 ? niche.join(", ") : "marketing, conteúdo digital, IA";
-  const prompt = `Você é um estrategista editorial. ${langNote}
+  const prompt = `Você é um estrategista editorial SENIOR que entende o que vai explodir no Instagram/LinkedIn HOJE. ${langNote}
 
-Gere 6 IDEIAS DE CARROSSEL radicalmente diferentes para um creator com perfil:
+Gere 6 IDEIAS DE CARROSSEL VIRAIS pra um creator:
 - Nichos: ${nicheHint}
 - Tom: ${tone}
 
+OBJETIVO: cada ideia precisa parar o scroll. Não é pra entregar "conteúdo legal" — é pra entregar INSIGHT que o feed nunca mostrou antes OU provocação que o nicho vai compartilhar. Pense tipo BrandsDecoded, Morning Brew, Lenny Rachitsky, 1% Better — referências de conteúdo premium que viralizam porque tem ângulo.
+
+LINGUAGEM (IMPORTANTE):
+Escreva como se uma criança de 12 anos precisasse entender. Frases curtas. Palavras comuns. Zero jargão ("ecossistema", "narrativa", "ruptura", "paradigma" proibidos). Se você não falaria num bar pro amigo, reescreve.
+
 REGRAS:
-- Cada ideia deve ter um ângulo único: dados, provocação, história, como-fazer, mito, reenquadramento.
-- Titles curtos e concretos (máx 45 chars).
-- Hooks com 2 partes separadas por "|": parte 1 = interrupção (máx 8 palavras); parte 2 = âncora (máx 12 palavras).
-- Angle = 1 frase explicando a tensão narrativa (máx 20 palavras).
-- Evite cliché: nada de "descubra como", "o segredo", "guia definitivo".
-- Cada ideia deve ser específica ao nicho mencionado — nunca genérica.
+- Cada ideia = ângulo diferente: dados surpreendentes, provocação que fere, história pessoal, como-fazer específico, mito derrubado, reenquadramento (ex: "X não é Y, é Z").
+- Title: máx 45 chars, específico, que dê vontade de abrir. Proibido: "descubra", "o segredo", "guia definitivo", "você precisa saber", "tudo que você".
+- Hook em 2 partes com "|": parte 1 = interrupção impossível de ignorar (máx 8 palavras); parte 2 = âncora que promete o payoff (máx 12 palavras).
+- Angle = 1 frase explicando a tensão real (o que o leitor pensa X, mas a verdade é Y). Máx 20 palavras.
+- Nada genérico. Se trocar o nicho e a ideia ainda faz sentido, ela é ruim. Precisa ser ESPECÍFICA ao nicho do user.
+- Use dados, nomes, eventos recentes quando possível (2025/2026). Nada datado.
 
 Retorne APENAS JSON válido no formato:
 {"items":[{"id":"s1","title":"...","hook":"...|...","angle":"...","style":"data|story|provocative|howto|mythbust"}]}`;

@@ -11,6 +11,14 @@ interface RecentPost {
   text: string;
   likes: number;
   comments: number;
+  imageUrl?: string | null;
+  isCarousel?: boolean;
+}
+
+interface PostTranscript {
+  id: string;
+  visible_text: string;
+  scene: string;
 }
 
 interface BrandAnalysisRequest {
@@ -19,6 +27,7 @@ interface BrandAnalysisRequest {
   handle: string;
   platform: string;
   followers?: number | null;
+  transcripts?: PostTranscript[];
 }
 
 interface BrandAnalysisResponse {
@@ -29,6 +38,8 @@ interface BrandAnalysisResponse {
   avg_engagement: { likes: number; comments: number };
   suggested_pillars: string[];
   suggested_audience: string;
+  who_you_are?: string;
+  communication_style?: string;
 }
 
 function buildFallbackAnalysis(req: BrandAnalysisRequest): BrandAnalysisResponse {
@@ -81,39 +92,57 @@ export async function POST(request: Request) {
       return Response.json(buildFallbackAnalysis(body));
     }
 
-    const postsText = (body.recentPosts || [])
-      .map((p, i) => `Post ${i + 1}: "${p.text}" (${p.likes} likes, ${p.comments} comments)`)
-      .join("\n");
+    const posts = body.recentPosts || [];
+    const transcripts = body.transcripts || [];
+    const transcriptIndex = new Map<string, PostTranscript>();
+    for (const t of transcripts) transcriptIndex.set(t.id, t);
 
-    const systemPrompt = `You are a social media brand analyst. Analyze the user's profile and recent posts to produce a brand intelligence report. Be specific and actionable.
+    const postsText = posts
+      .map((p, i) => {
+        const id = String(i);
+        const t = transcriptIndex.get(id);
+        const transcriptBlock = t
+          ? `\n  [VISUAL] cena: ${t.scene}\n  [TEXTO_NO_POST] ${
+              t.visible_text?.slice(0, 600) || "(sem texto visivel)"
+            }`
+          : "";
+        const type = p.isCarousel ? "carrossel" : "single";
+        return `Post ${i + 1} (${type}, ${p.likes} likes, ${p.comments} coments):
+  [LEGENDA] ${p.text?.slice(0, 600) || "(sem legenda)"}${transcriptBlock}`;
+      })
+      .join("\n\n");
 
-Return ONLY valid JSON (no markdown, no code blocks) with this exact structure:
+    const systemPrompt = `Voce e um analista senior de marca e conteudo. Seu trabalho: ler bio + legendas + texto dos slides (quando disponivel) e entregar um diagnostico de DNA editorial concreto, em portugues BR.
+
+Retorne APENAS JSON valido (sem markdown, sem code block), com esta estrutura EXATA:
 {
-  "detected_niche": ["niche1", "niche2"],
+  "detected_niche": ["nicho1", "nicho2"],
   "tone_detected": "casual" | "professional" | "provocative" | "educational",
-  "top_topics": ["topic1", "topic2", "topic3", "topic4", "topic5"],
-  "posting_frequency": "estimated posts per week, e.g. ~3-5x/semana",
+  "top_topics": ["topico1", "topico2", "topico3", "topico4", "topico5"],
+  "posting_frequency": "estimativa por semana, ex: ~3-5x/semana",
   "avg_engagement": { "likes": 123, "comments": 45 },
-  "suggested_pillars": ["Pillar 1", "Pillar 2", "Pillar 3"],
-  "suggested_audience": "Brief description of their likely audience in Portuguese"
+  "suggested_pillars": ["Pilar 1", "Pilar 2", "Pilar 3"],
+  "suggested_audience": "Descricao detalhada (3-5 frases) do publico-alvo: quem e, o que busca, dores, onde passa tempo",
+  "who_you_are": "Retrato detalhado do perfil em 3-5 frases. NAO repita a bio palavra por palavra. Sintetize: o que a pessoa faz, qual e o ponto de vista unico, qual e a autoridade, que tipo de conteudo entrega e por que alguem segue. Escreva na terceira pessoa.",
+  "communication_style": "2-3 frases descrevendo o estilo de comunicacao: tipo de frase, uso de gatilhos, formatos dominantes (lista/narrativa/provocacao), tamanho medio, presenca de jargao ou dados."
 }
 
-Rules:
-- detected_niche: 1-3 niches inferred from bio + post content
-- tone_detected: analyze writing style across posts (formal vs informal, bold vs reserved)
-- top_topics: 3-7 recurring themes from posts (be specific, not generic)
-- posting_frequency: estimate from the data available
-- avg_engagement: calculate average likes and comments across posts
-- suggested_pillars: 3 content pillars they could focus on based on their content
-- suggested_audience: who would follow this person, in Portuguese
-- ALL text values in Portuguese (pt-BR) except field names`;
+Regras:
+- detected_niche: 1-3 nichos, primeiro = mais forte. Especifico (ex: "cripto-DeFi" em vez de so "cripto").
+- tone_detected: escolha a melhor aproximacao dos 4 valores.
+- top_topics: 3-7 temas recorrentes CONCRETOS (nao generico como "marketing" — melhor "ads-de-performance-para-agencia").
+- suggested_pillars: 3 pilares executaveis. Cada um em formato "Verbo + Objeto" (ex: "Expor os bastidores da operacao").
+- suggested_audience: rico, nao rotulo. 3-5 frases.
+- who_you_are: NUNCA copiar bio. Sintetizar com analise. Se o post tiver texto visual (slides), usar isso como evidencia.
+- communication_style: concreto, com exemplos de padrao.
+- TUDO em portugues BR exceto as chaves JSON.`;
 
-    const userMessage = `Profile: @${body.handle} on ${body.platform}
-${body.followers ? `Followers: ${body.followers}` : ""}
-Bio: ${body.bio || "(no bio)"}
+    const userMessage = `Perfil: @${body.handle} em ${body.platform}
+${body.followers ? `Seguidores: ${body.followers}` : ""}
+Bio: ${body.bio || "(sem bio)"}
 
-Recent posts:
-${postsText || "(no posts available)"}`;
+Posts recentes (use [TEXTO_NO_POST] quando disponivel — e o texto do slide do carrossel, vale muito mais que a legenda):
+${postsText || "(sem posts disponiveis)"}`;
 
     const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 
@@ -126,7 +155,7 @@ ${postsText || "(no posts available)"}`;
       },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: systemPrompt,
         messages: [{ role: "user", content: userMessage }],
       }),

@@ -23,6 +23,11 @@ interface RecentPost {
   text: string;
   likes: number;
   comments: number;
+  imageUrl: string | null;
+  slideUrls: string[];
+  isCarousel: boolean;
+  permalink: string | null;
+  timestamp: string | null;
 }
 
 interface ProfileData {
@@ -64,6 +69,12 @@ const APIFY_ACTORS: Partial<
     buildInput: (handle: string) => ({
       usernames: [handle.replace(/^@/, "")],
       resultsLimit: 1,
+      // Ask the actor for more detail (includes latestPosts with image URLs
+      // and carousel children). Actor options vary in naming; these fields
+      // are safely ignored when unknown.
+      addParentData: false,
+      includePostDetails: true,
+      postsLimit: 24,
     }),
   },
   linkedin: {
@@ -194,13 +205,18 @@ function normalizeTwitter(item: any, handle: string): ProfileData {
   // apidojo/twitter-user-scraper returns tweets in `tweets` or the user may
   // appear at top-level with tweet fields. We handle both shapes.
   const tweets: unknown[] = item.tweets ?? item.latestTweets ?? [];
-  for (const tw of tweets.slice(0, 5)) {
+  for (const tw of tweets.slice(0, 20)) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const t = tw as any;
     recentPosts.push({
       text: t.text ?? t.full_text ?? t.tweet ?? "",
       likes: t.likeCount ?? t.favoriteCount ?? t.likes ?? 0,
       comments: t.replyCount ?? t.comments ?? 0,
+      imageUrl: t.media?.[0]?.url ?? null,
+      slideUrls: [],
+      isCarousel: false,
+      permalink: t.url ?? null,
+      timestamp: t.createdAt ?? t.created_at ?? null,
     });
   }
 
@@ -225,29 +241,57 @@ function normalizeInstagram(item: any, handle: string): ProfileData {
   const recentPosts: RecentPost[] = [];
 
   const posts: unknown[] = item.latestPosts ?? item.posts ?? item.recentPosts ?? [];
-  for (const p of posts.slice(0, 5)) {
+  for (const p of posts.slice(0, 20)) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const post = p as any;
+    const children: unknown[] = post.childPosts ?? post.children ?? [];
+    const slideUrls = children
+      .map((c) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ch = c as any;
+        return ch.displayUrl ?? ch.imageUrl ?? ch.url ?? null;
+      })
+      .filter((u): u is string => !!u);
+    const primaryImage: string | null =
+      post.displayUrl ??
+      post.imageUrl ??
+      post.thumbnailUrl ??
+      slideUrls[0] ??
+      null;
+    const isCarousel =
+      post.type === "Sidecar" ||
+      post.productType === "carousel_container" ||
+      slideUrls.length > 1;
+
     recentPosts.push({
       text: post.caption ?? post.text ?? "",
       likes: post.likesCount ?? post.likes ?? 0,
       comments: post.commentsCount ?? post.comments ?? 0,
+      imageUrl: primaryImage,
+      slideUrls: isCarousel ? slideUrls : [],
+      isCarousel,
+      permalink: post.url ?? post.permalink ?? null,
+      timestamp: post.timestamp ?? post.taken_at_timestamp ?? null,
     });
   }
 
   const bio: string | null = item.biography ?? item.bio ?? null;
 
-  // Avatar do Instagram vem de cdninstagram.com/fbcdn.net — URLs com token
-  // que expira em ~1h e bloqueia hotlinking de origem diferente. Usar essa
-  // URL pra avatar salva uma referência que quebra no dia seguinte.
-  // Decisão: não retornamos avatarUrl pra Instagram — o user faz upload
-  // da foto manualmente no onboarding.
+  // Instagram avatar URL expires fast (CDN token). We still return it so
+  // the analyze step can show it during the session, but we scrub it on
+  // persist in the onboarding (see scrubInstagramCdn). User uploads own photo.
+  const avatarUrl: string | null =
+    item.profilePicUrl ??
+    item.profilePicture ??
+    item.avatarUrl ??
+    null;
+
   return {
     handle,
     platform: "instagram",
     name: item.fullName ?? item.name ?? null,
     bio,
-    avatarUrl: null,
+    avatarUrl,
     followers: item.followersCount ?? item.followers ?? null,
     following: item.followsCount ?? item.following ?? item.followingCount ?? null,
     niche: inferNiche(bio),
@@ -262,13 +306,18 @@ function normalizeLinkedin(item: any, handleOrUrl: string): ProfileData {
     item.about ?? item.summary ?? item.description ?? item.headline ?? null;
   const recentPosts: RecentPost[] = [];
   const posts: unknown[] = item.posts ?? item.updates ?? [];
-  for (const p of posts.slice(0, 5)) {
+  for (const p of posts.slice(0, 15)) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const post = p as any;
     recentPosts.push({
       text: post.text ?? post.content ?? post.caption ?? "",
       likes: post.likesCount ?? post.reactions ?? 0,
       comments: post.commentsCount ?? post.comments ?? 0,
+      imageUrl: post.imageUrl ?? post.image ?? null,
+      slideUrls: [],
+      isCarousel: false,
+      permalink: post.url ?? post.permalink ?? null,
+      timestamp: post.timestamp ?? null,
     });
   }
   return {

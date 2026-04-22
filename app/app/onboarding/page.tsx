@@ -1124,7 +1124,10 @@ function StepConnect({
   onSkip: () => void;
 }) {
   const clean = handle.replace(/^@/, "").trim();
-  const hasFbAppId = !!process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+  // FB Login escondido por enquanto — endpoints backend permanecem vivos
+  // (Meta Live mode exige), mas botao nao aparece ate o flow estar testado.
+  // Quando for ativar, reenable: const hasFbAppId = !!process.env.NEXT_PUBLIC_FACEBOOK_APP_ID
+  const hasFbAppId = false;
   return (
     <Card>
       <Eyebrow>● Passo 02 · Instagram</Eyebrow>

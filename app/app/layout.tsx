@@ -34,7 +34,8 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/app", label: "Início", icon: LayoutDashboard },
-  { href: "/app/create/new", label: "Criar", icon: PlusCircle },
+  // 'Criar' removido — ja existe o botao 'Novo carrossel' flutuante acima do
+  // card de plano no bottom da sidebar. Mesma rota /app/create/new, redundante.
   { href: "/app/carousels", label: "Carrosséis", icon: FolderOpen },
   // Galeria temporariamente oculta (/app/gallery, /api/gallery ainda existem).
   // Pra reativar, descomentar a linha abaixo.

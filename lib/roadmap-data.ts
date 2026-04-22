@@ -65,11 +65,12 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
     n: "04",
     title: "Brand Kits & Voz da Marca",
     body:
-      "Cada cliente com suas cores, fontes, exemplos de posts e tom. A IA aprende como você escreve.",
+      "A voz da marca a gente já segue hoje — a IA escreve no seu tom desde o onboarding. O próximo passo: templates visuais também personalizados, com seu brand kit (cores, fontes, formas) vivo em cada slide.",
     bullets: [
-      "Múltiplos brand kits por workspace",
-      "Treinamento com posts de referência",
-      "Guardrails de tom e termos proibidos",
+      "Voz da marca já aprendida no onboarding ✓",
+      "Em breve: templates visuais adaptados ao brand kit",
+      "Múltiplos brand kits por workspace (agência)",
+      "Treinamento com posts de referência seus",
     ],
     status: "next",
     tag: "Próximo sprint",
@@ -171,6 +172,38 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
     tag: "Planejado",
     rotate: "rotate-[1.6deg]",
     color: "#FFD8A8",
+    pin: "#0A0A0A",
+  },
+  {
+    n: "11",
+    title: "Planejamento (Calendário editorial)",
+    body:
+      "Calendário de conteúdo drag-and-drop. Organize sua sequência inteira do mês e publique direto no Instagram nos dias e horários certos — sem sair do Sequência Viral.",
+    bullets: [
+      "Arrastar carrosseis pro dia/horário",
+      "Best time por engajamento do seu feed",
+      "Fila de publicação direto no Instagram",
+    ],
+    status: "next",
+    tag: "Em breve",
+    rotate: "-rotate-[2deg]",
+    color: "#FFE0C2",
+    pin: "#EC6000",
+  },
+  {
+    n: "12",
+    title: "Piloto automático",
+    body:
+      "A IA cuida de tudo sozinha: cria conteúdo no seu DNA, agenda e publica no seu Instagram. Você só revisa e aprova se quiser, ou deixa rodar no piloto 100% auto.",
+    bullets: [
+      "IA gera conteúdo diário no seu tom",
+      "Publicação automática com aprovação opcional",
+      "Alertas quando algo precisa da sua revisão",
+    ],
+    status: "next",
+    tag: "Em breve",
+    rotate: "rotate-[1.4deg]",
+    color: "#FFD4B0",
     pin: "#0A0A0A",
   },
 ];

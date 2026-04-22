@@ -1081,15 +1081,23 @@ export default function PreviewPage(props: {
         </section>
       )}
 
-      {/* Export render hidden container: 1080×1350 full scale. */}
+      {/* Export render hidden container: 1080×1350 full scale.
+           Mudança 2026-04-22: top:-99999/left:-99999/opacity:0 causava webkit
+           não pintar o container → 4/8 slides capturados em branco pelo toPng.
+           Agora container ainda invisivel ao user (pointer-events:none, opacity:0)
+           mas dentro da viewport (top/left 0 + z-index baixo) — força paint. */}
       <div
         aria-hidden="true"
         style={{
           position: "fixed",
-          top: -99999,
-          left: -99999,
+          top: 0,
+          left: 0,
           pointerEvents: "none",
           opacity: 0,
+          zIndex: -1,
+          overflow: "hidden",
+          width: "1px",
+          height: "1px",
         }}
       >
         {slides.map((s, i) => (

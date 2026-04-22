@@ -102,12 +102,25 @@ export function useExport(totalSlides: number) {
         "Slides de export não renderizaram a tempo. Recarregue e tente de novo."
       );
     }
+    // Aguarda todas as fontes carregarem (Bebas Neue, Inter Black, etc).
+    // Fonte não carregada = title renderiza em fallback system font = visual errado.
+    if (typeof document !== "undefined" && "fonts" in document) {
+      try {
+        await (document as Document & { fonts?: { ready?: Promise<unknown> } })
+          .fonts?.ready;
+      } catch {
+        /* best-effort */
+      }
+    }
     await Promise.all(
       exportRefs.current.slice(0, totalSlides).map(async (node) => {
         if (node) await waitForImagesInElement(node);
       })
     );
-    await new Promise((r) => setTimeout(r, 50));
+    // Settle 500ms (antes 50ms) — container off-screen com opacity:0 demora
+    // pra pintar em webkit. Sem esse delay, toPng captura state pre-layout e
+    // 4/8 slides falham aleatoriamente.
+    await new Promise((r) => setTimeout(r, 500));
   }, [totalSlides]);
 
   const exportPng = useCallback(async () => {
@@ -116,12 +129,13 @@ export function useExport(totalSlides: number) {
     try {
       await waitRender();
       let exported = 0;
+      const failed: number[] = [];
       for (let i = 0; i < totalSlides; i++) {
         setProgress(`Exportando slide ${i + 1} de ${totalSlides}...`);
         try {
           const dataUrl = await captureSlideAsPng(i);
           const link = document.createElement("a");
-          link.download = `slide-${i + 1}.png`;
+          link.download = `slide-${String(i + 1).padStart(2, "0")}.png`;
           link.href = dataUrl;
           document.body.appendChild(link);
           link.click();
@@ -129,15 +143,18 @@ export function useExport(totalSlides: number) {
           exported++;
           await new Promise((r) => setTimeout(r, 400));
         } catch (slideErr) {
-          console.warn(`[PNG] Falha slide ${i + 1}:`, slideErr);
+          console.error(`[PNG] Falha slide ${i + 1}:`, slideErr);
+          failed.push(i + 1);
         }
       }
       if (exported === 0) {
         toast.error("Nenhum slide capturado. Tente de novo.");
-      } else {
-        toast.success(
-          exported === 1 ? "1 slide exportado." : `${exported} slides exportados.`
+      } else if (failed.length > 0) {
+        toast.error(
+          `Só ${exported}/${totalSlides} slides exportaram. Faltaram: ${failed.join(", ")}. Recarregue e tente de novo.`
         );
+      } else {
+        toast.success(`${exported} slides exportados.`);
       }
     } catch (err) {
       console.error("Export PNG error:", err);
@@ -218,25 +235,33 @@ export function useExport(totalSlides: number) {
         const { default: JSZip } = await import("jszip");
         const zip = new JSZip();
         let added = 0;
+        const failed: number[] = [];
         for (let i = 0; i < totalSlides; i++) {
           setProgress(`Gerando slide ${i + 1}/${totalSlides}...`);
           try {
             const dataUrl = await captureSlideAsPng(i);
-            // dataURL = "data:image/png;base64,..." — extrai base64
             const base64 = dataUrl.split(",")[1] ?? "";
             if (base64) {
               zip.file(`slide-${String(i + 1).padStart(2, "0")}.png`, base64, {
                 base64: true,
               });
               added++;
+            } else {
+              failed.push(i + 1);
             }
           } catch (slideErr) {
-            console.warn(`[ZIP] Falha slide ${i + 1}:`, slideErr);
+            console.error(`[ZIP] Falha slide ${i + 1}:`, slideErr);
+            failed.push(i + 1);
           }
         }
         if (added === 0) {
           toast.error("Nenhum slide pra empacotar.");
           return;
+        }
+        if (failed.length > 0) {
+          toast.error(
+            `Só ${added}/${totalSlides} slides no .zip. Faltaram: ${failed.join(", ")}. Recarregue e tente de novo.`
+          );
         }
         setProgress("Empacotando .zip...");
         const blob = await zip.generateAsync({ type: "blob" });

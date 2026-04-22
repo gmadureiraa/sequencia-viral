@@ -305,7 +305,10 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
               )}
             </div>
           ) : isSolidBrand ? (
-            // ─── SOLID-BRAND: fundo cor da marca + título CAPS topo + imagem quadrada meio + body bottom ───
+            // ─── SOLID-BRAND: fundo cor da marca ───
+            // Com imagem: título topo + imagem quadrada meio + body bottom
+            // Sem imagem: centraliza título + body na vertical (evita espaço
+            // vazio gigante no meio quando imageUrl falta).
             <div
               style={{
                 position: "relative",
@@ -314,8 +317,9 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                 display: "flex",
                 flexDirection: "column",
                 padding: "50px 70px 80px",
-                gap: 36,
+                gap: hasImage ? 36 : 40,
                 minHeight: 0,
+                justifyContent: hasImage ? "flex-start" : "center",
               }}
             >
               {showTitle && (
@@ -323,7 +327,7 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                   style={{
                     fontFamily: displayStack,
                     fontWeight: 900,
-                    fontSize: 70 * ts,
+                    fontSize: (hasImage ? 70 : 92) * ts,
                     lineHeight: 0.95,
                     letterSpacing: "-0.035em",
                     margin: 0,
@@ -351,7 +355,7 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                 <p
                   style={{
                     fontFamily: SANS_STACK,
-                    fontSize: 30 * ts,
+                    fontSize: (hasImage ? 30 : 36) * ts,
                     fontWeight: 500,
                     lineHeight: 1.35,
                     margin: 0,
@@ -360,6 +364,9 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                       : "rgba(247,245,239,0.92)",
                     whiteSpace: "pre-line",
                     textAlign: "center",
+                    maxWidth: hasImage ? "100%" : 820,
+                    marginLeft: hasImage ? 0 : "auto",
+                    marginRight: hasImage ? 0 : "auto",
                   }}
                 >
                   {renderRichText(body, dotColor)}

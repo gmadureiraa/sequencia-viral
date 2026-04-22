@@ -184,7 +184,7 @@ export default function OnboardingPage() {
   );
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [analyzePhase, setAnalyzePhase] = useState<0 | 1 | 2 | 3 | 4 | 5>(0);
+  const [analyzePhase, setAnalyzePhase] = useState<0 | 1 | 2 | 3 | 4 | 5 | 6>(0);
 
   // dna (editable)
   const [dnaNiches, setDnaNiches] = useState<string[]>([]);
@@ -284,7 +284,7 @@ export default function OnboardingPage() {
         setAnalyzePhase(2);
 
         if (!scraped.recentPosts || scraped.recentPosts.length === 0) {
-          setAnalyzePhase(5);
+          setAnalyzePhase(6);
           return;
         }
 
@@ -359,7 +359,7 @@ export default function OnboardingPage() {
             `Tom ${analysis.tone_detected}. Formato dominante: ${analysis.posting_frequency}.`
         );
         setDnaPillars((analysis.suggested_pillars ?? []).join(", "));
-        setAnalyzePhase(5);
+        setAnalyzePhase(6);
       } catch (err) {
         setAnalysisError(
           err instanceof Error ? err.message : "Erro inesperado."
@@ -1208,7 +1208,7 @@ function StepAnalyze({
   onBack,
   onNext,
 }: {
-  phase: 0 | 1 | 2 | 3 | 4 | 5;
+  phase: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   scrapedProfile: ScrapedProfile | null;
   analysis: BrandAnalysisResult | null;
   analyzing: boolean;

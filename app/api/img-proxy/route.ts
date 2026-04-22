@@ -29,6 +29,34 @@ const MAX_BYTES = 10 * 1024 * 1024; // 10MB
 const MAX_REDIRECTS = 3;
 const ALLOWED_CONTENT_TYPE = /^image\//i;
 
+/**
+ * Hosts publicos permitidos sem auth — sao CDNs de redes sociais/Apify
+ * cujo conteudo ja e publico de origem. Browser <img src> nao consegue
+ * mandar Bearer token, entao essa whitelist permite que avatars/posts do
+ * onboarding renderizem diretamente. Qualquer URL fora dessa lista ainda
+ * exige auth.
+ */
+const PUBLIC_HOST_SUFFIXES = [
+  "cdninstagram.com",
+  "fbcdn.net",
+  "instagram.com",
+  "twimg.com",
+  "pbs.twimg.com",
+  "licdn.com",
+  "media.licdn.com",
+  "googleusercontent.com",
+  "ytimg.com",
+  "apify.com",
+  "apifyusercontent.com",
+];
+
+function hostAllowedPublic(host: string): boolean {
+  const h = host.toLowerCase();
+  return PUBLIC_HOST_SUFFIXES.some(
+    (suffix) => h === suffix || h.endsWith(`.${suffix}`)
+  );
+}
+
 export const runtime = "nodejs";
 
 async function fetchWithSafeRedirects(
@@ -62,9 +90,6 @@ async function fetchWithSafeRedirects(
 }
 
 export async function GET(request: Request) {
-  const auth = await requireAuthenticatedUser(request);
-  if (!auth.ok) return auth.response;
-
   const { searchParams } = new URL(request.url);
   const raw = searchParams.get("url");
   if (!raw) {
@@ -78,6 +103,13 @@ export async function GET(request: Request) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "invalid url";
     return new Response(msg, { status: 400 });
+  }
+
+  // Publico apenas para CDNs conhecidas (imagens ja publicas de origem).
+  // URLs fora da whitelist ainda exigem Bearer token.
+  if (!hostAllowedPublic(target.hostname)) {
+    const auth = await requireAuthenticatedUser(request);
+    if (!auth.ok) return auth.response;
   }
 
   let upstream: Response;

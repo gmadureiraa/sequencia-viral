@@ -1,5 +1,9 @@
 # Roadmap interno (eng + produto)
 
+_Atualizado 2026-04-22_
+
+> **Nota (2026-04-22):** O onboarding legado `/app/onboarding-v1` foi removido do repo. O fluxo atual com 9 passos (`about → connect → analyze → dna → photo → visual → ideas → generating → done`) vive em [`app/app/onboarding/page.tsx`](../../app/app/onboarding/page.tsx) e é o único em produção. Rotas mortas (`onboarding-v2`, `create-v2`, `generate-v2`) também foram removidas junto com componentes de landing não renderizados (gallery/manifesto). Packages `brillance-landing`, `nexus-landing`, `optimus-landing` foram movidos para `_archive/landing-packages/` como referência visual.
+
 Itens operacionais que não precisam aparecer no roadmap público, mas guiam prioridade.
 
 ## Curto prazo

@@ -19,10 +19,7 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"],
-      "@brillance/*": ["./packages/brillance-landing/*"],
-      "@nexus/*": ["./packages/nexus-landing/*"],
-      "@optimus/*": ["./packages/optimus-landing/*"]
+      "@/*": ["./*"]
     }
   },
   "include": [
@@ -35,9 +32,7 @@
   ],
   "exclude": [
     "node_modules",
-    "packages/brillance-landing",
-    "packages/nexus-landing",
-    "packages/optimus-landing",
+    "_archive",
     "scripts"
   ]
 }

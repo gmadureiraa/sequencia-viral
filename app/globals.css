@@ -1,10 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@source "../packages/brillance-landing/**/*.tsx";
-@source "../packages/nexus-landing/**/*.tsx";
-@source "../packages/optimus-landing/**/*.tsx";
-
 /* ─────────────────────────────────────────────────────────────────
    Sequência Viral — Kaleidos Digital brand fonts (brutalist editorial)
    Handoff: design_handoff_sequencia_viral/README.md

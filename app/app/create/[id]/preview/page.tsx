@@ -78,12 +78,44 @@ export default function PreviewPage(props: {
   const { profile, session, user } = useAuth();
   const { draft, loading, error } = useDraft(id);
 
-  const slides = draft?.slides ?? [];
-  const templateId: TemplateId = draft?.visualTemplate ?? "manifesto";
-  const accentOverride = draft?.accentOverride;
-  const displayFontOverride = draft?.displayFont;
+  // SNAPSHOT DO EDITOR (session): estratégia anti-race. Quando user vem de
+  // /edit, o editor grava slides + overrides EXATOS em sessionStorage antes
+  // de navegar. Preview usa esse snapshot como fonte de verdade PRINCIPAL,
+  // independente do que o DB retornou. Se nao tem snapshot (user abriu /preview
+  // direto), cai no draft do DB.
+  const [snapshot, setSnapshot] = useState<null | {
+    slides: NonNullable<typeof draft>["slides"];
+    title: string;
+    slideStyle: "white" | "dark";
+    visualTemplate?: TemplateId;
+    accentOverride?: string;
+    displayFont?: string;
+    textScale?: number;
+  }>(null);
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(`sv_preview_snapshot_${id}`);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.slides)) {
+        setSnapshot(parsed);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [id]);
+
+  const slides = snapshot?.slides ?? draft?.slides ?? [];
+  const templateId: TemplateId =
+    snapshot?.visualTemplate ?? draft?.visualTemplate ?? "manifesto";
+  const accentOverride = snapshot?.accentOverride ?? draft?.accentOverride;
+  const displayFontOverride = snapshot?.displayFont ?? draft?.displayFont;
   const textScaleOverride =
-    typeof draft?.textScale === "number" ? draft.textScale : undefined;
+    typeof snapshot?.textScale === "number"
+      ? snapshot.textScale
+      : typeof draft?.textScale === "number"
+        ? draft.textScale
+        : undefined;
   const previewProfile = useMemo(
     () =>
       buildPreviewProfile(
@@ -117,7 +149,8 @@ export default function PreviewPage(props: {
 
   const hashStorageKey = draft ? `sv_caption_hash_${draft.id}` : null;
 
-  const slideStyle = draft?.style === "dark" ? "dark" : "white";
+  const slideStyle =
+    (snapshot?.slideStyle ?? draft?.style) === "dark" ? "dark" : "white";
 
   const { exportRefs, exportPng, exportPdf, exportZip, isExporting, progress } =
     useExport(slides.length);

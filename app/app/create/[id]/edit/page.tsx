@@ -339,9 +339,19 @@ export default function EditPage(props: {
       setTemplateId(draft.visualTemplate);
     }
     // Hidrata overrides persistidos (accent/font/text scale).
+    // Prioridade pro accent: draft.accentOverride (salvo) → profile.brand_colors[0]
+    // (cor da marca do user) → default #7CF067. Sem o fallback da marca, template
+    // Futurista usava sempre ACCENT_DEFAULT laranja mesmo quando user escolheu verde.
     if (draft.accentOverride) {
       setAccent(draft.accentOverride);
       setAccentTouched(true);
+    } else if (
+      Array.isArray(profile?.brand_colors) &&
+      profile!.brand_colors!.length > 0 &&
+      typeof profile!.brand_colors![0] === "string"
+    ) {
+      setAccent(profile!.brand_colors![0]);
+      setAccentTouched(true); // passa pro TemplateRenderer como accentOverride
     }
     if (draft.displayFont) {
       setFontId(fontIdFromFamily(draft.displayFont));
@@ -451,15 +461,42 @@ export default function EditPage(props: {
     enabled: slides.length > 0,
   });
 
-  // saveNow: flush imediato usado antes de navegar pra /preview. Evita
-  // race condition em que auto-save (1200ms debounce) nao disparou e user
-  // chega no preview com draft stale — preview/export renderiza versao
-  // antiga (bug reportado 2026-04-22).
+  // Transição Editor → Preview: ESTRATEGIA DUPLA pra garantir fidelidade 100%:
+  //   1. Flush sincrono do draft no server (preview → fetchUserCarousel pega fresh)
+  //   2. ADICIONAL: passa snapshot EXATO dos slides via sessionStorage como
+  //      override. Preview page le esse snapshot primeiro — se existir, renderiza
+  //      dele direto. Bypass de qualquer race condition do DB.
+  //
+  // Bug reportado 2026-04-22: mesmo com flush, download vinha diferente do
+  // editor. Por via das duvidas, sessionStorage e'a ponte direta.
   const { saveNow: flushDraft } = useSaveDraft(user?.id ?? null, null);
   const [flushingToPreview, setFlushingToPreview] = useState(false);
   async function goToPreview() {
     if (!id) return;
     setFlushingToPreview(true);
+
+    // Snapshot EXATO do estado atual do editor — preview page usa como
+    // override em vez de depender do DB.
+    const snapshot = {
+      draftId: id,
+      title,
+      slides,
+      slideStyle,
+      visualTemplate: templateId,
+      accentOverride: accentTouched ? accent : undefined,
+      displayFont: fontTouched ? familyFromFontId(fontId) : undefined,
+      textScale: scaleTouched ? textScale : undefined,
+      savedAt: Date.now(),
+    };
+    try {
+      sessionStorage.setItem(
+        `sv_preview_snapshot_${id}`,
+        JSON.stringify(snapshot)
+      );
+    } catch {
+      /* quota cheia — ignora, preview vai usar DB */
+    }
+
     try {
       await flushDraft(id, {
         title,
@@ -473,7 +510,6 @@ export default function EditPage(props: {
       });
     } catch (err) {
       console.warn("[edit] flush before preview falhou:", err);
-      // nao bloqueia a navegacao — preview pelo menos tenta carregar draft atual
     }
     router.push(`/app/create/${id}/preview`);
   }

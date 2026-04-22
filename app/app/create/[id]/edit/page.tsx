@@ -364,6 +364,70 @@ export default function EditPage(props: {
     [kicker, handle, profile?.avatar_url]
   );
 
+  // ─── Auto-fill de imagens faltantes ───────────────────────────────
+  // Todo slide deve ter imagem (evita espaco vazio). Quando slides hidratam
+  // do draft, detecta os sem imageUrl e dispara fetch usando a estrategia:
+  //   - slide 0 (capa) → Imagen 4 com pipeline 2-pass cover-scene
+  //   - index impar → Gemini Flash Image (geracao barata)
+  //   - index par (>=2) → Serper stock
+  // Roda 1x por draft. Se user ja tem imagens (draft salvo), nao refaz.
+  const autoFillStartedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!draft?.id) return;
+    if (!slides.length) return;
+    if (autoFillStartedRef.current === draft.id) return;
+    autoFillStartedRef.current = draft.id;
+
+    // Clona o array de slides e processa em paralelo (limite 2 concorrentes
+    // pra nao estourar rate limit da /api/images e nao travar a UI).
+    async function fillMissing() {
+      const concurrency = 2;
+      let next = 0;
+      const totalSlides = slides.length;
+      async function worker() {
+        while (true) {
+          const i = next++;
+          if (i >= totalSlides) return;
+          const s = slides[i];
+          if (!s || s.imageUrl) continue; // ja tem imagem
+          const baseQuery =
+            (s.imageQuery && s.imageQuery.trim()) ||
+            (s.heading && s.heading.trim()) ||
+            title;
+          if (!baseQuery) continue;
+          // Decide modo pela posicao do slide (ver planSlideImages)
+          const isCover = i === 0 && templateId !== "twitter";
+          const isInnerOdd = !isCover && i % 2 === 1;
+          const mode: "generate" | "search" =
+            isCover || isInnerOdd ? "generate" : "search";
+          try {
+            const res = await imagesHook.refetchImage(i, {
+              query: baseQuery,
+              contextHeading: s.heading,
+              contextBody: s.body,
+              mode,
+              designTemplate: templateId,
+              isCover,
+            });
+            if (res.appliedUrl) {
+              updateSlide(i, { imageUrl: res.appliedUrl });
+            } else if (res.options && res.options.length > 0) {
+              // search retorna picker options — pega primeira como default
+              updateSlide(i, { imageUrl: res.options[0] });
+            }
+          } catch {
+            // Silencia falha individual. User pode regen manual via UI.
+          }
+        }
+      }
+      await Promise.all(
+        Array.from({ length: concurrency }).map(() => worker())
+      );
+    }
+    void fillMissing();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.id, slides.length]);
+
   // Auto-save debounced. Só envia accent/font/scale se o usuário mexeu —
   // evita sobrescrever com defaults toda vez que o draft hidratar.
   useAutoSaveDraft({

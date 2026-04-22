@@ -1,26 +1,27 @@
 /**
- * Estrategia de imagens por slide — decide quem recebe imagem, com qual
- * tecnologia (Imagen vs Serper), e faz lookup de cache tematico.
+ * Estrategia de imagens por slide — decide quem recebe imagem e qual tecnologia.
  *
- * Regra (2026-04-22):
- *  - Slide 0 (CAPA): SEMPRE Imagen 4 (cover-scene 2-pass). Cover = cinema.
- *  - Slides internos (1..N-2): so METADE recebe imagem. Alternancia:
- *      - index impar → recebe imagem via Serper (busca stock, $0.008)
- *      - index par (exceto 0) → recebe imagem via Imagen (geracao, $0.04)
- *      - os restantes → sem imagem (layout text-only)
- *  - Slide final (CTA, index N-1): SEM imagem (layout CTA costuma ser
- *    texto + accent color pra destacar a chamada).
+ * Regra (2026-04-22 v3 — TODOS slides com imagem):
+ *  - Slide 0 (CAPA): SEMPRE Imagen 4 premium (scroll stopper, cinema)
+ *  - Slides 1..N-1 (inner + CTA): TODOS recebem imagem. Alternam:
+ *      - pos par   → Serper search (stock real, $0.008/img)
+ *      - pos impar → Gemini 3.1 Flash Image (geracao simples, $0.008/img)
+ *  - CTA tb tem imagem pq user reclamou de slide vazio
  *
- * Por que metade + mix:
- *  - 6 slides com Imagen em todos = $0.24 por carrossel.
- *  - 3 com Imagen + 2 Serper + 1 capa Imagen = $0.04×4 + $0.008×2 = $0.176
- *  - Metade com imagem (3 de 6): $0.04×2 (capa + 1 inner) + $0.008×1 (serper) = $0.096 → 60% de economia
+ * Por que tudo tem imagem:
+ *  - Template 'foto' tem espaco dedicado — sem imagem ficava vazio
+ *  - Twitter template renderiza imagem se existir, texto puro fica magro
+ *  - Gabriel prefere ate R\$ 1/carrossel do que slide vazio
  *
- * Cache tematico:
- *  - Hash da query/theme (sha256, 24 chars) indexa a tabela image_theme_cache
- *  - Antes de chamar Imagen/Serper, consulta cache. Se hit recente (<7d),
- *    retorna URL existente e nao gasta API call.
- *  - TTL 7d pra refrescar visual sem perder economia.
+ * Custo estimado (6 slides):
+ *  - 1 Imagen 4 capa: \$0.04
+ *  - 3 Gemini Flash Image: 3 × \$0.008 = \$0.024
+ *  - 2 Serper: 2 × \$0.008 = \$0.016
+ *  - Total: ~\$0.08 = R\$ 0.45/carrossel (dentro do budget R\$ 1)
+ *
+ * Cache tematico (TTL 30d):
+ *  - Hash sha256(mode::query) → image_theme_cache
+ *  - Economia adicional em users que repetem temas do mesmo nicho
  */
 
 import { createHash } from "node:crypto";
@@ -39,49 +40,26 @@ export type ImageAction = {
 export function planSlideImages(totalSlides: number): ImageAction[] {
   const actions: ImageAction[] = [];
   for (let i = 0; i < totalSlides; i++) {
-    const isCover = i === 0;
-    const isCta = i === totalSlides - 1 && totalSlides > 1;
-
-    if (isCover) {
+    if (i === 0) {
+      // Capa SEMPRE Imagen 4 — primeira impressao, scroll stopper.
       actions.push({
         slideIndex: i,
         mode: "generate",
         isCover: true,
-        reason: "cover-always-generated",
+        reason: "cover-imagen-4",
       });
       continue;
     }
-    if (isCta) {
-      actions.push({
-        slideIndex: i,
-        mode: "skip",
-        isCover: false,
-        reason: "cta-text-only",
-      });
-      continue;
-    }
-
-    // Internos: alternar entre skip / generate / search. Metade dos slides
-    // internos recebem imagem, com mix 50/50 imagen/serper.
-    const innerPos = i - 1; // 0-indexed entre os internos
-    if (innerPos % 2 === 0) {
-      // pares (pos 0, 2, 4) → sem imagem (skip)
-      actions.push({
-        slideIndex: i,
-        mode: "skip",
-        isCover: false,
-        reason: "alt-half-skip",
-      });
-    } else {
-      // impares (pos 1, 3, 5) → com imagem, alternando fonte
-      const useImagen = Math.floor(innerPos / 2) % 2 === 0;
-      actions.push({
-        slideIndex: i,
-        mode: useImagen ? "generate" : "search",
-        isCover: false,
-        reason: useImagen ? "alt-half-imagen" : "alt-half-serper",
-      });
-    }
+    // Internos + CTA: TODOS tem imagem pra evitar slide vazio. Alternam
+    // entre Serper stock e Gemini Flash Image (gen simples barata).
+    const innerPos = i - 1;
+    const useSearch = innerPos % 2 === 0;
+    actions.push({
+      slideIndex: i,
+      mode: useSearch ? "search" : "generate",
+      isCover: false,
+      reason: useSearch ? "inner-stock" : "inner-flash-image",
+    });
   }
   return actions;
 }
@@ -91,7 +69,11 @@ export function planSlideImages(totalSlides: number): ImageAction[] {
 // ──────────────────────────────────────────────────────────────────────────
 
 const CACHE_TABLE = "image_theme_cache";
-const CACHE_TTL_DAYS = 7;
+// TTL 30d (antes 7d). Aumento agressivo pra maximizar cache hit em users que
+// fazem muitos carrosseis do mesmo nicho. Imagens IA nao envelhecem rapido —
+// um tema como 'crypto chart' ou 'creator trabalhando' pode ser reusado por
+// meses sem perder qualidade. Se user reclamar de repeticao visual, reduz.
+const CACHE_TTL_DAYS = 30;
 
 function themeHash(query: string, mode: "generate" | "search"): string {
   const normalized = query

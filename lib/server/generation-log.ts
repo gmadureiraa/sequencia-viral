@@ -21,11 +21,20 @@ const PRICING = {
     input: 0.00000125, // $1.25 / 1M input
     output: 0.00000500, // $5.00 / 1M output
   },
-  // Gemini Imagen 4 — cobrado por imagem gerada, não por token.
+  // Gemini Imagen 4 — cobrado por imagem gerada, não por token. Usado
+  // exclusivamente em capa (qualidade cinematografica).
   "imagen-4.0-generate-001": {
     input: 0,
     output: 0,
     perImage: 0.04, // $0.04 por imagem
+  },
+  // Gemini 3.1 Flash Image ("Nano Banana") — usado em slides internos.
+  // ~5x mais barato que Imagen 4 com qualidade aceitavel pra inner slide.
+  // Capa continua Imagen pq tem que stop scroll.
+  "gemini-3.1-flash-image-preview": {
+    input: 0,
+    output: 0,
+    perImage: 0.008, // $0.008 por imagem (estimativa conservadora)
   },
   // Claude Sonnet 4.6 — pricing Anthropic 2026.
   "claude-sonnet-4-6": {

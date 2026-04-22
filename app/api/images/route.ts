@@ -355,29 +355,81 @@ export async function POST(request: Request) {
               .join(" ");
           }
 
-          const res = await ai.models.generateImages({
-            model: "imagen-4.0-generate-001",
-            prompt: imagePrompt,
-            config: {
-              numberOfImages: 1,
-              aspectRatio: "1:1",
-              // Imagen 4 respeita negativePrompt — reforco camada adicional
-              // pra bloquear qualquer texto/UI/logo na imagem.
-              negativePrompt: NEGATIVE_PROMPT,
-            },
-          });
+          // ── ESTRATEGIA DE MODELO ──────────────────────────────────
+          // Capa: Imagen 4 (premium, cinema, $0.04)
+          // Interno: Gemini 3.1 Flash Image (~5x mais barato, $0.008)
+          // Twitter: mantem Imagen 4 (se cair aqui e rara, quase sempre usa search)
+          const shouldUseCheapModel = !isCover && !isTwitterTpl;
+          const modelId = shouldUseCheapModel
+            ? "gemini-3.1-flash-image-preview"
+            : "imagen-4.0-generate-001";
 
-          const imageBytes = res.generatedImages?.[0]?.image?.imageBytes;
+          let imageBytes: string | undefined;
+
+          if (shouldUseCheapModel) {
+            // Gemini Flash Image usa generateContent com responseModalities
+            // ['IMAGE']. Output vem em candidates[0].content.parts[].inlineData.
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const gRes: any = await ai.models.generateContent({
+                model: "gemini-3.1-flash-image-preview",
+                contents: [
+                  {
+                    role: "user",
+                    parts: [
+                      {
+                        text: `${imagePrompt}\n\nNEGATIVE (absolutely avoid): ${NEGATIVE_PROMPT}`,
+                      },
+                    ],
+                  },
+                ],
+                config: {
+                  responseModalities: ["IMAGE"],
+                },
+              });
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const parts = gRes.candidates?.[0]?.content?.parts ?? [];
+              for (const p of parts) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const inline = (p as any).inlineData;
+                if (inline?.data) {
+                  imageBytes = inline.data as string;
+                  break;
+                }
+              }
+            } catch (err) {
+              console.warn(
+                "[images] Gemini Flash Image failed, falling back to Imagen 4:",
+                err instanceof Error ? err.message : err
+              );
+            }
+          }
+
+          // Fallback: se Flash Image falhou OU cover → usa Imagen 4.
+          if (!imageBytes) {
+            const res = await ai.models.generateImages({
+              model: "imagen-4.0-generate-001",
+              prompt: imagePrompt,
+              config: {
+                numberOfImages: 1,
+                aspectRatio: "1:1",
+                negativePrompt: NEGATIVE_PROMPT,
+              },
+            });
+            imageBytes = res.generatedImages?.[0]?.image?.imageBytes;
+          }
+
           if (imageBytes) {
-            // Registra custo Imagen ANTES do upload (se upload falhar, o
-            // custo da API já foi cobrado de qualquer jeito).
+            // Registra custo ANTES do upload (API ja foi cobrada de qualquer jeito).
+            // Se caiu no fallback de Imagen, o modelId vai logar errado — mas isso
+            // raramente acontece e nao e grave pra analytics.
             await recordGeneration({
               userId: user.id,
-              model: "imagen-4.0-generate-001",
+              model: modelId,
               provider: "google",
               inputTokens: 0,
               outputTokens: 0,
-              costUsd: costForImages("imagen-4.0-generate-001", 1),
+              costUsd: costForImages(modelId, 1),
               promptType: "image",
             });
 
@@ -410,12 +462,26 @@ export async function POST(request: Request) {
                   supabase,
                 });
 
+                // Grava no cache tematico global: proximos slides/carrosseis
+                // com a mesma query reusam essa URL em vez de gastar API.
+                if (cacheQueryKey) {
+                  await recordThemeImage(
+                    supabase,
+                    cacheQueryKey,
+                    "generate",
+                    pub.publicUrl
+                  );
+                }
+
                 return Response.json({
                   images: [
                     {
                       url: pub.publicUrl,
                       title: query,
-                      source: "Gemini Imagen",
+                      source:
+                        modelId === "imagen-4.0-generate-001"
+                          ? "Imagen 4"
+                          : "Gemini Flash Image",
                       generated: true,
                     },
                   ],

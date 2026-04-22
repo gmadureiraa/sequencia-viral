@@ -370,24 +370,54 @@ export default function AdminPage() {
             )}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={fetching}
-          className="sv-btn sv-btn-outline"
-          style={{
-            padding: "10px 14px",
-            fontSize: 10.5,
-            opacity: fetching ? 0.5 : 1,
-          }}
-        >
-          {fetching ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <RefreshCw size={12} />
-          )}
-          Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/app/admin/source-test"
+            className="sv-btn sv-btn-outline"
+            style={{
+              padding: "10px 14px",
+              fontSize: 10.5,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            Source Debug
+          </Link>
+          <Link
+            href="/app/admin/batch-test"
+            className="sv-btn sv-btn-outline"
+            style={{
+              padding: "10px 14px",
+              fontSize: 10.5,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            Batch Test
+          </Link>
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={fetching}
+            className="sv-btn sv-btn-outline"
+            style={{
+              padding: "10px 14px",
+              fontSize: 10.5,
+              opacity: fetching ? 0.5 : 1,
+            }}
+          >
+            {fetching ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <RefreshCw size={12} />
+            )}
+            Atualizar
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

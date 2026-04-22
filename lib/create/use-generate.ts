@@ -94,7 +94,9 @@ export function useGenerate(session: Session | null) {
   );
 
   const generateCarousel = useCallback(
-    async (input: GenerateCarouselInput): Promise<CreateVariation[]> => {
+    async (
+      input: GenerateCarouselInput
+    ): Promise<{ variations: CreateVariation[]; promptUsed?: string }> => {
       setError(null);
       setLoadingCarousel(true);
       try {
@@ -130,6 +132,7 @@ export function useGenerate(session: Session | null) {
         }
         const data: {
           variations?: CreateVariation[];
+          promptUsed?: string;
           error?: string;
           code?: string;
         } = await res.json();
@@ -137,7 +140,10 @@ export function useGenerate(session: Session | null) {
           throw buildError(data.error || "Falha na geração.", res, data.code);
         if (!data.variations?.length)
           throw new Error("Nenhum carrossel gerado.");
-        return data.variations;
+        return {
+          variations: data.variations,
+          promptUsed: data.promptUsed,
+        };
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : "Erro ao gerar carrossel.";

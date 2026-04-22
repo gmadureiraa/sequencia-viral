@@ -243,6 +243,9 @@ const BG_SWATCHES = [
 
 const DEFAULT_LAYERS: SlideLayers = { title: true, body: true, bg: true };
 
+/** Admin emails pra gate do painel Debug IA. */
+const ADMIN_EMAILS = ["gf.madureiraa@gmail.com", "gf.madureira@hotmail.com"];
+
 /** "+ Adicionar camada" — opções que vão aparecer no menu (stubs por enquanto). */
 const EXTRA_LAYER_OPTIONS = [
   { id: "quote", label: "Citação em destaque" },
@@ -1726,6 +1729,141 @@ export default function EditPage(props: {
         )}
       </div>
 
+      {(() => {
+        const email = user?.email?.toLowerCase().trim() || "";
+        const isAdmin = ADMIN_EMAILS.includes(email);
+        if (!isAdmin) return null;
+        const promptUsed = draft?.promptUsed || "";
+        if (!promptUsed) {
+          return (
+            <AdminDebugPanel
+              title="Debug IA"
+              subtitle="Carrossel sem prompt_used registrado (gerado antes da feature). Novos carrosseis terão."
+              emptyHint
+            />
+          );
+        }
+        return <AdminDebugPanel title="Debug IA" promptUsed={promptUsed} />;
+      })()}
+
     </motion.div>
+  );
+}
+
+/**
+ * Painel só-admin que mostra o systemPrompt + userMessage enviado à IA
+ * pra gerar o carrossel atual. Visibilidade travada em isAdmin (email).
+ */
+function AdminDebugPanel({
+  title,
+  subtitle,
+  promptUsed,
+  emptyHint,
+}: {
+  title: string;
+  subtitle?: string;
+  promptUsed?: string;
+  emptyHint?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    if (!promptUsed) return;
+    try {
+      await navigator.clipboard.writeText(promptUsed);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // noop
+    }
+  }
+  return (
+    <div
+      className="mt-6"
+      style={{
+        border: "1.5px dashed var(--sv-ink)",
+        background: "var(--sv-paper)",
+        padding: 14,
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div
+            style={{
+              fontFamily: "var(--sv-display)",
+              fontSize: 16,
+              color: "var(--sv-ink)",
+            }}
+          >
+            {title}{" "}
+            <span
+              className="uppercase"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: 9,
+                letterSpacing: "0.14em",
+                color: "var(--sv-muted)",
+                fontWeight: 700,
+                marginLeft: 6,
+              }}
+            >
+              · admin only
+            </span>
+          </div>
+          {subtitle && (
+            <div
+              style={{
+                fontFamily: "var(--sv-sans)",
+                fontSize: 12,
+                color: "var(--sv-muted)",
+                marginTop: 2,
+              }}
+            >
+              {subtitle}
+            </div>
+          )}
+        </div>
+        {!emptyHint && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={copy}
+              className="sv-btn sv-btn-outline"
+              style={{ padding: "6px 10px", fontSize: 10 }}
+            >
+              {copied ? "Copiado!" : "Copiar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="sv-btn sv-btn-outline"
+              style={{ padding: "6px 10px", fontSize: 10 }}
+            >
+              {expanded ? "Fechar" : "Expandir"}
+            </button>
+          </div>
+        )}
+      </div>
+      {expanded && promptUsed && (
+        <pre
+          style={{
+            fontFamily: "var(--sv-mono)",
+            fontSize: 10.5,
+            lineHeight: 1.5,
+            color: "var(--sv-ink)",
+            background: "var(--sv-white)",
+            border: "1px solid rgba(10,10,10,0.12)",
+            padding: 12,
+            marginTop: 10,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            maxHeight: 500,
+            overflow: "auto",
+          }}
+        >
+          {promptUsed}
+        </pre>
+      )}
+    </div>
   );
 }

@@ -465,7 +465,7 @@ export default function NewCarouselPage() {
       // 5000. NÃO fatia em title/hook/angle diferentes — isso confundia a
       // IA a "parafrasear" em vez de respeitar o conteúdo.
       const fullIdea = idea.slice(0, 4900);
-      const variations = await generateCarousel({
+      const { variations, promptUsed } = await generateCarousel({
         concept: {
           title: idea.split("\n")[0].slice(0, 120) || idea.slice(0, 120),
           hook: "",
@@ -590,6 +590,7 @@ export default function NewCarouselPage() {
           title: chosen.title || idea.slice(0, 80),
           style: `${tone}|${lang}|${niche}`,
         },
+        promptUsed,
       });
 
       // Template já escolhido no briefing → pula /templates, vai direto pro editor.

@@ -94,6 +94,12 @@ export type SavedCarousel = {
   caption?: string;
   /** Hashtags sugeridas pela IA. Persistido em `style.caption_hashtags[]`. */
   captionHashtags?: string[];
+  /**
+   * Prompt enviado à IA pra gerar este carrossel (systemPrompt + userMessage).
+   * Persistido na coluna `prompt_used` (migration 20260422160000). Visível só
+   * pra admin no editor, via painel Debug IA. Pra carrosséis legados é null.
+   */
+  promptUsed?: string | null;
 };
 
 export function isCarouselUuid(id: string) {
@@ -112,6 +118,7 @@ type CarouselRow = {
   created_at: string;
   export_assets?: unknown;
   thumbnail_url?: string | null;
+  prompt_used?: string | null;
 };
 
 function parseExportAssets(raw: unknown): CarouselExportAssets | undefined {
@@ -259,6 +266,8 @@ export function rowToSavedCarousel(row: CarouselRow): SavedCarousel {
     tags,
     caption,
     captionHashtags,
+    promptUsed:
+      typeof row.prompt_used === "string" ? row.prompt_used : null,
   };
 }
 
@@ -305,7 +314,7 @@ export async function updateCarouselTags(
 
 // Pra FETCH individual (edit/preview) — inclui slides completos.
 const CAROUSEL_DETAIL_FIELDS =
-  "id,title,slides,style,status,created_at,updated_at,export_assets,thumbnail_url";
+  "id,title,slides,style,status,created_at,updated_at,export_assets,thumbnail_url,prompt_used";
 const CAROUSEL_DETAIL_FIELDS_FALLBACK =
   "id,title,slides,style,status,created_at,updated_at,thumbnail_url";
 
@@ -401,6 +410,11 @@ export async function upsertUserCarousel(
     textScale?: number;
     caption?: string;
     captionHashtags?: string[];
+    /**
+     * Prompt completo enviado ao Gemini (systemPrompt + userMessage). Opcional.
+     * Quando presente, é gravado na coluna `prompt_used` pra auditoria admin.
+     */
+    promptUsed?: string | null;
   }
 ): Promise<{ row: CarouselRow; inserted: boolean }> {
   const style: Record<string, unknown> = {
@@ -496,28 +510,31 @@ export async function upsertUserCarousel(
       style.tags = prev.tags;
     }
 
+    const updatePayload: Record<string, unknown> = {
+      title: payload.title,
+      slides: payload.slides,
+      style,
+      status: payload.status,
+    };
+    if (typeof payload.promptUsed === "string") {
+      updatePayload.prompt_used = payload.promptUsed;
+    }
+
     let { data, error } = await client
       .from("carousels")
-      .update({
-        title: payload.title,
-        slides: payload.slides,
-        style,
-        status: payload.status,
-      })
+      .update(updatePayload)
       .eq("id", payload.id)
       .eq("user_id", userId)
       .select(CAROUSEL_DETAIL_FIELDS)
       .single();
 
     if (error && isMissingColumnError(error)) {
+      // Coluna prompt_used ainda não aplicada — tenta sem ela.
+      const fallbackPayload = { ...updatePayload };
+      delete fallbackPayload.prompt_used;
       const retry = await client
         .from("carousels")
-        .update({
-          title: payload.title,
-          slides: payload.slides,
-          style,
-          status: payload.status,
-        })
+        .update(fallbackPayload)
         .eq("id", payload.id)
         .eq("user_id", userId)
         .select(CAROUSEL_DETAIL_FIELDS_FALLBACK)
@@ -537,28 +554,29 @@ export async function upsertUserCarousel(
     style.image_people_mode = payload.imagePeopleMode;
   }
 
+  const insertPayload: Record<string, unknown> = {
+    user_id: userId,
+    title: payload.title,
+    slides: payload.slides,
+    style,
+    status: payload.status,
+  };
+  if (typeof payload.promptUsed === "string") {
+    insertPayload.prompt_used = payload.promptUsed;
+  }
+
   let { data, error } = await client
     .from("carousels")
-    .insert({
-      user_id: userId,
-      title: payload.title,
-      slides: payload.slides,
-      style,
-      status: payload.status,
-    })
+    .insert(insertPayload)
     .select(CAROUSEL_LIST_FIELDS)
     .single();
 
   if (error && isMissingColumnError(error)) {
+    const fallbackPayload = { ...insertPayload };
+    delete fallbackPayload.prompt_used;
     const retry = await client
       .from("carousels")
-      .insert({
-        user_id: userId,
-        title: payload.title,
-        slides: payload.slides,
-        style,
-        status: payload.status,
-      })
+      .insert(fallbackPayload)
       .select(CAROUSEL_DETAIL_FIELDS_FALLBACK)
       .single();
     data = (retry.data as unknown) as typeof data;

@@ -182,7 +182,7 @@ export default function ConceptsPage() {
       if (!concept) return;
       setSelectedIdx(idx);
       try {
-        const variations = await generateCarousel({
+        const { variations, promptUsed } = await generateCarousel({
           concept,
           niche,
           tone,
@@ -203,6 +203,7 @@ export default function ConceptsPage() {
             title: concept.title,
             style: `${tone}|${language}|${niche}`,
           },
+          promptUsed,
         });
 
         router.push(`/app/create/${id}/templates`);

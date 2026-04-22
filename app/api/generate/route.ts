@@ -60,6 +60,15 @@ import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { geminiWithRetry } from "@/lib/server/gemini-retry";
 import { GoogleGenAI } from "@google/genai";
+import {
+  extractSourceFacts,
+  emptyFacts,
+  formatFactsBlock,
+} from "@/lib/server/source-ner";
+import {
+  validateImageQuery,
+  buildFallbackImageQuery,
+} from "@/lib/server/generate-carousel";
 
 export const maxDuration = 60;
 
@@ -958,8 +967,8 @@ Each slides array must have 6-10 items. Every slide MUST include a valid "varian
     // Source content (transcrição YouTube, scrape de link, legenda de Instagram):
     // Video/podcast de 40-60min gera 10-15k chars de transcript. Cortar em 6k
     // perde as teses centrais (que costumam vir depois de 20min de warm-up).
-    // Agora: 14k pra video (suficiente pra ~30min de fala densa), 8k pros outros.
-    const SOURCE_SLICE = sourceType === "video" ? 14000 : 8000;
+    // Agora: 18k pra video (suficiente pra ~40min de fala densa), 10k pros outros.
+    const SOURCE_SLICE = sourceType === "video" ? 18000 : 10000;
     if (sourceContent) {
       console.log(
         `[generate] sourceType=${sourceType} sourceContent=${sourceContent.length}chars (sliced to ${Math.min(
@@ -968,6 +977,20 @@ Each slides array must have 6-10 items. Every slide MUST include a valid "varian
         )})`
       );
     }
+
+    // ── NER pre-processing — roda SÓ se tem sourceContent ──
+    // Extrai entities/dataPoints/quotes/arguments estruturados do source pra
+    // forçar o writer a citar fatos específicos. Custo: ~$0.0005 (Flash).
+    // Silent-fail: se der erro, segue sem o facts block.
+    const facts = sourceContent
+      ? await extractSourceFacts(sourceContent, language)
+      : emptyFacts();
+    if (!facts.skipped) {
+      console.log(
+        `[generate] NER facts: ${facts.entities.length} entities, ${facts.dataPoints.length} dataPoints, ${facts.quotes.length} quotes, ${facts.arguments.length} args (${facts.durationMs}ms, ${facts.inputTokens}+${facts.outputTokens} tok)`
+      );
+    }
+    const factsBlock = formatFactsBlock(facts);
 
     // Parse ORDENS DIRETAS do briefing (título fixo, fidelidade literal,
     // modo "referência+twist"). Esse bloco vai PRIMEIRO no userMessage e é
@@ -1017,15 +1040,19 @@ O conteudo abaixo vem ${sourceType === "video" ? "da transcricao de um VIDEO DO 
 Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer transcricao estruturada com pontos de virada narrativos, NAO pensamento genérico sobre o tema.`
       : "";
 
+    // Facts block (NER) entra ANTES do source content, pra o LLM ver os fatos
+    // que deve citar antes de ler a massa de texto.
+    const factsBlockPrefix = factsBlock ? `\n\n${factsBlock}` : "";
+
     const userMessage =
       mode === "layout-only"
         ? // Em layout-only + source: o transcript/scrape VIRA o texto a ser formatado
           // (não é "fonte adicional", é O conteúdo). Topic do user é só hint/contexto.
           sourceContent
-          ? `${overridesBlock}TEXTO PRA FORMATAR EM SLIDES — extraído da fonte (${sourceType}). Preserve wording, ordem, dados, fale da cabeça do autor quando fizer sentido:${sourceFidelityBlock}\n\n"""\n${sourceContent.slice(0, SOURCE_SLICE)}\n"""${topic && topic.trim().length > 50 ? `\n\nContexto/direcionamento do usuário:\n${topic.slice(0, 1000)}` : ""}`
+          ? `${overridesBlock}TEXTO PRA FORMATAR EM SLIDES — extraído da fonte (${sourceType}). Preserve wording, ordem, dados, fale da cabeça do autor quando fizer sentido:${sourceFidelityBlock}${factsBlockPrefix}\n\n"""\n${sourceContent.slice(0, SOURCE_SLICE)}\n"""${topic && topic.trim().length > 50 ? `\n\nContexto/direcionamento do usuário:\n${topic.slice(0, 1000)}` : ""}`
           : `${overridesBlock}TEXTO DO USUÁRIO PRA FORMATAR EM SLIDES (preserve wording, ordem, dados, CTA):\n\n"""\n${topic}\n"""`
         : sourceContent
-          ? `${overridesBlock}Create 3 carousel variations (data, story, provocative) based on this content:\n\nTopic: ${topic}${sourceFidelityBlock}\n\nSource (${sourceType}):\n${sourceContent.slice(0, SOURCE_SLICE)}`
+          ? `${overridesBlock}Create 3 carousel variations (data, story, provocative) based on this content:\n\nTopic: ${topic}${sourceFidelityBlock}${factsBlockPrefix}\n\nSource (${sourceType}):\n${sourceContent.slice(0, SOURCE_SLICE)}`
           : `${overridesBlock}Create 3 carousel variations (data, story, provocative) about: ${topic}`;
 
     // Se o usuário pediu fidelidade literal, força layout-only — writer
@@ -1192,8 +1219,22 @@ Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer tra
           typeof raw.body === "string" && raw.body.trim()
             ? raw.body
             : "";
-        const imageQuery =
+        let imageQuery =
           typeof raw.imageQuery === "string" ? raw.imageQuery : "";
+        // Validação de imageQuery: rejeita se for genérico ou tiver banned keyword.
+        // Se falhar, injeta fallback usando entity do NER + slice do heading.
+        const imgValidation = validateImageQuery(imageQuery);
+        if (!imgValidation.ok) {
+          const fallback = buildFallbackImageQuery(
+            typeof raw.heading === "string" ? raw.heading : "",
+            typeof raw.body === "string" ? raw.body : "",
+            facts
+          );
+          console.log(
+            `[generate] imageQuery rejected (${imgValidation.reason}): "${imageQuery}" → "${fallback}"`
+          );
+          imageQuery = fallback;
+        }
         const imageUrl =
           typeof raw.imageUrl === "string" && raw.imageUrl.trim()
             ? raw.imageUrl
@@ -1268,14 +1309,18 @@ Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer tra
           : { input: 0.00000015, output: 0.00000060 };
       const costUsd =
         inputTokens * pricing.input + outputTokens * pricing.output;
+      // NER sempre usa Flash
+      const nerCost =
+        facts.inputTokens * 0.00000015 + facts.outputTokens * 0.00000060;
       try {
         await sb.from("generations").insert({
           user_id: user.id,
           model: modelId,
           provider: "google",
-          input_tokens: inputTokens,
-          output_tokens: outputTokens,
-          cost_usd: Math.round(costUsd * 1_000_000) / 1_000_000, // 6 decimal places
+          input_tokens: inputTokens + facts.inputTokens,
+          output_tokens: outputTokens + facts.outputTokens,
+          cost_usd:
+            Math.round((costUsd + nerCost) * 1_000_000) / 1_000_000,
           prompt_type: sourceType,
         });
       } catch (e) {
@@ -1334,7 +1379,27 @@ Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer tra
       }
     }
 
-    return Response.json(result);
+    // promptUsed: systemPrompt + userMessage completos, pra transparência.
+    // Visível pra admin no editor (painel Debug IA). Users normais ignoram.
+    const promptUsed = `${systemPrompt}\n\n========== USER MESSAGE ==========\n\n${userMessage}`;
+
+    return Response.json({
+      ...result,
+      promptUsed,
+      // Metadados úteis pro front auditar
+      meta: {
+        effectiveMode,
+        sourceChars: sourceContent.length,
+        facts: facts.skipped
+          ? null
+          : {
+              entities: facts.entities,
+              dataPoints: facts.dataPoints,
+              quotes: facts.quotes,
+              arguments: facts.arguments,
+            },
+      },
+    });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("[generate] Unhandled error:", {

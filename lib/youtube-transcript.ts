@@ -498,7 +498,9 @@ function formatTranscriptOutput(args: {
   text: string;
 }): string {
   const { title, lang, isAuto, durationSec, text } = args;
-  const truncated = text.length > 8000 ? text.slice(0, 8000) + "…" : text;
+  // Não truncamos aqui — o consumidor (generate route) aplica SOURCE_SLICE.
+  // Antes: truncava em 8000 chars, o que cortava transcript inteiro ANTES do
+  // SOURCE_SLICE de 14/18k ter chance. Agora entregamos o transcript completo.
   const meta: string[] = [];
   if (title) meta.push(`Vídeo: ${title}`);
   if (lang) meta.push(`Idioma: ${lang}${isAuto ? " (auto)" : ""}`);
@@ -508,5 +510,5 @@ function formatTranscriptOutput(args: {
     meta.push(`Duração: ${m}:${String(s).padStart(2, "0")}`);
   }
   const header = meta.length ? meta.join("\n") + "\n\n" : "";
-  return `${header}Transcrição:\n${truncated}`;
+  return `${header}Transcrição:\n${text}`;
 }

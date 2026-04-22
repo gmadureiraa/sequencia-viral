@@ -355,11 +355,12 @@ export async function POST(request: Request) {
               .join(" ");
           }
 
-          // ── ESTRATEGIA DE MODELO ──────────────────────────────────
-          // Capa: Imagen 4 (premium, cinema, $0.04)
-          // Interno: Gemini 3.1 Flash Image (~5x mais barato, $0.008)
-          // Twitter: mantem Imagen 4 (se cair aqui e rara, quase sempre usa search)
-          const shouldUseCheapModel = !isCover && !isTwitterTpl;
+          // ── ESTRATEGIA DE MODELO (2026-04-22 — atualizada) ─────────
+          // TODOS os slides (incluindo capa) agora usam Gemini 3.1 Flash Image.
+          // Gabriel aprovou o teste A/B — qualidade "ta otima" e custo cai 5x
+          // ($0.04 → $0.008 por imagem). Imagen 4 fica como FALLBACK automatico
+          // se o Flash Image falhar.
+          const shouldUseCheapModel = !isTwitterTpl; // default pra qualquer slide
           const modelId = shouldUseCheapModel
             ? "gemini-3.1-flash-image-preview"
             : "imagen-4.0-generate-001";

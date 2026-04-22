@@ -956,9 +956,10 @@ Shape:
 Each slides array must have 6-10 items. Every slide MUST include a valid "variant".`;
 
     // Source content (transcrição YouTube, scrape de link, legenda de Instagram):
-    // antes fatiava em 3000 chars — transcript de vídeo longo perdia metade.
-    // Raise pra 6000 (custa ~1.5k tokens extras, vale a pena pra fidelidade).
-    const SOURCE_SLICE = 6000;
+    // Video/podcast de 40-60min gera 10-15k chars de transcript. Cortar em 6k
+    // perde as teses centrais (que costumam vir depois de 20min de warm-up).
+    // Agora: 14k pra video (suficiente pra ~30min de fala densa), 8k pros outros.
+    const SOURCE_SLICE = sourceType === "video" ? 14000 : 8000;
     if (sourceContent) {
       console.log(
         `[generate] sourceType=${sourceType} sourceContent=${sourceContent.length}chars (sliced to ${Math.min(
@@ -999,15 +1000,32 @@ Each slides array must have 6-10 items. Every slide MUST include a valid "varian
         ? `# ORDENS DIRETAS DO USUÁRIO (PRIORIDADE MÁXIMA — obedeça antes de qualquer regra estética ou de estilo do prompt)\n${overrideLines.join("\n")}\n\n`
         : "";
 
+    // Bloco extra de fidelidade quando sourceContent existe. Writer tende a
+    // usar fonte como "inspiracao solta" e criar carrossel generico. Isso
+    // forca a citar fatos especificos do transcript.
+    const sourceFidelityBlock = sourceContent
+      ? `\n\n# FIDELIDADE AO SOURCE (OBRIGATORIO — nao ignore)
+O conteudo abaixo vem ${sourceType === "video" ? "da transcricao de um VIDEO DO YOUTUBE" : sourceType === "link" ? "de um ARTIGO/POST escrito" : sourceType === "instagram" ? "de um post do INSTAGRAM" : "da fonte"}. Esse material e GROUND TRUTH. Regras:
+
+1. CITE NOMES PROPRIOS que aparecem na fonte (pessoas, empresas, produtos, lugares, ferramentas). Esses nomes entram nos headings/bodys como evidencia — NAO reescreva pra generico ("a empresa", "o founder"). Se a fonte fala "Anthropic", escreve "Anthropic".
+2. CITE NUMEROS/DATAS/ESTATISTICAS que aparecem na fonte. Se disse "crescimento de 300%", usa "300%". Se disse "em 2024", usa "em 2024". Nao arredonda, nao invente.
+3. CITE FRASES DE IMPACTO que o autor falou. Se ha uma quote forte no transcript (max 80 chars), coloca ela num slide como frase literal entre aspas.
+4. NAO REESCREVA pra "melhorar" — a voz do autor da fonte VALE MAIS que a sua reinterpretacao. Seu trabalho e ESTRUTURAR em slides, nao criar conteudo novo em cima.
+5. SE A FONTE CONTRADIZ uma de suas regras estilisticas, a fonte vence. Ex: se autor usa jargao tecnico especifico, preserva.
+6. imageQuery pros slides DEVE usar os nomes/objetos/cenas especificas mencionados na fonte — nao generico. Se o video fala de "Claude Code", imageQuery do slide sobre isso e "developer typing terminal cli command line tool", nao "ai coding".
+
+Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer transcricao estruturada com pontos de virada narrativos, NAO pensamento genérico sobre o tema.`
+      : "";
+
     const userMessage =
       mode === "layout-only"
         ? // Em layout-only + source: o transcript/scrape VIRA o texto a ser formatado
           // (não é "fonte adicional", é O conteúdo). Topic do user é só hint/contexto.
           sourceContent
-          ? `${overridesBlock}TEXTO PRA FORMATAR EM SLIDES — extraído da fonte (${sourceType}). Preserve wording, ordem, dados, fale da cabeça do autor quando fizer sentido:\n\n"""\n${sourceContent.slice(0, SOURCE_SLICE)}\n"""${topic && topic.trim().length > 50 ? `\n\nContexto/direcionamento do usuário:\n${topic.slice(0, 1000)}` : ""}`
+          ? `${overridesBlock}TEXTO PRA FORMATAR EM SLIDES — extraído da fonte (${sourceType}). Preserve wording, ordem, dados, fale da cabeça do autor quando fizer sentido:${sourceFidelityBlock}\n\n"""\n${sourceContent.slice(0, SOURCE_SLICE)}\n"""${topic && topic.trim().length > 50 ? `\n\nContexto/direcionamento do usuário:\n${topic.slice(0, 1000)}` : ""}`
           : `${overridesBlock}TEXTO DO USUÁRIO PRA FORMATAR EM SLIDES (preserve wording, ordem, dados, CTA):\n\n"""\n${topic}\n"""`
         : sourceContent
-          ? `${overridesBlock}Create 3 carousel variations (data, story, provocative) based on this content:\n\nTopic: ${topic}\n\nSource (${sourceType}):\n${sourceContent.slice(0, SOURCE_SLICE)}`
+          ? `${overridesBlock}Create 3 carousel variations (data, story, provocative) based on this content:\n\nTopic: ${topic}${sourceFidelityBlock}\n\nSource (${sourceType}):\n${sourceContent.slice(0, SOURCE_SLICE)}`
           : `${overridesBlock}Create 3 carousel variations (data, story, provocative) about: ${topic}`;
 
     // Se o usuário pediu fidelidade literal, força layout-only — writer

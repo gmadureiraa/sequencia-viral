@@ -522,6 +522,11 @@ export default function PreviewPage(props: {
                       accentOverride={accentOverride}
                       displayFontOverride={displayFontOverride}
                       textScale={textScaleOverride}
+                      // BUG FIX: preview do iPhone precisa ler variant/bgColor/layers
+                      // do slide (caso contrario fica igual ao default, diferente do editor).
+                      variant={active.variant}
+                      bgColor={active.bgColor}
+                      layers={active.layers}
                     />
                   </div>
                 )}
@@ -1077,6 +1082,13 @@ export default function PreviewPage(props: {
               accentOverride={accentOverride}
               displayFontOverride={displayFontOverride}
               textScale={textScaleOverride}
+              // BUG FIX 2026-04-22: variant, bgColor e layers NAO estavam sendo
+              // passados no export — todos slides caiam no default 'headline'
+              // legacy. Por isso o .zip/.png baixado ficava TOTALMENTE diferente
+              // do que o user viu no editor. Agora export reflete 1:1 o editor.
+              variant={s.variant}
+              bgColor={s.bgColor}
+              layers={s.layers}
             />
           </div>
         ))}

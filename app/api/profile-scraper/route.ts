@@ -7,6 +7,7 @@ export const maxDuration = 60;
 import { getAuthenticatedUser } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { cacheImages } from "@/lib/server/scrape-cache";
+import { scrapeInstagram } from "@/lib/server/instagram-scrapers";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -64,20 +65,8 @@ const APIFY_ACTORS: Partial<
       maxItems: 1,
     }),
   },
-  instagram: {
-    // apify/instagram-profile-scraper — official Apify actor
-    id: "apify~instagram-profile-scraper",
-    buildInput: (handle: string) => ({
-      usernames: [handle.replace(/^@/, "")],
-      resultsLimit: 1,
-      // Ask the actor for more detail (includes latestPosts with image URLs
-      // and carousel children). Actor options vary in naming; these fields
-      // are safely ignored when unknown.
-      addParentData: false,
-      includePostDetails: true,
-      postsLimit: 24,
-    }),
-  },
+  // instagram é tratado pela strategy em `lib/server/instagram-scrapers/`
+  // (Apify primario + ScrapeCreators fallback). Nao entra no mapa aqui.
   linkedin: {
     // dev_fusion~linkedin-profile-scraper — community LinkedIn scraper
     // Fallback: se der erro, cai pro website scraper com URL LinkedIn.
@@ -231,70 +220,6 @@ function normalizeTwitter(item: any, handle: string): ProfileData {
     avatarUrl: item.profilePicture ?? item.profileImageUrl ?? item.avatar ?? item.profileImageUrlHttps ?? null,
     followers: item.followers ?? item.followersCount ?? item.followerCount ?? null,
     following: item.following ?? item.friendsCount ?? item.followingCount ?? null,
-    niche: inferNiche(bio),
-    recentPosts,
-    partial: false,
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function normalizeInstagram(item: any, handle: string): ProfileData {
-  const recentPosts: RecentPost[] = [];
-
-  const posts: unknown[] = item.latestPosts ?? item.posts ?? item.recentPosts ?? [];
-  for (const p of posts.slice(0, 20)) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const post = p as any;
-    const children: unknown[] = post.childPosts ?? post.children ?? [];
-    const slideUrls = children
-      .map((c) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const ch = c as any;
-        return ch.displayUrl ?? ch.imageUrl ?? ch.url ?? null;
-      })
-      .filter((u): u is string => !!u);
-    const primaryImage: string | null =
-      post.displayUrl ??
-      post.imageUrl ??
-      post.thumbnailUrl ??
-      slideUrls[0] ??
-      null;
-    const isCarousel =
-      post.type === "Sidecar" ||
-      post.productType === "carousel_container" ||
-      slideUrls.length > 1;
-
-    recentPosts.push({
-      text: post.caption ?? post.text ?? "",
-      likes: post.likesCount ?? post.likes ?? 0,
-      comments: post.commentsCount ?? post.comments ?? 0,
-      imageUrl: primaryImage,
-      slideUrls: isCarousel ? slideUrls : [],
-      isCarousel,
-      permalink: post.url ?? post.permalink ?? null,
-      timestamp: post.timestamp ?? post.taken_at_timestamp ?? null,
-    });
-  }
-
-  const bio: string | null = item.biography ?? item.bio ?? null;
-
-  // Instagram avatar URL expires fast (CDN token). We still return it so
-  // the analyze step can show it during the session, but we scrub it on
-  // persist in the onboarding (see scrubInstagramCdn). User uploads own photo.
-  const avatarUrl: string | null =
-    item.profilePicUrl ??
-    item.profilePicture ??
-    item.avatarUrl ??
-    null;
-
-  return {
-    handle,
-    platform: "instagram",
-    name: item.fullName ?? item.name ?? null,
-    bio,
-    avatarUrl,
-    followers: item.followersCount ?? item.followers ?? null,
-    following: item.followsCount ?? item.following ?? item.followingCount ?? null,
     niche: inferNiche(bio),
     recentPosts,
     partial: false,
@@ -470,7 +395,50 @@ export async function POST(request: Request) {
       return Response.json({ error: "Handle is required." }, { status: 400 });
     }
 
-    // Call Apify
+    // Instagram agora passa pela strategy com fallback automatico
+    // (Apify -> ScrapeCreators). Mantemos o cache de imagens pro
+    // Supabase Storage depois do scrape, independente do provider.
+    if (platform === "instagram") {
+      let profile: ProfileData;
+      try {
+        profile = (await scrapeInstagram(handle)) as ProfileData;
+      } catch (err) {
+        console.error("[profile-scraper] all IG scrapers failed:", err);
+        return Response.json(fallbackProfile(handle, platform));
+      }
+
+      try {
+        const urls: string[] = [];
+        if (profile.avatarUrl) urls.push(profile.avatarUrl);
+        for (const p of profile.recentPosts) {
+          if (p.imageUrl) urls.push(p.imageUrl);
+          for (const s of p.slideUrls) urls.push(s);
+        }
+        if (urls.length > 0) {
+          const cache = await cacheImages(user.id, urls);
+          if (profile.avatarUrl) {
+            profile.avatarUrl =
+              cache.get(profile.avatarUrl) ?? profile.avatarUrl;
+          }
+          profile.recentPosts = profile.recentPosts.map((p) => ({
+            ...p,
+            imageUrl: p.imageUrl
+              ? (cache.get(p.imageUrl) ?? p.imageUrl)
+              : null,
+            slideUrls: p.slideUrls.map((s) => cache.get(s) ?? s),
+          }));
+        }
+      } catch (cacheErr) {
+        console.warn(
+          "[profile-scraper] image cache failed:",
+          cacheErr instanceof Error ? cacheErr.message : cacheErr
+        );
+      }
+
+      return Response.json(profile);
+    }
+
+    // Twitter e LinkedIn continuam chamando Apify direto
     let profile: ProfileData;
 
     if (!process.env.APIFY_API_KEY) {
@@ -482,68 +450,16 @@ export async function POST(request: Request) {
       const items = await callApify(platform, handle);
 
       if (items.length === 0) {
-        // No data returned — return fallback
         profile = fallbackProfile(handle, platform);
       } else {
         const item = items[0];
-        // Log actor output shape (truncated) so we can debug field naming in
-        // prod. Instagram CDN URLs, carousel children — shapes evolve.
-        if (platform === "instagram") {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const it = item as any;
-          const sample = (it.latestPosts ?? it.posts ?? [])[0];
-          console.log("[profile-scraper] IG actor sample keys:", {
-            topLevel: Object.keys(it).slice(0, 30),
-            hasLatestPosts: Array.isArray(it.latestPosts),
-            latestPostsLen: it.latestPosts?.length,
-            postKeys: sample ? Object.keys(sample).slice(0, 30) : null,
-            sampleDisplayUrl: sample?.displayUrl?.slice(0, 80),
-            sampleType: sample?.type,
-            sampleChildCount:
-              (sample?.childPosts ?? sample?.children ?? []).length ?? 0,
-          });
-        }
         profile =
           platform === "twitter"
             ? normalizeTwitter(item, handle)
-            : platform === "instagram"
-              ? normalizeInstagram(item, handle)
-              : normalizeLinkedin(item, handle);
-
-        // Cache images server-side pro Supabase Storage. IG CDN URLs
-        // expiram + rejeitam hotlink; depois desse cache, o front consome
-        // URLs publicas e estaveis do supabase.
-        try {
-          const urls: string[] = [];
-          if (profile.avatarUrl) urls.push(profile.avatarUrl);
-          for (const p of profile.recentPosts) {
-            if (p.imageUrl) urls.push(p.imageUrl);
-            for (const s of p.slideUrls) urls.push(s);
-          }
-          if (urls.length > 0) {
-            const cache = await cacheImages(user.id, urls);
-            if (profile.avatarUrl) {
-              profile.avatarUrl =
-                cache.get(profile.avatarUrl) ?? profile.avatarUrl;
-            }
-            profile.recentPosts = profile.recentPosts.map((p) => ({
-              ...p,
-              imageUrl: p.imageUrl
-                ? (cache.get(p.imageUrl) ?? p.imageUrl)
-                : null,
-              slideUrls: p.slideUrls.map((s) => cache.get(s) ?? s),
-            }));
-          }
-        } catch (cacheErr) {
-          console.warn(
-            "[profile-scraper] image cache failed:",
-            cacheErr instanceof Error ? cacheErr.message : cacheErr
-          );
-        }
+            : normalizeLinkedin(item, handle);
       }
     } catch (apifyError) {
       console.error("[profile-scraper] Apify error:", apifyError);
-      // Fallback: return partial data with just the handle
       profile = fallbackProfile(handle, platform);
     }
 

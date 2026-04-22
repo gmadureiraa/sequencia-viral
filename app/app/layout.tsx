@@ -38,6 +38,10 @@ const NAV_ITEMS: NavItem[] = [
   // Galeria temporariamente oculta (/app/gallery, /api/gallery ainda existem).
   // Pra reativar, descomentar a linha abaixo.
   // { href: "/app/gallery", label: "Galeria", icon: ImageIcon },
+  { href: "/app/help", label: "Guia", icon: BookOpen },
+  { href: "/app/roadmap", label: "Roadmap", icon: Map },
+  { href: "/app/settings", label: "Ajustes", icon: Settings },
+  // Em breve — itens disabled no rodape da nav.
   {
     href: "#",
     label: "Planejamento",
@@ -47,15 +51,11 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     href: "#",
-    label: "Piloto automático",
+    label: "Piloto auto",
     icon: Rocket,
     badge: "Em breve",
     disabled: true,
   },
-  { href: "/app/plans", label: "Assinar", icon: Sparkles, badge: "Pro" },
-  { href: "/app/help", label: "Guia", icon: BookOpen },
-  { href: "/app/roadmap", label: "Roadmap", icon: Map },
-  { href: "/app/settings", label: "Ajustes", icon: Settings },
 ];
 
 /** Emails com acesso ao painel admin. Mesma lista do backend. */
@@ -260,7 +260,7 @@ function SidebarContent({
           const commonStyle = {
             fontFamily: "var(--sv-mono)",
             fontSize: "10.5px",
-            letterSpacing: "0.12em",
+            letterSpacing: disabled ? "0.08em" : "0.12em",
             textTransform: "uppercase" as const,
             fontWeight: 600,
             background: active ? "var(--sv-green)" : "transparent",
@@ -275,14 +275,24 @@ function SidebarContent({
           const content = (
             <>
               <Icon size={15} strokeWidth={1.8} className="shrink-0" />
-              <span className="flex-1 whitespace-nowrap">{label}</span>
+              <span
+                className="flex-1 min-w-0"
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {label}
+              </span>
               {badge && (
                 <span
-                  className="shrink-0 rounded-full px-1.5 py-[1px]"
+                  className="shrink-0 rounded-full"
                   style={{
-                    fontSize: "8px",
+                    padding: disabled ? "1px 5px" : "1px 6px",
+                    fontSize: disabled ? "7px" : "8px",
                     fontWeight: 800,
-                    letterSpacing: "0.1em",
+                    letterSpacing: "0.08em",
                     background:
                       disabled
                         ? "rgba(247,245,239,0.14)"

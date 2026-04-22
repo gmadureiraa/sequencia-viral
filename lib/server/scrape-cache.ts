@@ -43,26 +43,28 @@ async function downloadImage(url: string): Promise<{
   contentType: string;
 } | null> {
   try {
+    // SEM User-Agent nem Referer: KAI (projeto irmao que funciona) faz fetch
+    // direto sem headers. Referer instagram.com ativa hotlink-block do IG CDN.
     const res = await fetch(url, {
-      headers: {
-        // IG CDN exige UA de browser; sem isso retorna 403.
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
-        Accept:
-          "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-        // Referer de instagram.com evita bloqueio de hotlink em alguns edges.
-        Referer: "https://www.instagram.com/",
-      },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       redirect: "follow",
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(
+        `[scrape-cache] download ${res.status} for ${url.slice(0, 80)}`
+      );
+      return null;
+    }
     const ct = res.headers.get("content-type") || "image/jpeg";
     if (!ct.startsWith("image/")) return null;
     const buf = new Uint8Array(await res.arrayBuffer());
     if (buf.byteLength === 0 || buf.byteLength > MAX_IMG_BYTES) return null;
     return { bytes: buf, contentType: ct };
-  } catch {
+  } catch (err) {
+    console.warn(
+      `[scrape-cache] download error for ${url.slice(0, 80)}:`,
+      err instanceof Error ? err.message : err
+    );
     return null;
   }
 }
@@ -86,11 +88,18 @@ async function uploadToBucket(
       cacheControl: "31536000",
     });
   if (error) {
-    // "already exists" é tratado com upsert, mas alguns projetos não têm.
-    // Se errou por qualquer outro motivo, tenta getPublicUrl mesmo assim.
-    if (!error.message?.toLowerCase().includes("already exists")) {
-      console.warn("[scrape-cache] upload error:", error.message);
+    const msg = error.message ?? "";
+    // upsert:true deveria evitar "already exists" — se aparecer, algo tá
+    // estranho mas a URL existente funciona. Retorna ela nesse caso.
+    if (msg.toLowerCase().includes("already exists")) {
+      const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      return pub?.publicUrl ?? null;
     }
+    // Qualquer outro erro (bucket not found, policy, quota, etc.): NAO
+    // retornar URL. Front vai receber null e mostrar placeholder em vez de
+    // renderizar <img> com 404.
+    console.warn("[scrape-cache] upload failed:", msg);
+    return null;
   }
   const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return pub?.publicUrl ?? null;

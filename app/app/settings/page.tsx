@@ -2549,26 +2549,14 @@ function SettingsPageContent() {
           {activeTab === "security" && (
             <Section
               title="Segurança"
-              subtitle="Sessão, onboarding e remoção de conta."
+              subtitle="Sessão e remoção de conta."
             >
               <div className="flex flex-col gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    try {
-                      localStorage.removeItem("sequencia-viral_onboarding");
-                    } catch {
-                      /* ignore */
-                    }
-                    if (profile && updateProfile) {
-                      void updateProfile({ onboarding_completed: false });
-                    }
-                    router.push("/app/onboarding");
-                  }}
-                  className="sv-btn-outline self-start"
-                >
-                  <Sparkles size={13} /> Refazer onboarding
-                </button>
+                {/*
+                  Refazer onboarding removido intencionalmente — user gastava
+                  o limite gratuito toda vez que rodava. Pra ajustar tom/nicho
+                  use as abas Perfil e Voz.
+                */}
                 <button
                   type="button"
                   onClick={() => void signOut()}

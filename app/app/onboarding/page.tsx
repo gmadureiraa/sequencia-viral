@@ -247,10 +247,10 @@ export default function OnboardingPage() {
   }, [profile, user]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const force =
-      new URLSearchParams(window.location.search).get("force") === "1";
-    if (!force && profile?.onboarding_completed) router.replace("/app");
+    // Hard guard: usuario que ja completou onboarding nao pode refazer —
+    // evita loop de geracao gratuita toda vez. Pra ajustar tom/nicho
+    // depois, usa /app/settings (abas Perfil e Voz).
+    if (profile?.onboarding_completed) router.replace("/app");
   }, [profile?.onboarding_completed, router]);
 
   const goto = useCallback((next: Step) => setStep(next), []);

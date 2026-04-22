@@ -90,6 +90,35 @@ interface AnalyticsPayload {
   generatedAt: string;
 }
 
+interface CostBreakdownPayload {
+  range: { key: string; from: string; to: string };
+  perPromptType: {
+    type: string;
+    calls: number;
+    avgCostUsd: number;
+    totalCostUsd: number;
+    avgTokens: { in: number; out: number };
+  }[];
+  processes: {
+    id: string;
+    label: string;
+    components: string[];
+    avgCostUsd: number | null;
+    missing?: string[];
+  }[];
+  topUsersByCost: {
+    userId: string;
+    name: string | null;
+    email: string | null;
+    plan: string;
+    totalCostUsd: number;
+    callCount: number;
+  }[];
+  usdBrlRate: number;
+  queryErrors?: Record<string, string>;
+  generatedAt: string;
+}
+
 const COLORS = {
   ink: "#0A0A0A",
   green: "#C8E87A",
@@ -138,6 +167,8 @@ export default function AnalyticsTab({
   const [customFrom, setCustomFrom] = useState<string>("");
   const [customTo, setCustomTo] = useState<string>("");
   const [data, setData] = useState<AnalyticsPayload | null>(null);
+  const [costBreakdown, setCostBreakdown] =
+    useState<CostBreakdownPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -153,24 +184,53 @@ export default function AnalyticsTab({
         if (customTo) params.set("to", customTo);
       }
       const t0 = performance.now();
-      const res = await fetch(`/api/admin/analytics?${params.toString()}`, {
-        method: "GET",
-        headers: jsonWithAuth(session),
-      });
-      const text = await res.text();
-      let payload: { error?: string } & Partial<AnalyticsPayload> = {};
+      const [resA, resB] = await Promise.all([
+        fetch(`/api/admin/analytics?${params.toString()}`, {
+          method: "GET",
+          headers: jsonWithAuth(session),
+        }),
+        fetch(`/api/admin/cost-breakdown?${params.toString()}`, {
+          method: "GET",
+          headers: jsonWithAuth(session),
+        }),
+      ]);
+
+      // Parse analytics (mandatório — se falhar, erro)
+      const textA = await resA.text();
+      let payloadA: { error?: string } & Partial<AnalyticsPayload> = {};
       try {
-        payload = text ? JSON.parse(text) : {};
+        payloadA = textA ? JSON.parse(textA) : {};
       } catch {
         throw new Error(
-          `Resposta inválida (HTTP ${res.status}): ${text.slice(0, 120)}`
+          `Resposta inválida (HTTP ${resA.status}): ${textA.slice(0, 120)}`
         );
       }
-      if (!res.ok)
-        throw new Error(payload.error || `Falha (HTTP ${res.status})`);
+      if (!resA.ok)
+        throw new Error(payloadA.error || `Falha (HTTP ${resA.status})`);
+
+      // Parse cost-breakdown (best-effort — não quebra a tab toda)
+      const textB = await resB.text();
+      let payloadB: { error?: string } & Partial<CostBreakdownPayload> = {};
+      try {
+        payloadB = textB ? JSON.parse(textB) : {};
+      } catch {
+        payloadB = { error: "resposta inválida" };
+      }
+
       const dt = Math.round(performance.now() - t0);
-      console.info(`[admin/analytics] range=${range} took ${dt}ms`);
-      setData(payload as AnalyticsPayload);
+      console.info(`[admin/analytics+cost] range=${range} took ${dt}ms`);
+      if (dt > 2000) {
+        console.warn(`[admin/analytics+cost] SLOW query ${dt}ms (>2s)`);
+      }
+      setData(payloadA as AnalyticsPayload);
+      if (resB.ok) {
+        setCostBreakdown(payloadB as CostBreakdownPayload);
+      } else {
+        setCostBreakdown(null);
+        console.warn(
+          `[admin/cost-breakdown] falhou HTTP ${resB.status}: ${payloadB.error || "?"}`
+        );
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Erro ao carregar";
       setError(msg);
@@ -587,6 +647,195 @@ export default function AnalyticsTab({
             </Card>
           </div>
 
+          {/* Seção: Custo por processo */}
+          {costBreakdown && (
+            <>
+              <SectionTitle>Custo por processo · Unit economics</SectionTitle>
+              <div
+                className="grid gap-3"
+                style={{
+                  gridTemplateColumns:
+                    "repeat(auto-fill, minmax(220px, 1fr))",
+                }}
+              >
+                {costBreakdown.processes.map((p) => (
+                  <ProcessCard
+                    key={p.id}
+                    process={p}
+                    usdBrl={costBreakdown.usdBrlRate}
+                    highlight={p.id === "onboarding"}
+                  />
+                ))}
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card title="Custo médio por tipo de prompt">
+                  <div style={{ maxHeight: 280, overflow: "auto" }}>
+                    <table
+                      style={{
+                        width: "100%",
+                        borderCollapse: "collapse",
+                        fontFamily: "var(--sv-sans)",
+                        fontSize: 11.5,
+                      }}
+                    >
+                      <thead
+                        style={{
+                          background: "var(--sv-paper)",
+                          position: "sticky",
+                          top: 0,
+                        }}
+                      >
+                        <tr>
+                          <MiniTh>Prompt type</MiniTh>
+                          <MiniTh align="right">Chamadas</MiniTh>
+                          <MiniTh align="right">Custo médio</MiniTh>
+                          <MiniTh align="right">Total</MiniTh>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {costBreakdown.perPromptType.map((r) => (
+                          <tr
+                            key={r.type}
+                            style={{
+                              borderTop: "1px solid rgba(10,10,10,0.08)",
+                            }}
+                          >
+                            <MiniTd>
+                              <span
+                                style={{
+                                  fontFamily: "var(--sv-mono)",
+                                  fontSize: 10.5,
+                                  letterSpacing: "0.06em",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {r.type}
+                              </span>
+                              <div
+                                style={{
+                                  fontFamily: "var(--sv-mono)",
+                                  fontSize: 9,
+                                  color: "var(--sv-muted)",
+                                }}
+                              >
+                                tokens: {r.avgTokens.in}→{r.avgTokens.out}
+                              </div>
+                            </MiniTd>
+                            <MiniTd align="right">{r.calls}</MiniTd>
+                            <MiniTd align="right">
+                              {fmtUsd(r.avgCostUsd, 6)}
+                            </MiniTd>
+                            <MiniTd align="right">
+                              {fmtUsd(r.totalCostUsd, 4)}
+                            </MiniTd>
+                          </tr>
+                        ))}
+                        {costBreakdown.perPromptType.length === 0 && (
+                          <tr>
+                            <MiniTd>
+                              <span style={{ color: "var(--sv-muted)" }}>
+                                Sem gerações no período.
+                              </span>
+                            </MiniTd>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+
+                <Card title="Top 10 usuários por custo IA">
+                  <div style={{ maxHeight: 280, overflow: "auto" }}>
+                    <table
+                      style={{
+                        width: "100%",
+                        borderCollapse: "collapse",
+                        fontFamily: "var(--sv-sans)",
+                        fontSize: 11.5,
+                      }}
+                    >
+                      <thead
+                        style={{
+                          background: "var(--sv-paper)",
+                          position: "sticky",
+                          top: 0,
+                        }}
+                      >
+                        <tr>
+                          <MiniTh>Usuário</MiniTh>
+                          <MiniTh>Plano</MiniTh>
+                          <MiniTh align="right">Chamadas</MiniTh>
+                          <MiniTh align="right">Custo</MiniTh>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {costBreakdown.topUsersByCost.map((u) => (
+                          <tr
+                            key={u.userId}
+                            style={{
+                              borderTop: "1px solid rgba(10,10,10,0.08)",
+                            }}
+                          >
+                            <MiniTd>
+                              <div style={{ fontWeight: 700 }}>
+                                {u.name || "—"}
+                              </div>
+                              <div
+                                style={{
+                                  fontFamily: "var(--sv-mono)",
+                                  fontSize: 9,
+                                  color: "var(--sv-muted)",
+                                  letterSpacing: "0.1em",
+                                }}
+                              >
+                                {u.email || u.userId.slice(0, 8)}
+                              </div>
+                            </MiniTd>
+                            <MiniTd>
+                              <span
+                                className="uppercase"
+                                style={{
+                                  fontFamily: "var(--sv-mono)",
+                                  fontSize: 9,
+                                  letterSpacing: "0.14em",
+                                  fontWeight: 700,
+                                  padding: "2px 5px",
+                                  background:
+                                    u.plan === "pro"
+                                      ? COLORS.green
+                                      : u.plan === "business"
+                                        ? COLORS.pink
+                                        : COLORS.soft,
+                                  color: COLORS.ink,
+                                }}
+                              >
+                                {u.plan}
+                              </span>
+                            </MiniTd>
+                            <MiniTd align="right">{u.callCount}</MiniTd>
+                            <MiniTd align="right">
+                              {fmtUsd(u.totalCostUsd, 4)}
+                            </MiniTd>
+                          </tr>
+                        ))}
+                        {costBreakdown.topUsersByCost.length === 0 && (
+                          <tr>
+                            <MiniTd>
+                              <span style={{ color: "var(--sv-muted)" }}>
+                                Sem atividade no período.
+                              </span>
+                            </MiniTd>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </div>
+            </>
+          )}
+
           {/* Seção: Receita + Planos */}
           <SectionTitle>Financeiro · Planos</SectionTitle>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -875,6 +1124,123 @@ function MiniStat({
       >
         {sub}
       </div>
+    </div>
+  );
+}
+
+function ProcessCard({
+  process,
+  usdBrl,
+  highlight,
+}: {
+  process: {
+    id: string;
+    label: string;
+    components: string[];
+    avgCostUsd: number | null;
+    missing?: string[];
+  };
+  usdBrl: number;
+  highlight?: boolean;
+}) {
+  const usd = process.avgCostUsd;
+  const brl = usd !== null && usd !== undefined ? usd * usdBrl : null;
+  const bg = highlight ? COLORS.green : COLORS.white;
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: bg,
+        border: "1.5px solid var(--sv-ink)",
+        boxShadow: "3px 3px 0 0 var(--sv-ink)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+      }}
+    >
+      <div
+        className="uppercase"
+        style={{
+          fontFamily: "var(--sv-mono)",
+          fontSize: 9,
+          letterSpacing: "0.16em",
+          color: highlight ? COLORS.ink : COLORS.muted,
+          fontWeight: 700,
+        }}
+      >
+        {highlight ? "● unit economics" : "custo médio"}
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--sv-sans)",
+          fontSize: 13,
+          lineHeight: 1.25,
+          color: COLORS.ink,
+          fontWeight: 700,
+        }}
+      >
+        {process.label}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          gap: 8,
+          marginTop: 2,
+        }}
+      >
+        <div
+          className="italic"
+          style={{
+            fontFamily: "var(--sv-display)",
+            fontSize: 26,
+            lineHeight: 1,
+            color: COLORS.ink,
+          }}
+        >
+          {usd === null || usd === undefined ? "—" : fmtUsd(usd, 4)}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--sv-mono)",
+            fontSize: 10,
+            color: COLORS.muted,
+            letterSpacing: "0.06em",
+          }}
+        >
+          {brl === null ? "" : `≈ R$ ${brl.toFixed(4)}`}
+        </div>
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--sv-mono)",
+          fontSize: 9.5,
+          color: COLORS.muted,
+          letterSpacing: "0.05em",
+          lineHeight: 1.4,
+          marginTop: 4,
+          borderTop: "1px dashed rgba(10,10,10,0.2)",
+          paddingTop: 6,
+        }}
+      >
+        {process.components.join(" + ")}
+      </div>
+      {process.missing && process.missing.length > 0 && (
+        <div
+          className="uppercase"
+          style={{
+            fontFamily: "var(--sv-mono)",
+            fontSize: 8.5,
+            letterSpacing: "0.14em",
+            color: "#c94f3b",
+            fontWeight: 700,
+            marginTop: 4,
+          }}
+          title={`Sem dados pra: ${process.missing.join(", ")}`}
+        >
+          Sem dados: {process.missing.join(", ")}
+        </div>
+      )}
     </div>
   );
 }

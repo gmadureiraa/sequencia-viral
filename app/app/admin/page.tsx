@@ -368,6 +368,20 @@ export default function AdminPage() {
         </div>
         <div className="flex items-center gap-2">
           <Link
+            href="/app/admin/regras"
+            className="sv-btn sv-btn-outline"
+            style={{
+              padding: "10px 14px",
+              fontSize: 10.5,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            Regras
+          </Link>
+          <Link
             href="/app/admin/feedback"
             className="sv-btn sv-btn-outline"
             style={{

@@ -107,6 +107,7 @@ export async function POST(request: Request) {
       slideNumber,
       totalSlides,
       facts: factsFromBody,
+      model: modelOverride,
     } = body as {
       query?: string;
       mode?: "search" | "generate";
@@ -126,6 +127,13 @@ export async function POST(request: Request) {
         dataPoints?: string[];
         summary?: string[];
       };
+      /**
+       * Override explícito do modelo de geração de imagem. Quando omitido,
+       * default é Gemini 3.1 Flash Image ($0.008/img). Passar
+       * "imagen-4.0-generate-001" pra ativar modo PREMIUM (Imagen 4, $0.04/img).
+       * Outros valores são ignorados e o default é usado.
+       */
+      model?: "imagen-4.0-generate-001" | "gemini-3.1-flash-image-preview";
     };
 
     // `mode` é reatribuído depois do decider — precisa ser mutável.
@@ -542,21 +550,29 @@ export async function POST(request: Request) {
           }
 
           // ── ESTRATEGIA DE MODELO (2026-04-22 — atualizada) ─────────
-          // TODOS os slides (incluindo capa) agora usam Gemini 3.1 Flash Image.
-          // Gabriel aprovou o teste A/B — qualidade "ta otima" e custo cai 5x
-          // ($0.04 → $0.008 por imagem). Imagen 4 fica como FALLBACK automatico
-          // se o Flash Image falhar.
-          const shouldUseCheapModel = !isTwitterTpl; // default pra qualquer slide
-          const modelId = shouldUseCheapModel
-            ? "gemini-3.1-flash-image-preview"
-            : "imagen-4.0-generate-001";
+          // DEFAULT: Gemini 3.1 Flash Image ($0.008/img) pra TODOS os slides
+          // (capa + inner). Qualidade aprovada em teste A/B, custo 5x menor
+          // que Imagen 4 ($0.04/img).
+          //
+          // PREMIUM: Imagen 4 só quando caller manda `model="imagen-4.0-generate-001"`
+          // explicitamente (ex: toggle premium no editor avançado). Nesse caso
+          // a chain inverte — tenta Imagen primeiro, Flash Image como fallback.
+          //
+          // FALLBACK (default): Flash Image falha (safety/quota/no-bytes) →
+          // tenta Imagen 4 como retry pra não devolver slide sem imagem.
+          const isPremiumImagen =
+            modelOverride === "imagen-4.0-generate-001";
+          const preferredModel: "imagen-4.0-generate-001" | "gemini-3.1-flash-image-preview" =
+            isPremiumImagen ? "imagen-4.0-generate-001" : "gemini-3.1-flash-image-preview";
+          const fallbackModel: "imagen-4.0-generate-001" | "gemini-3.1-flash-image-preview" =
+            isPremiumImagen ? "gemini-3.1-flash-image-preview" : "imagen-4.0-generate-001";
 
           let imageBytes: string | undefined;
           let actualModelUsed:
             | "imagen-4.0-generate-001"
-            | "gemini-3.1-flash-image-preview" = modelId;
+            | "gemini-3.1-flash-image-preview" = preferredModel;
 
-          if (shouldUseCheapModel) {
+          async function tryFlashImage(): Promise<string | undefined> {
             // Gemini Flash Image usa generateContent com responseModalities
             // ['IMAGE']. Output vem em candidates[0].content.parts[].inlineData.
             try {
@@ -583,24 +599,22 @@ export async function POST(request: Request) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const inline = (p as any).inlineData;
                 if (inline?.data) {
-                  imageBytes = inline.data as string;
-                  break;
+                  return inline.data as string;
                 }
               }
-              if (!imageBytes) {
-                console.warn(
-                  `[images] FALHA slide=${slideNumber ?? "?"} reason=flash-image-no-bytes isCover=${!!isCover} — vai tentar Imagen 4 fallback`
-                );
-              }
+              console.warn(
+                `[images] FALHA slide=${slideNumber ?? "?"} reason=flash-image-no-bytes isCover=${!!isCover}`
+              );
+              return undefined;
             } catch (err) {
               console.warn(
-                `[images] FALHA slide=${slideNumber ?? "?"} reason=flash-image-exception isCover=${!!isCover} msg=${err instanceof Error ? err.message : String(err)} — vai tentar Imagen 4 fallback`
+                `[images] FALHA slide=${slideNumber ?? "?"} reason=flash-image-exception isCover=${!!isCover} msg=${err instanceof Error ? err.message : String(err)}`
               );
+              return undefined;
             }
           }
 
-          // Fallback: se Flash Image falhou OU cover → usa Imagen 4.
-          if (!imageBytes) {
+          async function tryImagen4(): Promise<string | undefined> {
             try {
               const res = await ai.models.generateImages({
                 model: "imagen-4.0-generate-001",
@@ -611,20 +625,43 @@ export async function POST(request: Request) {
                   negativePrompt: NEGATIVE_PROMPT,
                 },
               });
-              imageBytes = res.generatedImages?.[0]?.image?.imageBytes;
-              if (imageBytes) {
-                actualModelUsed = "imagen-4.0-generate-001";
-              } else {
+              const bytes = res.generatedImages?.[0]?.image?.imageBytes;
+              if (!bytes) {
                 console.error(
                   `[images] FALHA slide=${slideNumber ?? "?"} reason=imagen-no-bytes isCover=${!!isCover}`
                 );
               }
+              return bytes;
             } catch (err) {
               console.error(
                 `[images] FALHA slide=${slideNumber ?? "?"} reason=imagen-exception isCover=${!!isCover} msg=${err instanceof Error ? err.message : String(err)}`
               );
+              return undefined;
             }
           }
+
+          // Tenta modelo preferido primeiro, depois fallback.
+          if (preferredModel === "gemini-3.1-flash-image-preview") {
+            imageBytes = await tryFlashImage();
+            if (!imageBytes) {
+              console.warn(
+                `[images] slide=${slideNumber ?? "?"} fallback Flash Image → Imagen 4`
+              );
+              imageBytes = await tryImagen4();
+              if (imageBytes) actualModelUsed = "imagen-4.0-generate-001";
+            }
+          } else {
+            imageBytes = await tryImagen4();
+            if (!imageBytes) {
+              console.warn(
+                `[images] slide=${slideNumber ?? "?"} fallback Imagen 4 → Flash Image (premium failed)`
+              );
+              imageBytes = await tryFlashImage();
+              if (imageBytes) actualModelUsed = "gemini-3.1-flash-image-preview";
+            }
+          }
+          // Silenciar warning do linter: fallbackModel fica documentado mas não lido direto.
+          void fallbackModel;
 
           if (imageBytes) {
             // Registra custo ANTES do upload (API ja foi cobrada de qualquer jeito).

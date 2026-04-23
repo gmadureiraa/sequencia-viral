@@ -1,5 +1,6 @@
 export const maxDuration = 60;
 
+import { GoogleGenAI } from "@google/genai";
 import { getAuthenticatedUser } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import {
@@ -86,9 +87,9 @@ export async function POST(request: Request) {
 
     const body: BrandAnalysisRequest = await request.json();
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn("[brand-analysis] ANTHROPIC_API_KEY not set, returning fallback analysis");
+      console.warn("[brand-analysis] GEMINI_API_KEY not set, returning fallback analysis");
       return Response.json(buildFallbackAnalysis(body));
     }
 
@@ -144,43 +145,47 @@ Bio: ${body.bio || "(sem bio)"}
 Posts recentes (use [TEXTO_NO_POST] quando disponivel — e o texto do slide do carrossel, vale muito mais que a legenda):
 ${postsText || "(sem posts disponiveis)"}`;
 
-    const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+    const GEMINI_MODEL = "gemini-2.5-pro";
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: 2048,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userMessage }],
-      }),
-    });
+    const ai = new GoogleGenAI({ apiKey });
 
-    if (!response.ok) {
-      console.error("[brand-analysis] Claude API error:", response.status);
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: userMessage }],
+          },
+        ],
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: 0.7,
+          maxOutputTokens: 4000,
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingBudget: 4000 },
+        },
+      });
+    } catch (err) {
+      console.error(
+        "[brand-analysis] Gemini API error:",
+        err instanceof Error ? err.message : err
+      );
       return Response.json(buildFallbackAnalysis(body));
     }
 
-    const data = await response.json();
-    const textBlock = data.content?.find(
-      (block: { type: string }) => block.type === "text"
-    );
-
-    if (!textBlock?.text) {
-      console.warn("[brand-analysis] Claude returned no text content, using fallback");
+    const text = response.text || "";
+    if (!text.trim()) {
+      console.warn("[brand-analysis] Gemini returned no text content, using fallback");
       return Response.json(buildFallbackAnalysis(body));
     }
 
     let result: BrandAnalysisResponse;
     try {
-      result = JSON.parse(textBlock.text);
+      result = JSON.parse(text);
     } catch {
-      const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
           result = JSON.parse(jsonMatch[0]);
@@ -189,25 +194,27 @@ ${postsText || "(sem posts disponiveis)"}`;
           return Response.json(buildFallbackAnalysis(body));
         }
       } else {
-        console.warn("[brand-analysis] No JSON found in Claude response, using fallback");
+        console.warn("[brand-analysis] No JSON found in Gemini response, using fallback");
         return Response.json(buildFallbackAnalysis(body));
       }
     }
 
-    // Log de custo — Claude devolve usage no nível do response.
-    const usage = (data.usage ?? {}) as {
-      input_tokens?: number;
-      output_tokens?: number;
+    // Log de custo — Gemini devolve usage no response.usageMetadata.
+    const usage = (response.usageMetadata ?? {}) as {
+      promptTokenCount?: number;
+      candidatesTokenCount?: number;
+      thoughtsTokenCount?: number;
     };
-    const inputTokens = usage.input_tokens ?? 0;
-    const outputTokens = usage.output_tokens ?? 0;
+    const inputTokens = usage.promptTokenCount ?? 0;
+    const outputTokens =
+      (usage.candidatesTokenCount ?? 0) + (usage.thoughtsTokenCount ?? 0);
     await recordGeneration({
       userId: user.id,
-      model: "claude-sonnet-4-6",
-      provider: "anthropic",
+      model: GEMINI_MODEL,
+      provider: "google",
       inputTokens,
       outputTokens,
-      costUsd: costForTokens("claude-sonnet-4-6", inputTokens, outputTokens),
+      costUsd: costForTokens(GEMINI_MODEL, inputTokens, outputTokens),
       promptType: "brand-analysis",
     });
 

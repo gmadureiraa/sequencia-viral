@@ -33,50 +33,34 @@ export function TopNav() {
       }}
     >
       <div className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-3">
-        <Link href="/" className="flex items-center gap-2" aria-label="Sequência Viral">
-          {/* Logo "SV" — mark compacto. Usa a webp otimizada da identidade
-              gigante (fundo preto embedded). Em contextos com hover em verde
-              o mark continua legivel porque e full ink. */}
+        <Link href="/" className="flex items-center" aria-label="Sequência Viral">
+          {/* Logo completa. WebP da identidade Kaleidos (fundo preto embedded
+              já no asset). Usa largura generosa pra ser legível no nav. */}
           <span
             style={{
               display: "inline-flex",
               alignItems: "center",
-              justifyContent: "center",
-              width: 40,
-              height: 40,
+              height: 42,
               background: "var(--sv-ink)",
               border: "1.5px solid var(--sv-ink)",
               boxShadow: "2px 2px 0 0 var(--sv-ink)",
               overflow: "hidden",
+              padding: "0 10px",
             }}
           >
             <Image
               src="/brand/logo-sv-full.webp"
-              alt=""
+              alt="Sequência Viral"
               width={1200}
               height={655}
               priority
               style={{
-                width: "90%",
-                height: "auto",
+                height: 32,
+                width: "auto",
                 objectFit: "contain",
                 display: "block",
               }}
             />
-          </span>
-          <span
-            aria-hidden
-            className="hidden sm:inline"
-            style={{
-              fontFamily: "var(--sv-display)",
-              fontSize: 20,
-              fontStyle: "italic",
-              letterSpacing: "-0.01em",
-              color: "var(--sv-ink)",
-              lineHeight: 1,
-            }}
-          >
-            Sequência Viral
           </span>
         </Link>
 

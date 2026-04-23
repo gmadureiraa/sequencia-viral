@@ -268,25 +268,6 @@ export function Hero(props: HeroProps = {}) {
         }
       `}</style>
 
-      {/* Logo acima do H1 — brand stamp no inicio da primeira dobra. */}
-      <div
-        className="mx-auto flex max-w-[1240px] justify-center px-6"
-        style={{ marginBottom: "clamp(20px, 3vw, 36px)" }}
-      >
-        <Image
-          src="/brand/logo-sv-full.webp"
-          alt="Sequência Viral"
-          width={1200}
-          height={655}
-          priority
-          style={{
-            height: "clamp(90px, 12vw, 140px)",
-            width: "auto",
-            display: "block",
-          }}
-        />
-      </div>
-
       <div
         className="sv-hero-grid mx-auto grid max-w-[1240px] items-center gap-10 px-6"
         style={{

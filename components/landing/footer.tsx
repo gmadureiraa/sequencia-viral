@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 
 function FooterCol({
   title,
@@ -68,19 +67,35 @@ export function Footer() {
         >
           <div>
             <div className="mb-[18px]">
-              {/* Logo completo maior no footer — brand presence forte. */}
-              <Image
-                src="/brand/logo-sv-full.webp"
-                alt="Sequência Viral"
-                width={1200}
-                height={655}
+              {/* Wordmark tipográfico grande — brand presence via tipografia
+                  editorial (Instrument Serif italic) + dot pink. */}
+              <div
                 style={{
-                  height: 90,
-                  width: "auto",
-                  objectFit: "contain",
-                  display: "block",
+                  display: "inline-flex",
+                  alignItems: "baseline",
+                  gap: 10,
+                  fontFamily: "var(--sv-display)",
+                  fontSize: 44,
+                  fontStyle: "italic",
+                  letterSpacing: "-0.02em",
+                  color: "var(--sv-ink)",
+                  lineHeight: 1,
+                  fontWeight: 400,
                 }}
-              />
+              >
+                Sequência Viral
+                <span
+                  aria-hidden
+                  style={{
+                    display: "inline-block",
+                    width: 14,
+                    height: 14,
+                    background: "var(--sv-pink)",
+                    border: "1.5px solid var(--sv-ink)",
+                    transform: "translateY(-4px)",
+                  }}
+                />
+              </div>
             </div>
             <p
               style={{

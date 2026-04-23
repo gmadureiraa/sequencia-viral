@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
@@ -34,31 +33,32 @@ export function TopNav() {
     >
       <div className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-3">
         <Link href="/" className="flex items-center" aria-label="Sequência Viral">
-          {/* Logo completa. WebP da identidade Kaleidos (fundo preto embedded
-              já no asset). Usa largura generosa pra ser legível no nav. */}
+          {/* Wordmark tipográfico — Instrument Serif italic + dot pink.
+              Mais legível que o mark antigo e alinhado à estética editorial. */}
           <span
             style={{
               display: "inline-flex",
-              alignItems: "center",
-              height: 42,
-              background: "var(--sv-ink)",
-              border: "1.5px solid var(--sv-ink)",
-              boxShadow: "2px 2px 0 0 var(--sv-ink)",
-              overflow: "hidden",
-              padding: "0 10px",
+              alignItems: "baseline",
+              gap: 6,
+              fontFamily: "var(--sv-display)",
+              fontSize: 22,
+              fontStyle: "italic",
+              letterSpacing: "-0.02em",
+              color: "var(--sv-ink)",
+              lineHeight: 1,
+              fontWeight: 400,
             }}
           >
-            <Image
-              src="/brand/logo-sv-full.webp"
-              alt="Sequência Viral"
-              width={1200}
-              height={655}
-              priority
+            Sequência Viral
+            <span
+              aria-hidden
               style={{
-                height: 32,
-                width: "auto",
-                objectFit: "contain",
-                display: "block",
+                display: "inline-block",
+                width: 7,
+                height: 7,
+                background: "var(--sv-pink)",
+                border: "1px solid var(--sv-ink)",
+                transform: "translateY(-2px)",
               }}
             />
           </span>

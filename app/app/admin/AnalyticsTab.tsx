@@ -651,6 +651,7 @@ export default function AnalyticsTab({
           {costBreakdown && (
             <>
               <SectionTitle>Custo por processo · Unit economics</SectionTitle>
+              <PipelineReference usdBrl={costBreakdown.usdBrlRate} />
               <div
                 className="grid gap-3"
                 style={{
@@ -1123,6 +1124,157 @@ function MiniStat({
         }}
       >
         {sub}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Pipeline reference — valores ALVO do Gabriel pra conferir drift vs realidade.
+ * Atualizado 2026-04-22: capa migrou Imagen 4 → Gemini 3.1 Flash Image (5x mais
+ * barato), inner slides continuam alternando Flash Image + Serper stock, e NER
+ * pre-processing entra como custo fixo de ~$0.0005 por carrossel com source.
+ *
+ * Se o ProcessCard dinâmico mostrar um custo muito diferente do target aqui,
+ * provavelmente algo regrediu (ex: fallback pra Imagen 4 ficando frequente).
+ */
+function PipelineReference({ usdBrl }: { usdBrl: number }) {
+  const rows: { label: string; usd: number; note: string; was?: string }[] = [
+    {
+      label: "Onboarding completo",
+      usd: 0.015,
+      note: "concepts + transcripts + brand-analysis + 3× carousel + 3× NER",
+      was: "~$0.0215",
+    },
+    {
+      label: "1 Carrossel Futurista (+imagens)",
+      usd: 0.065,
+      note: "carousel + caption + cover-scene + NER + 3× img Flash ($0.008)",
+      was: "~$0.264 (pré-migração Imagen→Flash)",
+    },
+    {
+      label: "1 Carrossel Twitter",
+      usd: 0.014,
+      note: "carousel + caption (stock Serper não conta em generations)",
+    },
+    {
+      label: "1 Imagem avulsa",
+      usd: 0.008,
+      note: "Gemini 3.1 Flash Image (fallback Imagen 4)",
+      was: "$0.040 (Imagen 4)",
+    },
+    {
+      label: "Regerar 6 ideias",
+      usd: 0.0006,
+      note: "concepts x1",
+    },
+    {
+      label: "+ Análise refs visuais (opcional)",
+      usd: 0.004,
+      note: "brand-aesthetic · Gemini Vision multi-image, só roda se user subir refs",
+    },
+    {
+      label: "+ NER pre-processing (opcional)",
+      usd: 0.0005,
+      note: "source-ner · Gemini 2.5 Flash, só roda quando source tem conteúdo",
+    },
+  ];
+  return (
+    <div
+      style={{
+        padding: 16,
+        background: "var(--sv-paper)",
+        border: "1.5px solid var(--sv-ink)",
+        boxShadow: "3px 3px 0 0 var(--sv-ink)",
+      }}
+    >
+      <div
+        className="uppercase mb-3"
+        style={{
+          fontFamily: "var(--sv-mono)",
+          fontSize: 10,
+          letterSpacing: "0.18em",
+          color: "var(--sv-muted)",
+          fontWeight: 700,
+        }}
+      >
+        ● Targets de referência · pipeline atual (2026-04-22)
+      </div>
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          fontFamily: "var(--sv-sans)",
+          fontSize: 12,
+        }}
+      >
+        <thead>
+          <tr>
+            <MiniTh>Processo</MiniTh>
+            <MiniTh align="right">USD alvo</MiniTh>
+            <MiniTh align="right">≈ BRL</MiniTh>
+            <MiniTh>Nota</MiniTh>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr
+              key={r.label}
+              style={{ borderTop: "1px solid rgba(10,10,10,0.08)" }}
+            >
+              <MiniTd>
+                <span style={{ fontWeight: 700 }}>{r.label}</span>
+                {r.was && (
+                  <div
+                    style={{
+                      fontFamily: "var(--sv-mono)",
+                      fontSize: 9,
+                      color: "var(--sv-muted)",
+                      letterSpacing: "0.06em",
+                      marginTop: 2,
+                    }}
+                  >
+                    antes: {r.was}
+                  </div>
+                )}
+              </MiniTd>
+              <MiniTd align="right">
+                <span style={{ fontFamily: "var(--sv-mono)" }}>
+                  ${r.usd.toFixed(4)}
+                </span>
+              </MiniTd>
+              <MiniTd align="right">
+                <span style={{ fontFamily: "var(--sv-mono)" }}>
+                  R$ {(r.usd * usdBrl).toFixed(4)}
+                </span>
+              </MiniTd>
+              <MiniTd>
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "var(--sv-muted)",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {r.note}
+                </span>
+              </MiniTd>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div
+        className="mt-3 uppercase"
+        style={{
+          fontFamily: "var(--sv-mono)",
+          fontSize: 9,
+          letterSpacing: "0.14em",
+          color: "var(--sv-muted)",
+          fontWeight: 700,
+          lineHeight: 1.6,
+        }}
+      >
+        Se os cards dinâmicos abaixo divergirem muito destes targets, algo regrediu no pipeline. Use pra debug.
       </div>
     </div>
   );

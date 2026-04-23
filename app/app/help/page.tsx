@@ -11,6 +11,8 @@ import {
   FileText,
   Brain,
   MessageSquare,
+  Palette,
+  Lightbulb,
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -35,75 +37,93 @@ const CARDS: GuideCard[] = [
     icon: <PlusCircle size={18} strokeWidth={2} />,
     title: "Criar seu primeiro carrossel",
     body:
-      "No menu, clique em Criar. Cola um link (YouTube, artigo, post), um texto solto ou escreve a ideia direto. Escolhe o template visual (Futurista ou Thread) e clica gerar. A IA devolve um carrossel pronto em ~15s.",
+      "No menu, clique em Criar. Cola um link (YouTube, artigo, post do Instagram), um texto solto, ou escreve a ideia direto. Escolhe o template visual (Futurista ou Twitter) e clica gerar. A IA devolve um carrossel completo em ~15-25s.",
     actionLabel: "Criar agora",
     actionHref: "/app/create/new",
     accent: "green",
   },
   {
     step: "02",
-    icon: <Brain size={18} strokeWidth={2} />,
-    title: "Writer vs Layout-only",
+    icon: <Lightbulb size={18} strokeWidth={2} />,
+    title: "Ideias sugeridas pra desbloquear",
     body:
-      "Dois modos. Writer: IA usa seu briefing como inspiração e escreve do zero (hooks, escada, CTA). Layout-only: você já escreveu, ela só quebra em slides sem reescrever. Escolhe no topo antes de gerar.",
+      "Sem ideia do que postar? No Criar, o painel de sugestões mostra 6 conceitos baseados no seu nicho, voz e posts recentes. Clica numa e vai direto pro briefing preenchido. Pra puxar 6 novas, clica Regerar.",
     accent: "paper",
   },
   {
     step: "03",
+    icon: <Brain size={18} strokeWidth={2} />,
+    title: "Writer vs Layout-only",
+    body:
+      "Dois modos. Writer: IA usa seu briefing como inspiração e escreve do zero (hooks, escada, CTA). Layout-only: você já escreveu o texto, ela só quebra em slides sem reescrever. Escolhe no topo do Criar antes de gerar.",
+    accent: "paper",
+  },
+  {
+    step: "04",
     icon: <Mic size={18} strokeWidth={2} />,
     title: "Treinar a IA com sua voz",
     body:
-      "Em Ajustes → Voz da IA, cola amostras dos seus posts. A IA aprende ritmo, vocabulário, tiques de linguagem. Também dá pra listar tabus (palavras proibidas) e regras fixas (ex: 'nunca começo com pergunta').",
+      "Em Ajustes → Voz da IA, cola 3 links de posts seus (ou de referência). A IA lê legenda + OCR dos slides e extrai o DNA: hook, estrutura, CTA, vocabulário. Também dá pra listar tabus (palavras banidas) e regras fixas — tipo 'sem emoji em título'.",
     actionLabel: "Configurar voz",
     actionHref: "/app/settings?tab=voice",
     accent: "pink",
   },
   {
-    step: "04",
-    icon: <Layers size={18} strokeWidth={2} />,
-    title: "Modo avançado",
-    body:
-      "Antes de gerar, ativa o toggle Modo avançado e destrava: direcionamento do gancho, CTA customizado, número exato de slides, travar estilo (data/story/provocative), contexto extra, upload de fotos suas. Opcional, mas dá controle fino.",
-    accent: "paper",
-  },
-  {
     step: "05",
-    icon: <MessageSquare size={18} strokeWidth={2} />,
-    title: "Perguntar antes de gerar",
+    icon: <Palette size={18} strokeWidth={2} />,
+    title: "Referências visuais da marca",
     body:
-      "Dentro do Modo avançado, o toggle 🧠 Perguntar antes de gerar faz a IA ler seu briefing e devolver 1-2 perguntas cirúrgicas — tipo 'qual foi o resultado exato?' ou 'é pra qual público especificamente?'. Você responde e o output fica MUITO mais específico.",
+      "Em Ajustes → Branding padrão, sobe até 3 imagens que representam a estética da sua marca (paleta, iluminação, mood). O Gemini Vision lê e persiste a descrição — todas as imagens geradas depois seguem essa linha. Economia real de tempo de edição.",
+    actionLabel: "Subir refs",
+    actionHref: "/app/settings?tab=branding",
     accent: "paper",
   },
   {
     step: "06",
-    icon: <Sparkles size={18} strokeWidth={2} />,
-    title: "Escolher template visual",
+    icon: <Layers size={18} strokeWidth={2} />,
+    title: "Modo avançado (briefing cirúrgico)",
     body:
-      "Dois templates disponíveis. Futurista: editorial cinematográfico, caixa alta dramática, imagens IA tema-específicas — ideal pra conteúdo editorial denso. Thread (X): screenshot de tweet, visual minimalista, ideal pra linha conversacional.",
+      "No Criar, ativa Modo avançado e destrava: direcionamento do gancho, CTA customizado, número exato de slides (6-12), travar estilo (data / story / provocative), contexto extra, upload de fotos suas. Tudo opcional — deixa desligado pra geração rápida.",
     accent: "paper",
   },
   {
     step: "07",
-    icon: <ImageIcon size={18} strokeWidth={2} />,
-    title: "Ajustar imagens dos slides",
+    icon: <MessageSquare size={18} strokeWidth={2} />,
+    title: "Perguntar antes de gerar",
     body:
-      "No editor, clica num slide. Três opções: Buscar (stock no Google Images), Gerar IA (imagem cinematográfica única) ou Upload (sua foto). Cada slide pode ter sua própria imagem — não precisa que todas sejam do mesmo tipo.",
+      "Dentro do Modo avançado, o toggle Perguntar antes de gerar faz a IA ler seu briefing e devolver 1-2 perguntas cirúrgicas — tipo 'qual foi o resultado exato?' ou 'é pra qual público?'. Você responde, ela gera. Output fica MUITO mais específico.",
     accent: "paper",
   },
   {
     step: "08",
-    icon: <Download size={18} strokeWidth={2} />,
-    title: "Exportar e publicar",
+    icon: <Sparkles size={18} strokeWidth={2} />,
+    title: "Escolher template visual",
     body:
-      "Quando o carrossel tá pronto, clica Exportar. Baixa PNG 1080×1350 por slide, pronto pra Instagram e LinkedIn. A legenda vem junto — edita se quiser e cola no app da rede.",
-    accent: "ink",
+      "Dois templates disponíveis. Futurista: editorial cinematográfico, tipografia dramática, imagens IA tema-específicas — ideal pra conteúdo editorial denso. Twitter: screenshot de tweet, visual minimalista, ideal pra linha conversacional/thread.",
+    accent: "paper",
   },
   {
     step: "09",
+    icon: <ImageIcon size={18} strokeWidth={2} />,
+    title: "Como as imagens são geradas",
+    body:
+      "Capa: Gemini 3.1 Flash Image (IA cinematográfica). Slides internos: alternam entre Flash Image e stock do Google Images (via Serper). No editor você pode trocar qualquer uma por: Buscar (stock), Gerar IA (imagem única) ou Upload (sua foto). Cada slide é independente.",
+    accent: "paper",
+  },
+  {
+    step: "10",
+    icon: <Download size={18} strokeWidth={2} />,
+    title: "Exportar e publicar",
+    body:
+      "Quando o carrossel tá pronto, clica Exportar. Três opções: PNG por slide (pack de arquivos 1080×1350), PDF único com todos os slides, ou ZIP com tudo junto + legenda em .txt. Pronto pra Instagram e LinkedIn.",
+    accent: "ink",
+  },
+  {
+    step: "11",
     icon: <FileText size={18} strokeWidth={2} />,
     title: "Feedback que treina a IA",
     body:
-      "Na biblioteca, cada carrossel tem 👍 / 👎 + campo de comentário. A IA lê o seu feedback e, na próxima geração, reforça o que você gostou e evita o que você rejeitou. Use sem medo — quanto mais feedback, melhor a IA fica com você.",
+      "Na biblioteca, cada carrossel tem polegar pra cima / pra baixo + campo de comentário. A IA lê o feedback e, na próxima geração, reforça o que você gostou e evita o que rejeitou. Quanto mais feedback, mais a IA cola no seu estilo.",
     actionLabel: "Ver biblioteca",
     actionHref: "/app/carousels",
     accent: "paper",
@@ -172,7 +192,7 @@ export default function HelpPage() {
           maxWidth: 620,
         }}
       >
-        9 passos curtos. Sem jargão, sem rodeio. Cada card explica uma parte do produto — leia em ordem ou vai direto pro que você precisa agora.
+        11 passos curtos. Sem jargão, sem rodeio. Cada card explica uma parte do produto — leia em ordem ou vai direto pro que você precisa agora.
       </p>
 
       <div className="mt-8 flex flex-wrap gap-2">

@@ -1041,7 +1041,7 @@ function ApisTab({ stats }: { stats: AdminStats }) {
       name: "Gemini (Google)",
       envKeys: ["GEMINI_API_KEY"],
       provider: "google",
-      desc: "Geração de texto (carrossel, caption, concepts) + Vision + Imagen 4",
+      desc: "Texto (carousel/caption/concepts/NER) + Vision (brand-aesthetic) + Imagens (Flash Image default, Imagen 4 fallback)",
     },
     {
       name: "Claude (Anthropic)",
@@ -1073,7 +1073,7 @@ function ApisTab({ stats }: { stats: AdminStats }) {
     {
       name: "Serper",
       envKeys: ["SERPER_API_KEY"],
-      desc: "Busca de imagens (fallback pra Imagen)",
+      desc: "Busca de imagens stock (inner slides alternados com Gemini Flash Image)",
     },
     {
       name: "Supadata",

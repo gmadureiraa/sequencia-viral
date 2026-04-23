@@ -1300,7 +1300,9 @@ Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer tra
       }
     }
 
-    // Record generation with real token counts (usage already incremented above)
+    // Record generation with real token counts (usage already incremented above).
+    // 2 rows: 1 pro carousel (writer) + 1 pro NER (se rodou). Assim o
+    // cost-breakdown consegue isolar unit economics de cada processo.
     if (sb) {
       // Pricing by model: Flash ($0.15/$0.60 per 1M) vs Pro ($1.25/$5.00 per 1M).
       const pricing =
@@ -1309,22 +1311,38 @@ Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer tra
           : { input: 0.00000015, output: 0.00000060 };
       const costUsd =
         inputTokens * pricing.input + outputTokens * pricing.output;
-      // NER sempre usa Flash
-      const nerCost =
-        facts.inputTokens * 0.00000015 + facts.outputTokens * 0.00000060;
       try {
         await sb.from("generations").insert({
           user_id: user.id,
           model: modelId,
           provider: "google",
-          input_tokens: inputTokens + facts.inputTokens,
-          output_tokens: outputTokens + facts.outputTokens,
-          cost_usd:
-            Math.round((costUsd + nerCost) * 1_000_000) / 1_000_000,
-          prompt_type: sourceType,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          cost_usd: Math.round(costUsd * 1_000_000) / 1_000_000,
+          // Unifica carrossel em "carousel". sourceType (topic/video/link/instagram)
+          // agora vai pra coluna `source_type` se existir, ou fica no metadata.
+          prompt_type: "carousel",
         });
       } catch (e) {
-        console.warn("[generate] Failed to record generation:", e);
+        console.warn("[generate] Failed to record carousel generation:", e);
+      }
+      // Log NER separado (quando rodou) pra analytics isolar o custo do pre-processing.
+      if (!facts.skipped && (facts.inputTokens > 0 || facts.outputTokens > 0)) {
+        const nerCost =
+          facts.inputTokens * 0.00000015 + facts.outputTokens * 0.00000060;
+        try {
+          await sb.from("generations").insert({
+            user_id: user.id,
+            model: "gemini-2.5-flash",
+            provider: "google",
+            input_tokens: facts.inputTokens,
+            output_tokens: facts.outputTokens,
+            cost_usd: Math.round(nerCost * 1_000_000) / 1_000_000,
+            prompt_type: "source-ner",
+          });
+        } catch (e) {
+          console.warn("[generate] Failed to record NER generation:", e);
+        }
       }
     }
 

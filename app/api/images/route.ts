@@ -14,6 +14,12 @@ import {
   getCachedThemeImage,
   recordThemeImage,
 } from "@/lib/server/image-strategy";
+import {
+  buildImagePromptFromStructured,
+  decideSlideImage,
+  type ImageDecision,
+  type StructuredImagePrompt,
+} from "@/lib/server/image-decider";
 
 export const maxDuration = 60;
 
@@ -52,7 +58,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       query,
-      mode,
+      mode: modeFromBody,
       niche,
       tone,
       designTemplate,
@@ -61,6 +67,10 @@ export async function POST(request: Request) {
       peopleMode: peopleModeRaw,
       isCover,
       count,
+      useDecider,
+      slideNumber,
+      totalSlides,
+      facts: factsFromBody,
     } = body as {
       query?: string;
       mode?: "search" | "generate";
@@ -72,12 +82,26 @@ export async function POST(request: Request) {
       peopleMode?: ImagePeopleMode;
       isCover?: boolean;
       count?: number;
+      useDecider?: boolean;
+      slideNumber?: number;
+      totalSlides?: number;
+      facts?: {
+        entities?: string[];
+        dataPoints?: string[];
+        summary?: string[];
+      };
     };
 
+    // `mode` é reatribuído depois do decider — precisa ser mutável.
+    let mode: "search" | "generate" | undefined = modeFromBody;
+
     // Rate limit dividido por modo: generate (Imagen, $0.04/imagem) é
-    // mais restrito que search (Serper, ~grátis).
-    const rlBucket = mode === "generate" ? "images-generate" : "images-search";
-    const rlLimit = mode === "generate" ? 40 : 120;
+    // mais restrito que search (Serper, ~grátis). Quando useDecider=true
+    // tratamos como generate-tier (pessimistic) já que ainda não sabemos
+    // a escolha do agente mas provavelmente vai custar imagem.
+    const rlLikelyGenerate = mode === "generate" || useDecider;
+    const rlBucket = rlLikelyGenerate ? "images-generate" : "images-search";
+    const rlLimit = rlLikelyGenerate ? 40 : 120;
     const limiter = checkRateLimit({
       key: getRateLimitKey(request, rlBucket, user.id),
       limit: rlLimit,
@@ -118,18 +142,6 @@ export async function POST(request: Request) {
     const peopleMode = normalizeImagePeopleMode(peopleModeRaw);
     const peopleSearch = imagePeopleModeSearchSuffix(peopleMode);
 
-    // Picker manual (count > 10) não deve sobrescrever a query do user com
-    // hints de template — isso gera resultados vazios quando user busca algo
-    // específico. Only append hints quando é fetch automático pelo template.
-    const isManualPicker = typeof count === "number" && count > 10;
-    const searchQuery = isManualPicker
-      ? clip(query.trim(), MAX_QUERY_LEN)
-      : clip(
-          `${mergedSearch} ${tmplMeta.imageSearchStyleHint} ${peopleSearch}`
-            .replace(/\s+/g, " ")
-            .trim(),
-          MAX_QUERY_LEN
-        );
     const slideThemeHint = [heading, bodyCtx]
       .filter(Boolean)
       .join(" — ")
@@ -140,9 +152,10 @@ export async function POST(request: Request) {
     // Puxa a descrição estética da marca (se configurada em Ajustes →
     // Branding → Referências visuais). Vai como prefix do prompt do Imagen
     // pra todas as imagens geradas seguirem a mesma linguagem visual.
+    // Puxado ANTES do decider — ele usa brandAesthetic como contexto.
     let brandAesthetic = "";
     const sbForAesthetic = createServiceRoleSupabaseClient();
-    if (sbForAesthetic && (mode === "generate" || !mode)) {
+    if (sbForAesthetic) {
       try {
         const { data: prof } = await sbForAesthetic
           .from("profiles")
@@ -160,6 +173,87 @@ export async function POST(request: Request) {
         /* silently fall back to no aesthetic */
       }
     }
+
+    // ── IMAGE DECIDER ───────────────────────────────────────────────
+    // Se useDecider=true, roda agente Gemini Flash 2.5 pra decidir entre
+    // search (foto real de entidade nomeada) e generate (cena cinematográfica
+    // com StructuredImagePrompt). Substitui a heurística antiga de
+    // alternância fixa par/ímpar.
+    //
+    // Decider também retorna:
+    //   - searchQuery específico (quando mode=search) — sobrescreve heuristica
+    //   - StructuredImagePrompt rico (quando mode=generate) — caller monta
+    //     prompt Imagen de ~300-500 chars via buildImagePromptFromStructured.
+    let deciderDecision: ImageDecision | null = null;
+    let structuredPromptOverride: StructuredImagePrompt | null = null;
+    let deciderSearchQueryOverride: string | null = null;
+    if (useDecider) {
+      try {
+        deciderDecision = await decideSlideImage({
+          heading: heading || query,
+          body: bodyCtx || "",
+          slideNumber: typeof slideNumber === "number" ? slideNumber : 1,
+          totalSlides: typeof totalSlides === "number" ? totalSlides : 8,
+          isCover: !!isCover,
+          niche,
+          tone,
+          brandAesthetic: brandAesthetic || undefined,
+          facts: factsFromBody
+            ? {
+                entities: Array.isArray(factsFromBody.entities)
+                  ? factsFromBody.entities.filter(
+                      (x): x is string => typeof x === "string"
+                    )
+                  : [],
+                dataPoints: Array.isArray(factsFromBody.dataPoints)
+                  ? factsFromBody.dataPoints.filter(
+                      (x): x is string => typeof x === "string"
+                    )
+                  : [],
+                summary: Array.isArray(factsFromBody.summary)
+                  ? factsFromBody.summary.filter(
+                      (x): x is string => typeof x === "string"
+                    )
+                  : [],
+              }
+            : undefined,
+        });
+        console.log(
+          `[images] decider slide=${slideNumber ?? "?"} mode=${deciderDecision.mode} reasoning="${deciderDecision.reasoning}"`
+        );
+        mode = deciderDecision.mode;
+        if (deciderDecision.mode === "search" && deciderDecision.searchQuery) {
+          deciderSearchQueryOverride = deciderDecision.searchQuery;
+        }
+        if (
+          deciderDecision.mode === "generate" &&
+          deciderDecision.generatePrompt
+        ) {
+          structuredPromptOverride = deciderDecision.generatePrompt;
+        }
+      } catch (err) {
+        console.warn(
+          "[images] decider falhou, caindo pra heurística:",
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+
+    // Picker manual (count > 10) não deve sobrescrever a query do user com
+    // hints de template — isso gera resultados vazios quando user busca algo
+    // específico. Only append hints quando é fetch automático pelo template.
+    const isManualPicker = typeof count === "number" && count > 10;
+    const baseSearchText = deciderSearchQueryOverride
+      ? mergeImageSearchText(deciderSearchQueryOverride, heading, bodyCtx)
+      : mergedSearch;
+    const searchQuery = isManualPicker
+      ? clip(query.trim(), MAX_QUERY_LEN)
+      : clip(
+          `${baseSearchText} ${tmplMeta.imageSearchStyleHint} ${peopleSearch}`
+            .replace(/\s+/g, " ")
+            .trim(),
+          MAX_QUERY_LEN
+        );
 
     // ── CACHE TEMATICO: antes de chamar Imagen/Serper, checa se ja temos
     //    imagem recente (ultimos 7d) pro mesmo tema. Economia de ~40-60%
@@ -232,8 +326,12 @@ export async function POST(request: Request) {
           // primeiro pra planejar uma cena narrativa rica, depois injeta como
           // prompt principal no Imagen. Resultado é MUITO melhor que só
           // reforçar o prompt generico.
+          //
+          // Se decider já produziu StructuredImagePrompt, pulamos o cover-scene
+          // (redundante — decider já planejou a cena com campos estruturados).
           let coverScenePrompt = "";
-          const shouldUseCoverScene = isCover && !isTwitterTpl;
+          const shouldUseCoverScene =
+            isCover && !isTwitterTpl && !structuredPromptOverride;
           if (shouldUseCoverScene) {
             try {
               const sceneRes = await fetch(
@@ -305,7 +403,32 @@ export async function POST(request: Request) {
             "text, letters, numbers, words, typography, captions, titles, subtitles, headlines, logos, watermarks, brand names, signs, billboards, book covers, magazine covers, newspaper, screen UI, phone UI, app UI, website screenshot, t-shirt print, road sign, license plate, poster text, neon sign, street sign, shop sign, written language, readable characters";
 
           let imagePrompt: string;
-          if (isCover && !isTwitterTpl) {
+          if (structuredPromptOverride) {
+            // DECIDER OVERRIDE: prompt veio do image-decider como
+            // StructuredImagePrompt rico (subject/composition/lighting/mood/
+            // palette/camera/textures/negative). Monta prompt Imagen-style
+            // compacto via helper + wrappers obrigatórios (NO_TEXT, aesthetic,
+            // template hints, palette rules).
+            const structuredBody = buildImagePromptFromStructured(
+              structuredPromptOverride
+            );
+            imagePrompt = [
+              NO_TEXT_HEADER,
+              aestheticPrefix,
+              `TEMPLATE STYLE GUIDE (${tmplMeta.name}): ${tmplMeta.styleGuidePrompt}`,
+              isCover && !isTwitterTpl ? cinematicBase : "",
+              isCover && !isTwitterTpl ? coverBoost : "",
+              structuredBody,
+              peopleInstr,
+              nicheHint,
+              toneHint,
+              preferHex,
+              avoidHex,
+              NO_TEXT_RULE,
+            ]
+              .filter(Boolean)
+              .join(" ");
+          } else if (isCover && !isTwitterTpl) {
             // Cover — rich structured cinematic prompt.
             imagePrompt = [
               NO_TEXT_HEADER,

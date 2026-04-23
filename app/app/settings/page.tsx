@@ -24,8 +24,6 @@ import {
   Instagram,
   Linkedin,
   Plug,
-  Mail,
-  Bell,
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -41,7 +39,6 @@ type TabId =
   | "branding"
   | "social"
   | "voice"
-  | "notifications"
   | "plan"
   | "security";
 
@@ -50,9 +47,9 @@ const TABS: { id: TabId; label: string; glyph: string }[] = [
   { id: "branding", label: "Branding padrão", glyph: "◆" },
   { id: "social", label: "Redes", glyph: "❋" },
   { id: "voice", label: "Voz IA", glyph: "✦" },
-  // Notificações escondida — ainda não temos sistema real.
-  // Quando houver toggles funcionais (email ou push), reativar.
-  // { id: "notifications", label: "Notificações", glyph: "●" },
+  // Aba "Notificações" ficou fora até termos toggles funcionais (email/push).
+  // As prefs ainda são persistidas em brand_analysis.__notifications pra não
+  // perder compatibilidade — só não tem UI pra editar por enquanto.
   { id: "plan", label: "Plano", glyph: "☆" },
   { id: "security", label: "Segurança", glyph: "▲" },
 ];
@@ -733,8 +730,7 @@ function SettingsPageContent() {
             maxWidth: 540,
           }}
         >
-          Perfil, branding, voz da IA, redes, notificações e plano. Tudo que
-          torna o Sequência Viral <em style={{ fontFamily: "var(--sv-display)" }}>seu</em>.
+          Perfil, branding, voz da IA, redes e plano. Tudo que torna o Sequência Viral <em style={{ fontFamily: "var(--sv-display)" }}>seu</em>.
         </p>
       </motion.div>
 
@@ -2285,133 +2281,8 @@ function SettingsPageContent() {
             </Section>
           )}
 
-          {/* ========== NOTIFICAÇÕES ========== */}
-          {activeTab === "notifications" && (
-            <Section
-              title="Notificações"
-              subtitle="Decida o que cai no seu email. Nada de spam — só sinais que importam."
-            >
-              <div className="flex flex-col gap-3">
-                {(
-                  [
-                    {
-                      key: "carousel_ready" as const,
-                      icon: <Sparkles size={14} />,
-                      title: "Carrossel pronto",
-                      desc: "Email quando um novo carrossel termina de gerar.",
-                    },
-                    {
-                      key: "upgrade_available" as const,
-                      icon: <CreditCard size={14} />,
-                      title: "Upgrade disponível",
-                      desc: "Avisos quando novos planos ou descontos aparecerem.",
-                    },
-                    {
-                      key: "weekly_summary" as const,
-                      icon: <Mail size={14} />,
-                      title: "Resumo semanal",
-                      desc: "Toda sexta: o que você criou + ideias pra semana.",
-                    },
-                    {
-                      key: "limit_warnings" as const,
-                      icon: <Bell size={14} />,
-                      title: "Avisos de limite",
-                      desc: "Alerta em 80% e 100% do limite mensal do plano.",
-                    },
-                  ]
-                ).map((n) => {
-                  const on = notifs[n.key];
-                  return (
-                    <div
-                      key={n.key}
-                      className="flex items-start gap-4 p-4"
-                      style={{
-                        border: "1.5px solid var(--sv-ink)",
-                        background: "var(--sv-paper)",
-                      }}
-                    >
-                      <div
-                        className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center"
-                        style={{
-                          border: "1.5px solid var(--sv-ink)",
-                          background: on ? "var(--sv-green)" : "var(--sv-white)",
-                          color: "var(--sv-ink)",
-                        }}
-                      >
-                        {n.icon}
-                      </div>
-                      <div className="flex-1">
-                        <div
-                          style={{
-                            fontFamily: "var(--sv-sans)",
-                            fontSize: 15,
-                            fontWeight: 700,
-                            color: "var(--sv-ink)",
-                          }}
-                        >
-                          {n.title}
-                        </div>
-                        <div
-                          className="mt-1"
-                          style={{
-                            fontFamily: "var(--sv-sans)",
-                            fontSize: 13,
-                            color: "var(--sv-muted)",
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          {n.desc}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={on}
-                        onClick={() =>
-                          setNotifs((prev) => ({ ...prev, [n.key]: !prev[n.key] }))
-                        }
-                        className="relative mt-1 shrink-0"
-                        style={{
-                          width: 48,
-                          height: 26,
-                          border: "1.5px solid var(--sv-ink)",
-                          background: on ? "var(--sv-green)" : "var(--sv-white)",
-                          boxShadow: "2px 2px 0 0 var(--sv-ink)",
-                        }}
-                      >
-                        <span
-                          aria-hidden
-                          style={{
-                            position: "absolute",
-                            top: 2,
-                            left: on ? 23 : 2,
-                            width: 18,
-                            height: 18,
-                            background: "var(--sv-ink)",
-                            transition: "left 160ms ease",
-                          }}
-                        />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <p
-                className="mt-6"
-                style={{
-                  fontFamily: "var(--sv-mono)",
-                  fontSize: 10,
-                  letterSpacing: "0.16em",
-                  textTransform: "uppercase",
-                  color: "var(--sv-muted)",
-                  fontWeight: 700,
-                }}
-              >
-                ● Envios para {profile?.email || "seu e-mail cadastrado"}
-              </p>
-            </Section>
-          )}
+          {/* Aba Notificações removida — prefs continuam sendo persistidas em
+              brand_analysis.__notifications pra compat, mas sem UI até backend real. */}
 
           {/* ========== PLANO ========== */}
           {activeTab === "plan" && (

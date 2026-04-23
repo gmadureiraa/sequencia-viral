@@ -968,7 +968,11 @@ select:focus-visible {
   50% { opacity: 0.4; }
 }
 
-.sv-btn {
+.sv-btn,
+.sv-btn-primary,
+.sv-btn-outline,
+.sv-btn-ink,
+.sv-btn-ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;

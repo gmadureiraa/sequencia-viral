@@ -21,6 +21,23 @@ export interface RefetchImageInput {
   designTemplate?: "manifesto" | "futurista" | "autoral" | "twitter";
   /** Se true, ativa pipeline 2-pass (cover-scene → Imagen) com composição cinematográfica. */
   isCover?: boolean;
+  /**
+   * Se true, deixa o agente image-decider escolher entre search e generate,
+   * ignorando o `mode` passado. Também aceita StructuredImagePrompt do decider
+   * quando escolhe generate. Usado no auto-fill pra decidir foto real de
+   * entidade vs. cena cinematográfica abstrata.
+   */
+  useDecider?: boolean;
+  /** Número do slide (1-indexed) — contexto pro decider. */
+  slideNumber?: number;
+  /** Total de slides do carrossel — contexto pro decider. */
+  totalSlides?: number;
+  /** Facts extraídos via NER do source (quando disponível). */
+  facts?: {
+    entities?: string[];
+    dataPoints?: string[];
+    summary?: string[];
+  };
 }
 
 export function useImages(session: Session | null) {
@@ -49,6 +66,10 @@ export function useImages(session: Session | null) {
             contextHeading: input.contextHeading?.slice(0, 400),
             contextBody: input.contextBody?.slice(0, 500),
             isCover: input.isCover ?? false,
+            useDecider: input.useDecider ?? false,
+            slideNumber: input.slideNumber,
+            totalSlides: input.totalSlides,
+            facts: input.facts,
           }),
         });
         const data = await res.json();

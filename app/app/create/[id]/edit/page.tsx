@@ -384,10 +384,12 @@ export default function EditPage(props: {
 
   // ─── Auto-fill de imagens faltantes ───────────────────────────────
   // Todo slide deve ter imagem (evita espaco vazio). Quando slides hidratam
-  // do draft, detecta os sem imageUrl e dispara fetch usando a estrategia:
-  //   - slide 0 (capa) → Imagen 4 com pipeline 2-pass cover-scene
-  //   - index impar → Gemini Flash Image (geracao barata)
-  //   - index par (>=2) → Serper stock
+  // do draft, detecta os sem imageUrl e dispara fetch usando o IMAGE DECIDER
+  // (agente Gemini Flash 2.5 que decide slide a slide):
+  //   - Entidade nomeada (Anthropic, Satoshi, Tesla) → mode="search" via Serper
+  //   - Conceito abstrato / metáfora → mode="generate" com StructuredImagePrompt
+  //     cinematográfico (Gemini Flash Image / Imagen fallback)
+  //   - Capa (slide 0) → sempre generate (forçado pelo decider pro max drama)
   // Roda continuamente ate TODOS os slides terem imageUrl. Com retry ilimitado
   // (backoff exponencial) em falhas — garantia de 100% fiel no export.
   const autoFillStartedRef = useRef<string | null>(null);
@@ -433,17 +435,19 @@ export default function EditPage(props: {
               title;
             if (!baseQuery) continue;
             const isCover = i === 0 && templateId !== "twitter";
-            const isInnerOdd = !isCover && i % 2 === 1;
-            const mode: "generate" | "search" =
-              isCover || isInnerOdd ? "generate" : "search";
+            // Decider define mode internamente no backend — passamos
+            // "generate" como hint (será sobrescrito pelo decider).
             try {
               const res = await imagesHook.refetchImage(i, {
                 query: baseQuery,
                 contextHeading: s.heading,
                 contextBody: s.body,
-                mode,
+                mode: "generate",
                 designTemplate: templateId,
                 isCover,
+                useDecider: true,
+                slideNumber: i + 1,
+                totalSlides: slides.length,
               });
               const urlToApply =
                 res.appliedUrl ??
@@ -800,6 +804,9 @@ export default function EditPage(props: {
         mode: "generate",
         designTemplate: templateId,
         isCover: true,
+        useDecider: true,
+        slideNumber: 1,
+        totalSlides: slides.length,
       });
       if (res.appliedUrl) {
         updateSlide(0, { imageUrl: res.appliedUrl });

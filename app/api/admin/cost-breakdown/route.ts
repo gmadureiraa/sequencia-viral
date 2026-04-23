@@ -147,25 +147,34 @@ export async function GET(request: Request) {
     };
 
     // ─── processes[] ────────────────────────────────────────────────────
-    // Heurísticas (ver AGENTS / instruções do user):
+    // Heurísticas (atualizadas 2026-04-22 — pipeline novo):
     //  - Onboarding = 1×concepts + 1×post-vision-transcripts +
-    //                 1×brand-analysis + 3×carousel
-    //  - Carrossel Manifesto c/ imagens = 1×carousel + 1×caption +
-    //                 1×cover-scene + 3.5×image
-    //  - Carrossel Twitter = 1×carousel + 1×caption
-    //  - 1 imagem Imagen = 1×image (filtra model = imagen-4.0-*)
+    //                 1×brand-analysis + 3×carousel (+ 3×source-ner se houver)
+    //  - Carrossel Futurista = 1×carousel + 1×caption + 1×cover-scene +
+    //                          5×image (capa Flash Image + 2 inner Flash Image
+    //                          + 2 inner Serper stock, todos ~$0.008)
+    //                          + opcional 1×source-ner (se source tinha conteúdo)
+    //  - Carrossel Twitter = 1×carousel + 1×caption (imagens via Serper stock
+    //                          também custam ~$0.008 mas não geram row em `generations`)
+    //  - 1 imagem avulsa = 1×image (Flash Image default agora; antes Imagen)
     //  - Regerar 6 ideias = 1×concepts
+    //  - Referências visuais (opcional) = 1×brand-aesthetic (~$0.004, Gemini Vision)
     const avgConcepts = avgOf("concepts");
     const avgTranscripts = avgOf("post-vision-transcripts");
     const avgBrandAnalysis = avgOf("brand-analysis");
     const avgCarousel = avgOf("carousel");
     const avgCaption = avgOf("caption");
     const avgCoverScene = avgOf("cover-scene");
+    const avgSourceNer = avgOf("source-ner");
+    const avgBrandAesthetic = avgOf("brand-aesthetic");
 
-    // Pra "image", usamos a media global do type. Pra "image Imagen"
-    // especifico, filtramos por model pra não misturar stock.
+    // Pra "image", calculamos duas médias:
+    //  - avgImageAll  → média global (mistura Flash Image + Imagen fallback)
+    //  - avgFlashImg  → só gemini-3.1-flash-image-preview (~$0.008)
+    //  - avgImagenOnly → só imagen-4.0-* (~$0.04, raramente usado hoje — só fallback)
     const avgImageAll = avgOf("image");
     let avgImagenOnly: number | undefined;
+    let avgFlashImg: number | undefined;
     {
       const imagenRows = generations.filter((g) => {
         const m = (g.model || "").toLowerCase();
@@ -176,7 +185,21 @@ export async function GET(request: Request) {
         const sum = imagenRows.reduce((a, g) => a + toNum(g.cost_usd), 0);
         avgImagenOnly = sum / imagenRows.length;
       }
+      const flashRows = generations.filter((g) => {
+        const m = (g.model || "").toLowerCase();
+        const t = (g.prompt_type || "").toLowerCase();
+        return t === "image" && m.includes("flash-image");
+      });
+      if (flashRows.length > 0) {
+        const sum = flashRows.reduce((a, g) => a + toNum(g.cost_usd), 0);
+        avgFlashImg = sum / flashRows.length;
+      }
     }
+    // Unit estimate pra capa + inner slides (pipeline atual):
+    //  - Capa: Flash Image default (fallback Imagen)
+    //  - 2 Flash Image inner + 2 Serper stock inner (stock não conta em generations)
+    //  - Estimamos 3× Flash Image (capa + 2 inner) logados em generations
+    const avgImageUnit = avgFlashImg ?? avgImageAll ?? avgImagenOnly;
 
     const sumOpt = (...parts: (number | undefined)[]): number | undefined => {
       let total = 0;
@@ -197,13 +220,17 @@ export async function GET(request: Request) {
           "post-vision-transcripts x1",
           "brand-analysis x1",
           "carousel x3",
+          "source-ner x3 (opcional)",
+          "brand-aesthetic x1 (se upload refs)",
         ],
         avgCostUsd: roundMaybe(
           sumOpt(
             avgConcepts,
             avgTranscripts,
             avgBrandAnalysis,
-            avgCarousel ? avgCarousel * 3 : undefined
+            avgCarousel ? avgCarousel * 3 : undefined,
+            avgSourceNer ? avgSourceNer * 3 : 0,
+            avgBrandAesthetic ?? 0
           )
         ),
         missing: missingList({
@@ -220,39 +247,49 @@ export async function GET(request: Request) {
           "carousel x1",
           "caption x1",
           "cover-scene x1",
-          "image x3.5",
+          "source-ner x1 (se source tem conteúdo)",
+          "image x3 (Flash Image capa + 2 inner; 2 Serper stock não contam)",
         ],
         avgCostUsd: roundMaybe(
           sumOpt(
             avgCarousel,
             avgCaption,
             avgCoverScene,
-            avgImageAll ? avgImageAll * 3.5 : undefined
+            avgSourceNer ?? 0,
+            avgImageUnit ? avgImageUnit * 3 : undefined
           )
         ),
         missing: missingList({
           carousel: avgCarousel,
           caption: avgCaption,
           "cover-scene": avgCoverScene,
-          image: avgImageAll,
+          image: avgImageUnit,
         }),
       },
       {
         id: "carousel-twitter",
         label: "1 carrossel Twitter",
-        components: ["carousel x1", "caption x1"],
-        avgCostUsd: roundMaybe(sumOpt(avgCarousel, avgCaption)),
+        components: [
+          "carousel x1",
+          "caption x1",
+          "source-ner x1 (se source tem conteúdo)",
+        ],
+        avgCostUsd: roundMaybe(
+          sumOpt(avgCarousel, avgCaption, avgSourceNer ?? 0)
+        ),
         missing: missingList({
           carousel: avgCarousel,
           caption: avgCaption,
         }),
       },
       {
-        id: "image-imagen",
-        label: "1 imagem Imagen 4",
-        components: ["image (imagen-4.0) x1"],
-        avgCostUsd: roundMaybe(avgImagenOnly ?? avgImageAll),
-        missing: missingList({ image: avgImagenOnly ?? avgImageAll }),
+        id: "image-single",
+        label: "1 imagem avulsa (Flash Image)",
+        components: ["image x1 (gemini-3.1-flash-image-preview · fallback Imagen)"],
+        avgCostUsd: roundMaybe(avgFlashImg ?? avgImageAll ?? avgImagenOnly),
+        missing: missingList({
+          image: avgFlashImg ?? avgImageAll ?? avgImagenOnly,
+        }),
       },
       {
         id: "suggestions-refresh",
@@ -260,6 +297,13 @@ export async function GET(request: Request) {
         components: ["concepts x1"],
         avgCostUsd: roundMaybe(avgConcepts),
         missing: missingList({ concepts: avgConcepts }),
+      },
+      {
+        id: "brand-aesthetic",
+        label: "Análise de referências visuais",
+        components: ["brand-aesthetic x1 (Gemini Vision, multi-image)"],
+        avgCostUsd: roundMaybe(avgBrandAesthetic),
+        missing: missingList({ "brand-aesthetic": avgBrandAesthetic }),
       },
     ];
 

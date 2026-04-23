@@ -153,7 +153,12 @@ export async function POST(request: Request) {
     // Branding → Referências visuais). Vai como prefix do prompt do Imagen
     // pra todas as imagens geradas seguirem a mesma linguagem visual.
     // Puxado ANTES do decider — ele usa brandAesthetic como contexto.
+    //
+    // Tambem carrega imageRules de profile.brand_analysis.__generation_memory
+    // (regras vindas de feedback pos-download). Essas regras viram instrucao
+    // direta no decider + reforço inline no prompt do Imagen/Flash Image.
     let brandAesthetic = "";
+    let imageRules: string[] = [];
     const sbForAesthetic = createServiceRoleSupabaseClient();
     if (sbForAesthetic) {
       try {
@@ -168,6 +173,16 @@ export async function POST(request: Request) {
           | undefined;
         if (aesthetic?.description && typeof aesthetic.description === "string") {
           brandAesthetic = aesthetic.description.trim();
+        }
+        const memory = ba?.__generation_memory as
+          | { image_rules?: unknown }
+          | undefined;
+        if (Array.isArray(memory?.image_rules)) {
+          imageRules = (memory.image_rules as unknown[])
+            .filter(
+              (v): v is string => typeof v === "string" && v.trim().length > 0
+            )
+            .slice(0, 10);
         }
       } catch {
         /* silently fall back to no aesthetic */
@@ -198,6 +213,7 @@ export async function POST(request: Request) {
           niche,
           tone,
           brandAesthetic: brandAesthetic || undefined,
+          imageRules: imageRules.length > 0 ? imageRules : undefined,
           facts: factsFromBody
             ? {
                 entities: Array.isArray(factsFromBody.entities)
@@ -314,6 +330,14 @@ export async function POST(request: Request) {
             ? `BRAND AESTHETIC (follow this visual language strictly): ${brandAesthetic}`
             : DEFAULT_BASELINE;
 
+          // Regras aprendidas com feedback pos-download do proprio user.
+          // Peso ALTO — user disse explicitamente o que quer/nao quer nas
+          // imagens. Injetado logo apos o aestheticPrefix pra alta prioridade.
+          const userImageRulesBlock =
+            imageRules.length > 0
+              ? `USER IMAGE RULES (learned from past feedback, MUST respect every one): ${imageRules.slice(0, 10).join("; ")}.`
+              : "";
+
           // CINEMATIC BOOST pra TODOS os slides de template editorial
           // (Gabriel reclamou que só a capa ficava cinematográfica). Cover
           // ainda recebe reforço adicional por ser a primeira impressão.
@@ -415,6 +439,7 @@ export async function POST(request: Request) {
             imagePrompt = [
               NO_TEXT_HEADER,
               aestheticPrefix,
+              userImageRulesBlock,
               `TEMPLATE STYLE GUIDE (${tmplMeta.name}): ${tmplMeta.styleGuidePrompt}`,
               isCover && !isTwitterTpl ? cinematicBase : "",
               isCover && !isTwitterTpl ? coverBoost : "",
@@ -433,6 +458,7 @@ export async function POST(request: Request) {
             imagePrompt = [
               NO_TEXT_HEADER,
               aestheticPrefix,
+              userImageRulesBlock,
               `TEMPLATE STYLE GUIDE (${tmplMeta.name}): ${tmplMeta.styleGuidePrompt}`,
               cinematicBase,
               coverBoost,
@@ -462,6 +488,7 @@ export async function POST(request: Request) {
             imagePrompt = [
               NO_TEXT_HEADER,
               aestheticPrefix,
+              userImageRulesBlock,
               `TEMPLATE STYLE: ${tmplMeta.name}.`,
               `Subject: ${coreSubject}`,
               isTwitterTpl

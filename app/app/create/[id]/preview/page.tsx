@@ -12,6 +12,7 @@ import { useCaption } from "@/lib/create/use-caption";
 import { supabase } from "@/lib/supabase";
 import { upsertUserCarousel } from "@/lib/carousel-storage";
 import CarouselFeedbackPanel from "@/components/app/carousel-feedback";
+import FeedbackModal from "@/components/app/FeedbackModal";
 
 // Mesmo injector que o edit usa — garante que a fonte display escolhida
 // esteja disponível no momento do export PNG/PDF.
@@ -136,6 +137,22 @@ export default function PreviewPage(props: {
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [captionMissingKey, setCaptionMissingKey] = useState(false);
   const [captionStale, setCaptionStale] = useState(false);
+
+  // Modal de feedback pos-download. Abre 800ms depois de um export zip/pdf
+  // bem-sucedido. Nao trava o download — so aparece depois que o browser
+  // processou o save. Ver components/app/FeedbackModal.tsx.
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  function scheduleFeedbackModal() {
+    setTimeout(() => setFeedbackOpen(true), 800);
+  }
+  async function handleExportZip() {
+    await exportZip(draft?.title || "carrossel");
+    scheduleFeedbackModal();
+  }
+  async function handleExportPdf() {
+    await exportPdf(draft?.title || "carrossel");
+    scheduleFeedbackModal();
+  }
 
   // Hash simples dos slides pra detectar quando legenda ficou desatualizada
   // (usuário voltou pro /edit e mudou texto). Guardado em localStorage porque
@@ -713,9 +730,9 @@ export default function PreviewPage(props: {
             </h4>
             <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
               {[
-                { label: "Baixar .zip", hi: true, onClick: () => void exportZip(draft.title) },
+                { label: "Baixar .zip", hi: true, onClick: () => void handleExportZip() },
                 { label: `PNG × ${slides.length}`, onClick: () => void exportPng() },
-                { label: "PDF", onClick: () => void exportPdf(draft.title) },
+                { label: "PDF", onClick: () => void handleExportPdf() },
                 { label: "Copiar", onClick: () => void handleClipboard() },
               ].map((btn, i) => (
                 <button
@@ -1080,6 +1097,16 @@ export default function PreviewPage(props: {
           />
         </section>
       )}
+
+      {/* Modal de feedback pos-download. Abre 800ms depois do export zip/pdf
+          completar. Manda o texto bruto pra /api/feedback/carousel que
+          classifica e alimenta profile.brand_analysis.__generation_memory. */}
+      <FeedbackModal
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        carouselId={draft?.id ?? null}
+        session={session}
+      />
 
       {/* Export render hidden container: 1080×1350 full scale.
            Mudança 2026-04-22: top:-99999/left:-99999/opacity:0 causava webkit

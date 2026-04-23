@@ -77,6 +77,12 @@ export interface ImageDeciderInput {
     dataPoints: string[];
     summary: string[];
   };
+  /**
+   * Regras aprendidas com feedback pós-download (profile.brand_analysis.
+   * __generation_memory.image_rules). Ex: "imagens mais minimalistas",
+   * "menos saturação", "sem pessoas com rosto na frente". Peso ALTO.
+   */
+  imageRules?: string[];
 }
 
 /**
@@ -160,6 +166,7 @@ function buildDeciderPrompt(input: ImageDeciderInput): string {
     tone,
     brandAesthetic,
     facts,
+    imageRules,
   } = input;
 
   const factsBlock =
@@ -169,6 +176,14 @@ FACTS DO SOURCE (use pra entidades nomeadas):
 - Entidades: ${facts.entities.slice(0, 10).join(", ") || "(nenhuma)"}
 - Data points: ${facts.dataPoints.slice(0, 8).join(", ") || "(nenhum)"}
 - Resumo: ${facts.summary.slice(0, 3).join(" | ") || "(vazio)"}`
+      : "";
+
+  const imageRulesBlock =
+    Array.isArray(imageRules) && imageRules.length > 0
+      ? `
+## DIRETRIZES DO USER PARA IMAGENS (respeitar sempre, peso ALTO — vindas de feedback passado):
+${imageRules.slice(0, 10).map((r, i) => `${i + 1}. ${r}`).join("\n")}
+Se o prompt gerado violar qualquer regra acima, o slide será rejeitado.`
       : "";
 
   const coverRule = isCover
@@ -196,6 +211,7 @@ ${niche ? `- Nicho: ${niche}` : ""}
 ${tone ? `- Tom: ${tone}` : ""}
 ${brandAesthetic ? `- Estética da marca: ${brandAesthetic.slice(0, 300)}` : ""}
 ${factsBlock}
+${imageRulesBlock}
 
 REGRAS DE OUTPUT:
 

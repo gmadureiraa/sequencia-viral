@@ -262,6 +262,7 @@ export async function POST(request: Request) {
     const sb = createServiceRoleSupabaseClient();
     let brandContext = "";
     let feedbackContext = "";
+    let generationMemoryContext = "";
     let usageAlreadyIncremented = false;
     if (sb) {
       const { data: gate, error: gateErr } = await sb.rpc(
@@ -373,6 +374,22 @@ USER BRAND CONTEXT (use this to make content sound authentically like this creat
 - Target audience: ${audience || "not specified"}
 - Voice preference: ${voice || "not specified"}
 ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalmente):\n${voiceSamples}\n` : ""}${voiceDnaBlock}${tabus ? `- NEVER use these words or phrases: ${tabus}\n` : ""}${contentRules ? `- Rules to follow strictly: ${contentRules}\n` : ""}`;
+          }
+
+          // Memoria aprendida com feedback pos-download (ver
+          // /api/feedback/carousel). Regras curtas, imperativas, extraidas
+          // pelo Gemini Flash do texto livre do user. Aplicar com peso ALTO
+          // no writer — user disse explicitamente o que quer.
+          const memory = ba.__generation_memory as
+            | { text_rules?: unknown; image_rules?: unknown }
+            | undefined;
+          const textRules = Array.isArray(memory?.text_rules)
+            ? (memory.text_rules as unknown[])
+                .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+                .slice(0, 20)
+            : [];
+          if (textRules.length > 0) {
+            generationMemoryContext = `\n## DIRETRIZES APRENDIDAS COM FEEDBACK DO USER\n\nRegras vindas de feedback passado (PESO ALTO, respeitar sempre):\n${textRules.map((r, i) => `${i + 1}. ${r}`).join("\n")}\n\nSe você violar qualquer uma dessas regras, o carrossel será rejeitado.\n`;
           }
         }
       }
@@ -675,7 +692,7 @@ Don't acknowledge — WEAVE. Se o criador fala de marketing, use exemplos de mar
 # LEARNING FROM USER FEEDBACK
 ${feedbackContext}
 Trate como ground truth da preferência. Se contradizer regra genérica, o feedback vence.
-` : ""}
+` : ""}${generationMemoryContext || ""}
 
 # YOUR MISSION
 Um carrossel (6-10 slides) construído em NARRATIVE TENSION — conflito entre o que as pessoas assumem e o que é realmente verdade.

@@ -55,7 +55,8 @@ export type PromptType =
   | "cover-scene"
   | "voice-ingest"
   | "post-vision-transcripts"
-  | "source-ner";
+  | "source-ner"
+  | "feedback-classify";
 
 export function costForTokens(
   model: ModelId,

@@ -7,7 +7,9 @@ import { X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
 /**
- * Popup de 30% off (cupom BEMVINDO30) pra users em plano free dentro do app.
+ * Popup de 50% off (cupom VIRAL50) pra users em plano free dentro do app.
+ * Limitado aos primeiros 10 assinantes — mensagem não expõe o numero (escassez
+ * sem psicologia barata).
  *
  * Gatilhos suportados:
  *  - "post-onboarding": primeira entrada no dashboard após completar onboarding
@@ -17,7 +19,7 @@ import { useAuth } from "@/lib/auth-context";
  * Regras pra não spammar:
  *  - Só aparece se `profile.plan === "free" | null` (users pagos ficam isentos)
  *  - Cada trigger tem sua chave em localStorage — só mostra 1x por trigger
- *  - Cooldown global de 7 dias entre QUALQUER aparição (sv_discount_last_shown)
+ *  - Cooldown global de 2 dias entre QUALQUER aparição (sv_discount_last_shown)
  *  - Se storage bloqueado, não mostra (fail-safe)
  *
  * Uso:
@@ -25,7 +27,7 @@ import { useAuth } from "@/lib/auth-context";
  *
  * Montar no client component que representa o momento do gatilho. Fire-and-forget.
  */
-const COUPON = "BEMVINDO30";
+const COUPON = "VIRAL50";
 // Cooldown reduzido de 7d pra 2d — user reclamou que o popup aparecia de
 // menos. 2d permite que o lembrete reaparece na metade da semana seguinte.
 const COOLDOWN_DAYS = 2;
@@ -43,28 +45,28 @@ const TRIGGER_KEY: Record<Trigger, string> = {
 const HEADLINE: Record<Trigger, React.ReactNode> = {
   "post-onboarding": (
     <>
-      Bem-vindo. <em>30% off</em> no seu primeiro mês.
+      Bem-vindo. <em>50% off</em> no primeiro mês.
     </>
   ),
   "post-first-carousel": (
     <>
-      Primeiro carrossel pronto. <em>30% off</em> no Creator.
+      Primeiro carrossel pronto. <em>50% off</em> no Creator.
     </>
   ),
   "limit-reached": (
     <>
-      Bateu o limite grátis. <em>30% off</em> pra seguir postando.
+      Bateu o limite grátis. <em>50% off</em> pra seguir postando.
     </>
   ),
 };
 
 const SUBLINE: Record<Trigger, string> = {
   "post-onboarding":
-    "Agora que você configurou voz e marca, o Creator (R$ 49/mês · R$ 34 com 30% off) libera 10 carrosséis por mês e destrava tudo.",
+    "Agora que voz e marca estão prontas, o Creator (R$ 99,90/mês · R$ 49,90 no 1º mês com 50% off) libera 10 carrosséis/mês. Cupom limitado aos primeiros assinantes.",
   "post-first-carousel":
-    "Gostou? Creator te dá 10 carrosséis/mês por R$ 49 (R$ 34 no primeiro mês com 30% off). Cupom só válido agora.",
+    "Gostou? Creator te dá 10 carrosséis/mês por R$ 99,90 (R$ 49,90 no 1º mês com 50% off). Cupom limitado — quando esgotar, esgotou.",
   "limit-reached":
-    "Você usou seus 5 grátis. Upgrade agora pro Creator (R$ 49/mês, R$ 34 no 1º mês) e libera 10 carrosséis/mês.",
+    "Você usou seus 5 grátis. O que tá te segurando? Creator (R$ 99,90/mês · R$ 49,90 no 1º mês com 50% off) libera 10 carrosséis/mês. Limitado aos primeiros assinantes.",
 };
 
 export function DiscountPopup({ trigger }: { trigger: Trigger }) {
@@ -274,7 +276,7 @@ export function DiscountPopup({ trigger }: { trigger: Trigger }) {
                 justifyContent: "center",
               }}
             >
-              Aplicar 30% agora →
+              Aplicar 50% agora →
             </Link>
 
             <p

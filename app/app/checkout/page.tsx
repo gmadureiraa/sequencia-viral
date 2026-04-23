@@ -15,57 +15,46 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { PLANS } from "@/lib/pricing";
 import posthog from "posthog-js";
 
 type PlanKey = "pro" | "business";
 
+// Meta derivado de lib/pricing.ts (fonte de verdade). Evita divergir quando
+// os precos em `PLANS` sobem ou o cupom mudar.
 const PLAN_META: Record<
   PlanKey,
   {
     name: string;
     tagline: string;
-    anchorPrice: number; // cents
-    price: number; // cents
+    anchorPrice: number; // cents BRL
+    price: number; // cents BRL
     discountLabel: string;
     features: string[];
   }
 > = {
   pro: {
-    name: "Pro",
-    tagline: "Pra quem posta todo dia.",
-    anchorPrice: 1990, // $19.90 preço normal pós-lançamento
-    price: 990,        // $9.90 lançamento
-    discountLabel: "50% de lançamento",
-    features: [
-      "30 carrosséis por mês",
-      "Sem marca d'água",
-      "Todos os estilos",
-      "Imagens com IA + busca",
-      "Export PNG",
-      "3 perfis de marca",
-    ],
+    name: PLANS.pro.name, // "Creator"
+    tagline: "Pra criador solo que quer cadência.",
+    anchorPrice: PLANS.pro.priceAnchor, // R$ 149
+    price: PLANS.pro.priceMonthly,      // R$ 99,90
+    discountLabel: "VIRAL50 → 50% off 1° mês",
+    features: [...PLANS.pro.features],
   },
   business: {
-    name: "Agência",
-    tagline: "Pra times e agências.",
-    anchorPrice: 3990, // $39.90
-    price: 2990,       // $29.90 lançamento
-    discountLabel: "25% de lançamento",
-    features: [
-      "150 carrosséis/mês",
-      "3 seats inclusos",
-      "Custom branding",
-      "Analytics avançado",
-      "Suporte prioritário",
-      "API de integração",
-    ],
+    name: PLANS.business.name, // "Pro"
+    tagline: "Pra quem publica todo dia e vive de conteúdo.",
+    anchorPrice: PLANS.business.priceAnchor, // R$ 299,90
+    price: PLANS.business.priceMonthly,      // R$ 199,90
+    discountLabel: "VIRAL50 → 50% off 1° mês",
+    features: [...PLANS.business.features],
   },
 };
 
 const BUMP_META = {
   name: "Publicação automática",
   tagline: "Instagram · X · LinkedIn",
-  priceCents: 499,
+  priceCents: 2490, // R$ 24,90 (de lib/pricing.ts AUTOPUBLISH_BUMP)
   bullets: [
     "Publica direto nas 3 redes",
     "Agendamento + fila",
@@ -74,8 +63,13 @@ const BUMP_META = {
 };
 
 function formatPrice(cents: number): string {
-  const dollars = cents / 100;
-  return `$${dollars.toFixed(2)}`;
+  const v = cents / 100;
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v);
 }
 
 function CheckoutContent() {

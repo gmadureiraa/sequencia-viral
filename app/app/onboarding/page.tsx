@@ -3461,7 +3461,7 @@ function StepDone({
                 color: "var(--sv-ink)",
               }}
             >
-              R$ 49<span style={{ fontSize: 14 }}>/mês</span>
+              R$ 99,90<span style={{ fontSize: 14 }}>/mês</span>
             </div>
             <ul
               style={{

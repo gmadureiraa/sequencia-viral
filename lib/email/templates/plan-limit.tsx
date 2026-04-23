@@ -35,12 +35,13 @@ export function PlanLimitEmail({
           : `${firstName}, só ${remaining} ${remaining === 1 ? "carrossel" : "carrosséis"} até o fim do ciclo.`}
       </EmailHeadline>
       <EmailText>
-        O plano <strong>Creator</strong> (R$ 49/mês) libera 10 carrosséis e
-        remove a marca d&apos;água. O <strong>Pro</strong> (R$ 97/mês)
-        libera 30/mês — pensado pra quem publica todo dia.
+        O plano <strong>Creator</strong> (R$ 99,90/mês) libera 10 carrosséis e
+        remove a marca d&apos;água. Com o cupom{" "}
+        <strong>VIRAL50 → R$ 49,90 no 1º mês</strong> (limitado aos primeiros
+        assinantes).
       </EmailText>
-      <EmailButton href={`${appUrl}/app/checkout?plan=pro`}>
-        Assinar Creator e continuar publicando
+      <EmailButton href={`${appUrl}/app/checkout?plan=pro&coupon=VIRAL50`}>
+        Assinar com 50% off
       </EmailButton>
       <EmailText>
         Prefere esperar o próximo ciclo? Sem problema. O limite reseta

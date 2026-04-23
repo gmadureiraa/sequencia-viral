@@ -33,7 +33,7 @@ const DEFAULT_ROWS: string[][] = [
   ["Imagem por slide", "✦ Cinemática contextual", "Stock photo", "✕", "Manual"],
   ["Export pronto pra postar", "✦ 1 clique", "Manual", "✕", "Manual"],
   ["Preview real (WYSIWYG)", "✦ Sim", "✓", "✕", "✓"],
-  ["Preço pra postar todo dia", "$9.90/mês", "$15/mês", "$20/mês", "Seu tempo"],
+  ["Preço pra postar todo dia", "R$ 99,90/mês", "R$ 70/mês", "R$ 100/mês", "Seu tempo"],
 ];
 
 export function CompareSection(props: CompareSectionProps = {}) {

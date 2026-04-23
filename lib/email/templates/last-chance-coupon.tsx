@@ -11,7 +11,7 @@ import {
 /**
  * Last chance coupon — user free que gastou os 5 carrosséis e já tem 7+
  * dias de conta. Cupom VIRAL50 (50% off primeiro mês Creator), limitado
- * aos primeiros 50 usuários + expira em 48h.
+ * aos primeiros 10 assinantes — copy não expõe o número, só escassez.
  */
 export function LastChanceCouponEmail({
   name,
@@ -28,7 +28,7 @@ export function LastChanceCouponEmail({
   )}`;
 
   return (
-    <EmailLayout preview="50% off no plano Creator — cupom limitado, primeiros 50 usuários.">
+    <EmailLayout preview="50% off no primeiro mês do Creator — cupom limitado aos primeiros assinantes.">
       <EmailKicker>Cupom limitado</EmailKicker>
       <EmailHeadline>
         {firstName}, o que tá te segurando?
@@ -39,11 +39,11 @@ export function LastChanceCouponEmail({
       </EmailText>
       <EmailText>
         Pra facilitar a decisão, liberei um cupom de <strong>50% off</strong>{" "}
-        no primeiro mês do Creator — só pra quem tá nesse ponto.
+        no primeiro mês do Creator — R$ 99,90 → <strong>R$ 49,90</strong>.
       </EmailText>
       <EmailText>
-        Cupom é limitado aos primeiros 50 usuários e expira em 48h. Se
-        passar disso, volta o preço cheio.
+        Cupom é limitado aos primeiros assinantes e expira em 48h. Quando
+        esgotar, esgotou — volta o preço cheio.
       </EmailText>
 
       <Section
@@ -89,7 +89,7 @@ export function LastChanceCouponEmail({
             color: BRAND.mutedFg,
           }}
         >
-          50% off · primeiro mês Creator · 48h
+          50% off · primeiro mês Creator · 48h · limitado
         </Text>
       </Section>
 

@@ -6,15 +6,16 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 
 /**
- * Popup de boas-vindas oferecendo 30% off no primeiro pagamento. Estratégia:
+ * Popup de boas-vindas oferecendo 50% off no primeiro mês (cupom VIRAL50,
+ * limitado aos primeiros 10 assinantes). Estratégia:
  *  - Não mostra em /app/* (já autenticado)
  *  - Aparece depois de 12s na primeira visita OU quando user tenta sair
  *    (exit-intent no desktop via mousemove pra topo)
  *  - localStorage guarda `sv_welcome_seen` pra não aparecer de novo
- *  - Botão "Resgatar 30%" leva pra /app/login?coupon=BEMVINDO30
+ *  - Botão "Resgatar 50%" leva pra /app/login?coupon=VIRAL50
  *    (o param é lido depois no checkout)
  */
-const COUPON_CODE = "BEMVINDO30";
+const COUPON_CODE = "VIRAL50";
 const SEEN_KEY = "sv_welcome_popup_seen_v1";
 const FIRST_DELAY_MS = 12_000;
 
@@ -163,7 +164,7 @@ export function WelcomePopup() {
                 fontWeight: 400,
               }}
             >
-              <em>30% off</em> no seu primeiro mês.
+              <em>50% off</em> no seu primeiro mês.
             </h2>
 
             <p
@@ -174,10 +175,10 @@ export function WelcomePopup() {
                 color: "var(--sv-muted)",
               }}
             >
-              Cria conta grátis agora. Quando decidir ir pro Pro ou Agência,
+              Cria conta grátis agora. Quando decidir assinar o Creator,
               usa o código abaixo no checkout e tira{" "}
-              <b style={{ color: "var(--sv-ink)" }}>30% do primeiro pagamento</b>.
-              Sem pegadinha, sem fidelidade.
+              <b style={{ color: "var(--sv-ink)" }}>50% do primeiro mês</b>{" "}
+              (R$ 99,90 → R$ 49,90). Cupom limitado aos primeiros assinantes.
             </p>
 
             {/* Cupom */}
@@ -245,7 +246,7 @@ export function WelcomePopup() {
                   fontSize: 11.5,
                 }}
               >
-                Resgatar 30% →
+                Resgatar 50% →
               </Link>
               <button
                 type="button"

@@ -21,11 +21,15 @@ export function ActivationNudgeEmail({
     <EmailLayout preview="Cola 1 link — a IA faz o resto em 15s.">
       <EmailKicker>Dica rápida</EmailKicker>
       <EmailHeadline>
-        {firstName}, experimenta colar um link no estúdio.
+        {firstName}, o que tá te segurando?
       </EmailHeadline>
       <EmailText>
-        Não precisa escrever nada do zero. A IA funciona melhor quando você
-        joga uma fonte real:
+        A primeira geração é o passo mais difícil. Depois dela, tudo vira
+        hábito. Qualquer link de YouTube que você salvou essa semana serve —
+        cola lá e vê o que sai.
+      </EmailText>
+      <EmailText>
+        Se quiser ideia de input:
       </EmailText>
       <EmailText>
         • Um vídeo do YouTube que você gostou
@@ -36,12 +40,12 @@ export function ActivationNudgeEmail({
         <br />
         • Um link de notícia sobre o seu nicho
       </EmailText>
-      <EmailButton href={`${appUrl}/app/create`}>
-        Colar link e gerar
+      <EmailButton href={`${appUrl}/app/create/new`}>
+        Gerar meu primeiro agora
       </EmailButton>
       <EmailText>
-        Você tem 5 carrosséis grátis esse mês. Usa 1 pra testar — o resultado
-        costuma surpreender.
+        Você tem 5 carrosséis grátis esse mês. Usa 1 pra testar — o
+        resultado costuma surpreender.
       </EmailText>
     </EmailLayout>
   );

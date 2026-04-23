@@ -23,13 +23,21 @@ export const maxDuration = 60;
 type Step = {
   days: number;
   flag: string;
+  /** Se true, filtra apenas `plan = 'free'` (pitch de upgrade só faz sentido
+   *  pra quem ainda não assinou). Steps educacionais deixam undefined. */
+  freeOnly?: boolean;
   send: (args: { email: string; name?: string }) => Promise<string | null>;
 };
 
 const STEPS: Step[] = [
   { days: 1, flag: "onboarding_how_it_works_sent_at", send: sendOnboardingHowItWorks },
   { days: 3, flag: "onboarding_first_case_sent_at", send: sendOnboardingFirstCase },
-  { days: 7, flag: "onboarding_why_upgrade_sent_at", send: sendOnboardingWhyUpgrade },
+  {
+    days: 7,
+    flag: "onboarding_why_upgrade_sent_at",
+    freeOnly: true,
+    send: sendOnboardingWhyUpgrade,
+  },
 ];
 
 export async function GET(request: Request) {
@@ -44,12 +52,18 @@ export async function GET(request: Request) {
     const to = new Date(Date.now() - step.days * 24 * 3600_000).toISOString();
     const from = new Date(Date.now() - (step.days + 1) * 24 * 3600_000).toISOString();
 
-    const { data: candidates } = await sb
+    let query = sb
       .from("profiles")
-      .select("id,name,email,brand_analysis,created_at")
+      .select("id,name,email,brand_analysis,created_at,plan")
       .gte("created_at", from)
       .lte("created_at", to)
       .limit(500);
+
+    if (step.freeOnly) {
+      query = query.eq("plan", "free");
+    }
+
+    const { data: candidates } = await query;
 
     let sent = 0;
     let skipped = 0;

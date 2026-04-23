@@ -15,26 +15,31 @@ export function WelcomeEmail({
 }) {
   const firstName = (name || "").trim().split(" ")[0] || "creator";
   return (
-    <EmailLayout preview="Bem-vindo ao Sequência Viral — 5 carrosséis grátis pra você começar.">
+    <EmailLayout preview="Oi! Que tal o primeiro carrossel agora? Leva uns 60 segundos.">
       <EmailKicker>Bem-vindo</EmailKicker>
       <EmailHeadline>
-        Oi, {firstName}. Seu estúdio de carrosséis já tá pronto.
+        Oi, {firstName}. Que tal o primeiro carrossel agora?
       </EmailHeadline>
       <EmailText>
-        Você tem 5 carrosséis grátis por mês. Cola um link de YouTube, um
-        artigo, um reel do Instagram ou escreve uma ideia — a IA escreve no
-        seu tom e monta os slides em ~60 segundos.
+        O que tá te segurando? Cola um link, testa, 60 segundos. Sem
+        perfumaria. Você tem 5 carrosséis grátis por mês.
       </EmailText>
-      <EmailButton href={`${appUrl}/app/create`}>
-        Criar meu primeiro carrossel
+      <EmailText>
+        Serve link de YouTube, artigo, reel do Instagram ou só uma ideia
+        solta. A IA escreve no seu tom e monta os slides. É pra ser rápido
+        mesmo.
+      </EmailText>
+      <EmailButton href={`${appUrl}/app/create/new`}>
+        Criar meu primeiro agora
       </EmailButton>
       <EmailText>
-        Dica: se você completar seu <strong>perfil de marca</strong> em{" "}
+        Dica honesta: se você completar seu <strong>perfil de marca</strong>{" "}
+        em{" "}
         <a href={`${appUrl}/app/settings`} style={{ color: "#0A0A0A" }}>
           /app/settings
         </a>
-        , a IA usa seu tom e nicho pra escrever. O output muda de genérico
-        pra &quot;soa como eu&quot;.
+        , a IA aprende seu tom e o output muda de genérico pra &quot;soa
+        como eu&quot;. Mas isso é depois. Primeiro testa.
       </EmailText>
       <EmailText>
         Qualquer dúvida, responde este e-mail. A gente lê.

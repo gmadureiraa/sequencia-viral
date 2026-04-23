@@ -5,8 +5,11 @@ Provider: Resend (`lib/email/send.ts`)
 From default: `Sequência Viral <onboarding@resend.dev>` (override via `EMAIL_FROM`)
 Tags globais: `project:sequencia-viral`, `env:prod|dev`, `lifecycle:<slug>`
 
-Total mapeado: 10 emails transacionais + lifecycle. Todos idempotentes via
+Total mapeado: 11 emails transacionais + lifecycle. Todos idempotentes via
 flag em `profiles.brand_analysis.__lifecycle.<slug>_sent_at`.
+
+> **Verificado funcional em 2026-04-23** via build + deploy prod. Idempotência
+> testada no código (flags por slug, cupom limitado por `max_uses`).
 
 ---
 
@@ -57,20 +60,20 @@ flag em `profiles.brand_analysis.__lifecycle.<slug>_sent_at`.
 - **Dispatcher:** `sendOnboardingFirstCase()` em `dispatch.ts:135`
 - **Trigger:** mesmo cron `onboarding-drip`, step `days: 3`.
 - **Público:** todos users D+3 após signup.
-- **Assunto:** "47 carrosséis em 1 semana (case real)"
-- **CTA:** "Treinar a minha voz agora" → `/app/settings` (aba Voz IA)
+- **Assunto:** "A diferença entre IA genérica e IA que soa como você"
+- **CTA:** "Treinar Voz IA em 3 minutos" → `/app/settings` (aba Voz IA)
 - **Idempotência:** flag `onboarding_first_case_sent_at`.
-- **Funcional:** ⚠ — copy cita "47 carrosséis em 1 semana · beta de IA creator". Case real não é verificável; se não for o Gabriel, considerar reescrever com número/nome honestos antes de marketing em escala. Mecanicamente: OK.
+- **Funcional:** ✓ — ~~copy cita "47 carrosséis em 1 semana"~~ **[2026-04-23]** reescrito: case fictício removido, foco agora em Voz da Marca (diferença entre IA genérica e conteúdo que soa como você). Sem métrica inventada.
 
 ### 6. Onboarding Why Upgrade — D+7
 - **Template:** `lib/email/templates/onboarding-why-upgrade.tsx`
 - **Dispatcher:** `sendOnboardingWhyUpgrade()` em `dispatch.ts:145`
 - **Trigger:** cron `onboarding-drip`, step `days: 7`.
-- **Público:** todos users D+7 (não filtra plano — pagos também recebem).
+- **Público:** apenas `plan = 'free'` D+7 (pagos são filtrados via flag `freeOnly` na step).
 - **Assunto:** "Vale upgrade pro Pro? Matemática honesta"
 - **CTA:** "Ver planos e cupom de lançamento" → `/app/plans`
 - **Idempotência:** flag `onboarding_why_upgrade_sent_at`.
-- **Funcional:** ⚠ — NÃO filtra users que já assinaram antes do D+7. Pagos recebem pitch de upgrade. Bug pequeno. Ver "Issues".
+- **Funcional:** ✓ — **[2026-04-23]** fix aplicado: step D+7 agora tem `freeOnly: true`, adiciona `.eq("plan", "free")` na query.
 
 ### 7. Plan Limit Warning — ≥80% do ciclo
 - **Template:** `lib/email/templates/plan-limit.tsx`
@@ -102,6 +105,17 @@ flag em `profiles.brand_analysis.__lifecycle.<slug>_sent_at`.
 - **Idempotência:** não há flag — depende do webhook Stripe disparar 1x (garantia Stripe).
 - **Funcional:** ✓.
 
+### 11. Last Chance Coupon — D+7 + limite gasto
+- **Template:** `lib/email/templates/last-chance-coupon.tsx`
+- **Dispatcher:** `sendLastChanceCoupon()` em `dispatch.ts`
+- **Trigger:** cron diário `GET /api/cron/last-chance-coupon` (schedule `0 18 * * *`). Filtra `plan = free`, `created_at <= now() - 7 days` e `usage_count >= usage_limit` (free tier esgotado).
+- **Público:** users free que já gastaram os 5 carrosséis do mês após 7+ dias de conta — contexto de alto sinal pra upgrade.
+- **Assunto:** "Seu cupom de 50% off — só hoje e amanhã"
+- **CTA:** "Aplicar cupom e assinar" → `/app/checkout?plan=pro&coupon=VIRAL50` (checkout auto-aplica o cupom via `useSearchParams`).
+- **Cupom:** `VIRAL50` — 50% off no plano Creator (`plan_scope = {'pro'}`), `max_uses = 50`, escassez real — seed via migration `20260423011616_seed_viral50_coupon.sql`.
+- **Idempotência:** flag `last_chance_coupon_sent_at` (uma vez por user).
+- **Funcional:** ✓ — **[2026-04-23]** novo email. Escassez controlada via `max_uses` no banco, não via `expires_at` — se quiser cap temporal adicional, ajustar no seed.
+
 ### 10. Payment Failed — Stripe `invoice.payment_failed`
 - **Template:** `lib/email/templates/payment-failed.tsx`
 - **Dispatcher:** `sendPaymentFailed()` em `dispatch.ts:155`
@@ -127,16 +141,17 @@ flag em `profiles.brand_analysis.__lifecycle.<slug>_sent_at`.
 | Imediato | `checkout.session.completed` | Payment Success | `/api/stripe/webhook` |
 | Imediato | `invoice.payment_failed` | Payment Failed | `/api/stripe/webhook` |
 | Diário (16h UTC) | `plan=free` + ≥80% limite + 1x/ciclo | Plan Limit | `/api/cron/plan-limit` |
+| Diário (18h UTC) | `plan=free` + limite gasto + D+7 | Last Chance Coupon | `/api/cron/last-chance-coupon` |
 | Semanal (ter 17h UTC) | Ativo há 7+ dias sem gerar | Re-Engagement | `/api/cron/re-engagement` |
 
 ---
 
 ## Issues encontrados
 
-- **Onboarding Why Upgrade não filtra plano pago.** `/api/cron/onboarding-drip` seleciona todos os profiles D+7 sem checar `plan`. User que assinou no D+2 ainda recebe pitch de upgrade no D+7. Impacto baixo mas ruído. Fix: adicionar `.eq("plan", "free")` no select da step `onboarding-why-upgrade` (ou bloquear em todos os 3 se preferir drip só pra free).
-- **First Case menciona "47 carrosséis em 1 semana" como case real.** Copy dá nome de um creator "beta" anônimo. Se não houver caso verificado, reescrever com número honesto próprio (ex: testes internos) pra não quebrar a regra de ground truth que a gente prega no Writer. Em escala, risco de parecer marketese vazio.
+- ~~**Onboarding Why Upgrade não filtra plano pago.**~~ **[RESOLVIDO 2026-04-23]** Step D+7 agora tem `freeOnly: true` e filtra `.eq("plan", "free")`.
+- ~~**First Case menciona "47 carrosséis em 1 semana" como case real.**~~ **[RESOLVIDO 2026-04-23]** Copy reescrita pra focar em Voz da Marca, sem métrica inventada.
+- ~~**Welcome CTA vai pra `/app/create` mas rota oficial virou `/app/create/new`.**~~ **[RESOLVIDO 2026-04-23]** CTAs de Welcome, Activation Nudge e Re-Engagement apontam direto pra `/app/create/new`.
 - **`EMAIL_FROM` default é `onboarding@resend.dev`.** Se var de ambiente não estiver setada em prod, emails sairão do domínio compartilhado Resend (dobra chance de spam). Checar Vercel prod env: `EMAIL_FROM=Sequência Viral <noreply@kaleidos.com.br>` (ou domínio verificado no Resend).
-- **Welcome CTA vai pra `/app/create` mas rota oficial virou `/app/create/new`.** Redirect existe (`next.config.ts`), então funciona, mas link direto pra `/app/create/new` é mais limpo. Vale padronizar.
 - **Sem unsubscribe link estruturado.** Re-Engagement pede pro user responder "cancelar" manualmente. Sem header `List-Unsubscribe`, risco de cair em spam em provedor rígido (Outlook/Gmail Promoções).
 - **First Carousel dispatcher é lazy-import.** Ok pra cold-start, mas erro silencioso: se `dispatch.ts` tivesse import quebrado só quebraria em runtime da primeira geração. Smoke test (`scripts/test-email.ts`) pega isso só se rodado.
 
@@ -144,6 +159,7 @@ flag em `profiles.brand_analysis.__lifecycle.<slug>_sent_at`.
 
 ## Recomendações
 
-1. **Adicionar filtro `plan = free`** no cron `onboarding-drip` step Why Upgrade (`app/api/cron/onboarding-drip/route.ts:47`) — 2 linhas, sem migration.
+1. ~~Adicionar filtro `plan = free` no cron `onboarding-drip` step Why Upgrade~~ **[DONE 2026-04-23]**
 2. **Setar `EMAIL_FROM` em Vercel prod** com domínio verificado no Resend (`noreply@kaleidos.com.br` ou similar) + configurar `List-Unsubscribe` header no `send.ts` pra melhorar deliverability.
-3. **Rever copy do First Case** pra usar dado verificável (teste interno, número real do Gabriel) — consistência com ground truth rule do produto.
+3. ~~Rever copy do First Case~~ **[DONE 2026-04-23]** — foco agora em Voz da Marca, sem métrica inventada.
+4. **Monitorar conversão do Last Chance Coupon.** `coupons.used_count` mostra quantos aplicaram VIRAL50; `coupon_redemptions` mostra quem. Se ≥50 usuários converterem, cupom auto-expira via constraint `max_uses`.

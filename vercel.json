@@ -8,6 +8,7 @@
     "app/api/cron/plan-limit/route.ts": { "maxDuration": 60 },
     "app/api/cron/re-engagement/route.ts": { "maxDuration": 60 },
     "app/api/cron/onboarding-drip/route.ts": { "maxDuration": 60 },
+    "app/api/cron/last-chance-coupon/route.ts": { "maxDuration": 60 },
     "app/api/cron/usage-reset/route.ts": { "maxDuration": 60 },
     "app/api/cron/healthcheck/route.ts": { "maxDuration": 30 }
   },
@@ -16,6 +17,7 @@
     { "path": "/api/cron/plan-limit", "schedule": "0 16 * * *" },
     { "path": "/api/cron/re-engagement", "schedule": "0 17 * * 2" },
     { "path": "/api/cron/onboarding-drip", "schedule": "0 14 * * *" },
+    { "path": "/api/cron/last-chance-coupon", "schedule": "0 18 * * *" },
     { "path": "/api/cron/usage-reset", "schedule": "0 0 1 * *" },
     { "path": "/api/cron/healthcheck", "schedule": "0 12 * * *" }
   ]

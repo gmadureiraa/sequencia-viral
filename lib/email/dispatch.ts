@@ -16,6 +16,7 @@ import { OnboardingHowItWorksEmail } from "./templates/onboarding-how-it-works";
 import { OnboardingFirstCaseEmail } from "./templates/onboarding-first-case";
 import { OnboardingWhyUpgradeEmail } from "./templates/onboarding-why-upgrade";
 import { PaymentFailedEmail } from "./templates/payment-failed";
+import { LastChanceCouponEmail } from "./templates/last-chance-coupon";
 
 import { APP_URL } from "@/lib/app-url";
 
@@ -131,11 +132,11 @@ export async function sendOnboardingHowItWorks(user: Recipient) {
   });
 }
 
-/** D+3 — onboarding drip: primeiro case + voz da marca. */
+/** D+3 — onboarding drip: voz da marca (IA genérica vs IA que soa como você). */
 export async function sendOnboardingFirstCase(user: Recipient) {
   return sendEmail({
     to: user.email,
-    subject: "47 carrosséis em 1 semana (case real)",
+    subject: "A diferença entre IA genérica e IA que soa como você",
     react: OnboardingFirstCaseEmail({ name: user.name, appUrl: APP_URL }),
     tags: [PROJECT_TAG, ENV_TAG, lifecycleTag("onboarding-first-case")],
   });
@@ -148,6 +149,27 @@ export async function sendOnboardingWhyUpgrade(user: Recipient) {
     subject: "Vale upgrade pro Pro? Matemática honesta",
     react: OnboardingWhyUpgradeEmail({ name: user.name, appUrl: APP_URL }),
     tags: [PROJECT_TAG, ENV_TAG, lifecycleTag("onboarding-why-upgrade")],
+  });
+}
+
+/**
+ * D+7 com limite gasto — cupom VIRAL50 (50% off primeiro mês Creator).
+ * Disparado pelo cron `last-chance-coupon` quando user free gastou os 5
+ * carrosséis e já passou da janela de 7 dias sem upgrade.
+ */
+export async function sendLastChanceCoupon(
+  user: Recipient,
+  args: { couponCode: string }
+) {
+  return sendEmail({
+    to: user.email,
+    subject: "Seu cupom de 50% off — só hoje e amanhã",
+    react: LastChanceCouponEmail({
+      name: user.name,
+      appUrl: APP_URL,
+      couponCode: args.couponCode,
+    }),
+    tags: [PROJECT_TAG, ENV_TAG, lifecycleTag("last-chance-coupon")],
   });
 }
 

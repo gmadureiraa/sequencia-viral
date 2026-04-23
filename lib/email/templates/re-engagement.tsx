@@ -17,21 +17,20 @@ export function ReEngagementEmail({
 }) {
   const firstName = (name || "").trim().split(" ")[0] || "você";
   return (
-    <EmailLayout preview="Volta rapidinho — 1 link vira 1 carrossel em 15s.">
+    <EmailLayout preview="Tá faltando ideia ou falta de tempo? Qualquer link salvo vira carrossel.">
       <EmailKicker>Faz tempo</EmailKicker>
       <EmailHeadline>
-        {firstName}, cola qualquer link e sai com carrossel.
+        {firstName}, tá faltando ideia ou falta de tempo?
       </EmailHeadline>
       <EmailText>
-        A gente notou que faz{" "}
-        <strong>{daysSinceLastUse} dias</strong> que você não abre o estúdio.
-        Sem cobrança, só um lembrete.
+        Faz <strong>{daysSinceLastUse} dias</strong> que você não abre o
+        estúdio. Sem cobrança, só um atalho.
       </EmailText>
       <EmailText>
-        O fluxo continua o mesmo: cola um YouTube, blog ou reel →
-        escolhe uma variação → ajusta → exporta. Tudo em menos de 2 minutos.
+        Cola qualquer link que você salvou essa semana e a gente transforma
+        em carrossel. 15 segundos.
       </EmailText>
-      <EmailButton href={`${appUrl}/app/create`}>
+      <EmailButton href={`${appUrl}/app/create/new`}>
         Gerar 1 carrossel agora
       </EmailButton>
       <EmailText>

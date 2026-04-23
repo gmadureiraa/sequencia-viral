@@ -203,7 +203,7 @@ export default function AdminRegrasPage() {
               <b key="v">VIRAL50</b>,
               "50%",
               "10",
-              "pro, business",
+              "qualquer plano pago",
               "Nunca",
               <Badge key="v-s" kind="ok">Ativo</Badge>,
               "Cron last-chance + popup app + popup landing",

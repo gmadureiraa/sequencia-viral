@@ -48,7 +48,7 @@ Fonte: tabela `public.coupons` no Supabase + migrations em `supabase/migrations/
 
 | Código | % Off | Max uses | Used | Plan scope | Expira | Status em prod | Distribuição |
 |---|---|---|---|---|---|---|---|
-| `VIRAL50` | 50% | 10 | 0 | `pro`, `business` | Nunca | **Ativo** (no DB) | email last-chance + popup in-app + welcome popup landing |
+| `VIRAL50` | 50% | 10 | 0 | qualquer plano pago | Nunca | **Ativo** (no DB) | email last-chance + popup in-app + welcome popup landing |
 | `BETA50` | 50% | 100 | — | qualquer | 2026-06-30 | **Não aplicado em prod** (migration rodou mas seed não chegou no DB) | — |
 | `BEMVINDO30` | 30% | 10.000 | — | qualquer | 2026-07-31 | **Não aplicado em prod** (aposentado pelo VIRAL50) | popup `/app/login?coupon=BEMVINDO30` referenciado ainda em código |
 

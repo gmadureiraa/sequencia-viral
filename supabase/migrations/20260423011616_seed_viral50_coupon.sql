@@ -8,7 +8,7 @@
 --   - Limitado aos primeiros 10 assinantes (max_uses = 10)
 --   - Copy nunca expõe o número — só "limitado aos primeiros assinantes"
 --   - Sem expires_at (controle vem via cron + max_uses)
---   - Escopo: planos `pro` (Creator) e `business` (Pro)
+--   - Escopo: QUALQUER plano pago (plan_scope vazio = sem restrição)
 --   - Idempotente via ON CONFLICT
 -- ──────────────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ values
     0,
     null,
     true,
-    array['pro','business']::text[],
-    'Last Chance Coupon — 50% off primeiro mês (Creator R$ 99,90→49,90 OU Pro R$ 199,90→99,90). Limitado aos primeiros 10 assinantes. Disparado via /api/cron/last-chance-coupon quando user free esgota limite + D+7.'
+    array[]::text[],
+    'Cupom VIRAL50 — 50% off primeiro mês em QUALQUER plano pago (Creator R$ 99,90→49,90 OU Pro R$ 199,90→99,90). Limitado aos primeiros 10 assinantes. Disparado via /api/cron/last-chance-coupon + popup in-app + popup welcome landing.'
   )
 on conflict (code) do nothing;

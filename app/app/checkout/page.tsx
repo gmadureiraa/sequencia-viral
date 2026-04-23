@@ -36,17 +36,17 @@ const PLAN_META: Record<
   pro: {
     name: PLANS.pro.name, // "Creator"
     tagline: "Pra criador solo que quer cadência.",
-    anchorPrice: PLANS.pro.priceAnchor, // R$ 149
-    price: PLANS.pro.priceMonthly,      // R$ 99,90
-    discountLabel: "VIRAL50 → 50% off 1° mês",
+    anchorPrice: PLANS.pro.priceAnchor, // R$ 99,90 (riscado)
+    price: PLANS.pro.priceMonthly,      // R$ 49,90 (lançamento)
+    discountLabel: "Preço de lançamento",
     features: [...PLANS.pro.features],
   },
   business: {
     name: PLANS.business.name, // "Pro"
     tagline: "Pra quem publica todo dia e vive de conteúdo.",
-    anchorPrice: PLANS.business.priceAnchor, // R$ 299,90
-    price: PLANS.business.priceMonthly,      // R$ 199,90
-    discountLabel: "VIRAL50 → 50% off 1° mês",
+    anchorPrice: PLANS.business.priceAnchor, // R$ 199,90 (riscado)
+    price: PLANS.business.priceMonthly,      // R$ 97,90 (lançamento)
+    discountLabel: "Preço de lançamento",
     features: [...PLANS.business.features],
   },
 };

@@ -107,18 +107,18 @@ const jsonLd = {
     {
       "@type": "Offer",
       name: "Creator",
-      price: "99.90",
+      price: "49.90",
       priceCurrency: "BRL",
       billingIncrement: "P1M",
-      description: "10 carrosséis/mês, sem marca d'água, export PNG, 1 perfil de marca",
+      description: "10 carrosséis/mês, sem marca d'água, export PNG, 1 perfil de marca (preço de lançamento, anchor R$ 99,90)",
     },
     {
       "@type": "Offer",
       name: "Pro",
-      price: "199.90",
+      price: "97.90",
       priceCurrency: "BRL",
       billingIncrement: "P1M",
-      description: "30 carrosséis/mês, imagens IA + stock, cache inteligente, suporte prioritário",
+      description: "30 carrosséis/mês, imagens IA + stock, cache inteligente, suporte prioritário (preço de lançamento, anchor R$ 199,90)",
     },
   ],
   featureList: [

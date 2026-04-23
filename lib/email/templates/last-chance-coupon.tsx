@@ -39,7 +39,7 @@ export function LastChanceCouponEmail({
       </EmailText>
       <EmailText>
         Pra facilitar a decisão, liberei um cupom de <strong>50% off</strong>{" "}
-        no primeiro mês do Creator — R$ 99,90 → <strong>R$ 49,90</strong>.
+        no primeiro mês do Creator — R$ 49,90 → <strong>R$ 24,95</strong>.
       </EmailText>
       <EmailText>
         Cupom é limitado aos primeiros assinantes e expira em 48h. Quando

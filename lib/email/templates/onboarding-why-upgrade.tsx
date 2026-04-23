@@ -34,12 +34,13 @@ export function OnboardingWhyUpgradeEmail({
       <EmailText>
         <strong>Grátis</strong>: 5 carrosséis/mês, marca d&apos;água discreta.
         <br />
-        <strong>Creator · R$ 99,90/mês</strong>: 10 carrosséis, até 12 slides,
-        zero marca d&apos;água, claro+escuro, imagens IA/busca, 1 perfil.
+        <strong>Creator · R$ 49,90/mês</strong> (de lançamento, anchor R$ 99,90):
+        10 carrosséis, até 12 slides, zero marca d&apos;água, claro+escuro,
+        imagens IA/busca, 1 perfil.
       </EmailText>
       <EmailText>
         Pra quem tá chegando agora, liberei o cupom{" "}
-        <strong>VIRAL50 → 50% off no 1º mês</strong> (R$ 99,90 → R$ 49,90).
+        <strong>VIRAL50 → 50% off no 1º mês</strong> (R$ 49,90 → R$ 24,95).
         Limitado aos primeiros assinantes — quando esgotar, esgotou.
       </EmailText>
       <EmailButton href={`${appUrl}/app/checkout?plan=pro&coupon=VIRAL50`}>

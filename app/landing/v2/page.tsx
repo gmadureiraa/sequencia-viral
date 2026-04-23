@@ -252,7 +252,7 @@ export default function LandingVelocidade() {
           },
           {
             topic: "Custo pra postar todo dia",
-            withSv: "R$ 99,90/mês (ou R$ 49,90 com VIRAL50)",
+            withSv: "R$ 49,90/mês (lançamento, anchor R$ 99,90)",
             withoutSv: "Seu fim de semana inteiro",
           },
         ]}

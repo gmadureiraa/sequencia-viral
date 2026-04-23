@@ -257,18 +257,18 @@ export function PricingSection() {
   const [interval, setInterval] = useState<Interval>("month");
   const isAnnual = interval === "year";
 
-  // Precos BRL vem de lib/pricing.ts. Creator R$ 99,90, Pro R$ 199,90.
-  // Anual 20% off → Creator R$ 79,92/mes (total R$ 959,04); Pro R$ 159,92/mes (total R$ 1.919,04).
-  // Cupom VIRAL50 aplica a ambos: Creator R$ 49,90 e Pro R$ 99,90 no 1° mes.
-  const creatorMonth = "R$ 99,90";
-  const creatorAnnualMonthlyEq = "R$ 79,92";
-  const creatorYearTotal = "R$ 959,04/ano";
-  const creatorAnchor = "R$ 149";
+  // Precos BRL vem de lib/pricing.ts. Creator R$ 49,90, Pro R$ 97,90 (lançamento).
+  // Anchor (riscado): R$ 99,90 Creator, R$ 199,90 Pro.
+  // Anual 20% off → Creator R$ 39,92/mes (total R$ 479,04); Pro R$ 78,32/mes (total R$ 939,84).
+  const creatorMonth = "R$ 49,90";
+  const creatorAnnualMonthlyEq = "R$ 39,92";
+  const creatorYearTotal = "R$ 479,04/ano";
+  const creatorAnchor = "R$ 99,90";
 
-  const proMonth = "R$ 199,90";
-  const proAnnualMonthlyEq = "R$ 159,92";
-  const proYearTotal = "R$ 1.919,04/ano";
-  const proAnchor = "R$ 299,90";
+  const proMonth = "R$ 97,90";
+  const proAnnualMonthlyEq = "R$ 78,32";
+  const proYearTotal = "R$ 939,84/ano";
+  const proAnchor = "R$ 199,90";
 
   return (
     <section id="pricing" style={{ padding: "0 0 96px" }}>

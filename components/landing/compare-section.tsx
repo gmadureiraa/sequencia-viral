@@ -46,7 +46,7 @@ const DEFAULT_ROWS: CompareRow[] = [
   },
   {
     topic: "Preço pra postar todo dia",
-    withSv: "R$ 99,90/mês (R$ 49,90 com cupom VIRAL50)",
+    withSv: "R$ 49,90/mês (de lançamento, anchor R$ 99,90)",
     withoutSv: "Seu tempo, que custa mais caro",
   },
 ];

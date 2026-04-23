@@ -178,7 +178,7 @@ export function WelcomePopup() {
               Cria conta grátis agora. Quando decidir assinar o Creator,
               usa o código abaixo no checkout e tira{" "}
               <b style={{ color: "var(--sv-ink)" }}>50% do primeiro mês</b>{" "}
-              (R$ 99,90 → R$ 49,90). Cupom limitado aos primeiros assinantes.
+              (R$ 49,90 → R$ 24,95). Cupom limitado aos primeiros assinantes.
             </p>
 
             {/* Cupom */}

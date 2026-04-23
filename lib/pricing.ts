@@ -10,8 +10,8 @@
  * env vars com os novos IDs antes de abrir checkout em prod.
  *
  * Precos BRL:
- *   Creator:  R$ 99,90/mes   (anchor: R$ 149)    — cupom VIRAL50 50% off = R$ 49,90 no 1° mes
- *   Pro:      R$ 199,90/mes  (anchor: R$ 299,90) — cupom VIRAL50 50% off = R$ 99,90 no 1° mes
+ *   Creator:  R$ 49,90/mes  (anchor: R$ 99,90)  — preço de lançamento
+ *   Pro:      R$ 97,90/mes  (anchor: R$ 199,90) — preço de lançamento
  * Anual: sempre -20% sobre mensal × 12.
  */
 
@@ -33,9 +33,9 @@ export const PLAN_CURRENCY = "brl" as const;
 export const PLANS = {
   pro: {
     name: "Creator",
-    priceMonthly: 9990, // R$ 99,90 em centavos BRL (cupom VIRAL50 50% off = R$ 49,95 no 1° mes)
-    priceAnnual: 95904, // R$ 959,04/ano (20% off sobre 99,90×12=1198,80)
-    priceAnchor: 14900, // R$ 149 preco riscado
+    priceMonthly: 4990, // R$ 49,90 em centavos BRL (preço de lançamento)
+    priceAnnual: 47904, // R$ 479,04/ano (20% off sobre 49,90×12=598,80)
+    priceAnchor: 9990, // R$ 99,90 preco riscado (anchor visual)
     // Product ID do Stripe — criado manualmente no dashboard. DB key 'pro'
     // mapeia pro produto cujo display name e "Creator" (confuso mas legado).
     stripeProductId: "prod_UNrg0hsyOm447P",
@@ -54,9 +54,9 @@ export const PLANS = {
   },
   business: {
     name: "Pro",
-    priceMonthly: 19990, // R$ 199,90 em centavos BRL (cupom VIRAL50 50% off = R$ 99,95 no 1° mes)
-    priceAnnual: 191904, // R$ 1.919,04/ano (20% off sobre 199,90×12=2398,80)
-    priceAnchor: 29990, // R$ 299,90 preco riscado
+    priceMonthly: 9790, // R$ 97,90 em centavos BRL (preço de lançamento)
+    priceAnnual: 93984, // R$ 939,84/ano (20% off sobre 97,90×12=1174,80)
+    priceAnchor: 19990, // R$ 199,90 preco riscado (anchor visual)
     // Product ID do Stripe. DB key 'business' mapeia pro produto "Pro".
     stripeProductId: "prod_UNrgO9pSZYSveR",
     carouselsPerMonth: 30,

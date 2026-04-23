@@ -3461,7 +3461,7 @@ function StepDone({
                 color: "var(--sv-ink)",
               }}
             >
-              R$ 99,90<span style={{ fontSize: 14 }}>/mês</span>
+              R$ 49,90<span style={{ fontSize: 14 }}>/mês</span>
             </div>
             <ul
               style={{
@@ -3527,7 +3527,7 @@ function StepDone({
                 color: "var(--sv-ink)",
               }}
             >
-              R$ 199,90<span style={{ fontSize: 14 }}>/mês</span>
+              R$ 97,90<span style={{ fontSize: 14 }}>/mês</span>
             </div>
             <ul
               style={{

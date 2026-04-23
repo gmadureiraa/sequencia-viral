@@ -25,8 +25,8 @@ Fonte única: `lib/pricing.ts`. Se divergir de qualquer UI, UI está errada.
 | Plano | Mensal | Anual (equivalente/mês) | Total anual | Anchor | Carrosséis/mês | Slides máx | Marca d'água | Stripe Product ID | DB key |
 |---|---|---|---|---|---|---|---|---|---|
 | Free | R$ 0 | — | — | — | 5 | 12 | Sim | — | `free` |
-| Creator | R$ 99,90 | R$ 79,92/mês | R$ 959,04/ano | R$ 149 | 10 | 12 | Não | `prod_UNrg0hsyOm447P` | `pro` |
-| Pro | R$ 199,90 | R$ 159,92/mês | R$ 1.919,04/ano | R$ 299,90 | 30 | 12 | Não | `prod_UNrgO9pSZYSveR` | `business` |
+| Creator | R$ 49,90 | R$ 39,92/mês | R$ 479,04/ano | R$ 99,90 | 10 | 12 | Não | `prod_UNrg0hsyOm447P` | `pro` |
+| Pro | R$ 97,90 | R$ 78,32/mês | R$ 939,84/ano | R$ 199,90 | 30 | 12 | Não | `prod_UNrgO9pSZYSveR` | `business` |
 
 **Regras importantes**:
 

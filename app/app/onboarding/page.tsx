@@ -131,6 +131,7 @@ type Step =
   | "about"
   | "connect"
   | "analyze"
+  | "refs"
   | "dna"
   | "photo"
   | "visual"
@@ -142,6 +143,7 @@ const STEP_ORDER: Step[] = [
   "about",
   "connect",
   "analyze",
+  "refs",
   "dna",
   "photo",
   "visual",
@@ -199,6 +201,12 @@ export default function OnboardingPage() {
   const [dnaPillars, setDnaPillars] = useState("");
   const [newNiche, setNewNiche] = useState("");
 
+  // refs (posts que o user ama) — opcionais, 0-3 URLs.
+  //  Persiste em brand_analysis.__reference_posts. Uma versao futura vai
+  //  ter um extractor que le o texto desses posts pra alimentar a voz da
+  //  IA; por enquanto ficam so como memoria guardada.
+  const [referencePosts, setReferencePosts] = useState<string[]>(["", "", ""]);
+
   // photo
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
   const [avatarUploadedUrl, setAvatarUploadedUrl] = useState<string | null>(
@@ -209,8 +217,23 @@ export default function OnboardingPage() {
 
   // visual
   const [colorHex, setColorHex] = useState<string>("#7CF067");
+  // imageStyleId aceita "photo" | "illus" | "iso3d" | "custom" (quando o
+  // usuario subiu referencias proprias, os presets ficam ocultos).
   const [imageStyleId, setImageStyleId] = useState<string>("photo");
   const [designId, setDesignId] = useState<DesignTemplateId>("manifesto");
+  // Upload de referencias visuais proprias (0-3). Se houver, roda
+  // /api/brand-aesthetic e guarda a description inline.
+  const [brandImageRefs, setBrandImageRefs] = useState<string[]>([]);
+  const [brandImageUploading, setBrandImageUploading] = useState(false);
+  const [imageAesthetic, setImageAesthetic] = useState<{
+    description: string;
+    palette?: string[];
+    keywords?: string[];
+    updatedAt?: string;
+  } | null>(null);
+  const [aestheticAnalyzing, setAestheticAnalyzing] = useState(false);
+  const [aestheticError, setAestheticError] = useState<string | null>(null);
+  const brandRefsInputRef = useRef<HTMLInputElement | null>(null);
 
   // ideas
   const [ideas, setIdeas] = useState<Suggestion[]>([]);
@@ -429,6 +452,108 @@ export default function OnboardingPage() {
     reader.readAsDataURL(file);
   };
 
+  // ─── Brand image refs (step visual) ───
+  async function handleBrandRefsChange(
+    e: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    if (brandImageRefs.length + files.length > 3) {
+      toast.error("Máximo 3 imagens de referência.");
+      return;
+    }
+    setBrandImageUploading(true);
+    setAestheticError(null);
+    try {
+      const uploads = Array.from(files).map(async (file) => {
+        if (!file.type.startsWith("image/")) {
+          throw new Error(`"${file.name}" não é imagem.`);
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          throw new Error(`"${file.name}" > 5MB.`);
+        }
+        const form = new FormData();
+        form.append("file", file);
+        form.append("carouselId", "brand-refs");
+        form.append("slideIndex", String(Math.floor(Math.random() * 1_000_000)));
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          headers: authHeaders(session),
+          body: form,
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok || !body?.url) {
+          throw new Error(body?.error || "Upload falhou.");
+        }
+        return body.url as string;
+      });
+      const urls = await Promise.all(uploads);
+      const merged = [...brandImageRefs, ...urls].slice(0, 3);
+      setBrandImageRefs(merged);
+      toast.success(`${urls.length} referência(s) salva(s).`);
+      // Se virou "custom", apaga selecao de preset pra UI ficar clara.
+      setImageStyleId("custom");
+      // Roda analise Gemini Vision em background.
+      void analyzeAesthetic(merged);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload falhou.");
+    } finally {
+      setBrandImageUploading(false);
+      if (brandRefsInputRef.current) brandRefsInputRef.current.value = "";
+    }
+  }
+
+  function removeBrandRef(idx: number) {
+    const next = brandImageRefs.filter((_, i) => i !== idx);
+    setBrandImageRefs(next);
+    if (next.length === 0) {
+      // User removeu tudo — volta pra preset default.
+      setImageStyleId("photo");
+      setImageAesthetic(null);
+      return;
+    }
+    void analyzeAesthetic(next);
+  }
+
+  const analyzeAesthetic = useCallback(
+    async (urls: string[]) => {
+      if (urls.length === 0) {
+        setImageAesthetic(null);
+        return;
+      }
+      setAestheticAnalyzing(true);
+      setAestheticError(null);
+      try {
+        const res = await fetch("/api/brand-aesthetic", {
+          method: "POST",
+          headers: jsonWithAuth(session),
+          body: JSON.stringify({ imageUrls: urls }),
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok) {
+          throw new Error(
+            typeof body?.error === "string"
+              ? body.error
+              : "Falha na análise."
+          );
+        }
+        setImageAesthetic({
+          description: String(body.aesthetic ?? ""),
+          palette: Array.isArray(body.palette) ? body.palette : [],
+          keywords: Array.isArray(body.keywords) ? body.keywords : [],
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        setAestheticError(
+          err instanceof Error ? err.message : "Erro inesperado."
+        );
+      } finally {
+        setAestheticAnalyzing(false);
+      }
+    },
+    [session]
+  );
+
   // ─── Ideas generation ───
   const regenIdeas = useCallback(async () => {
     setIdeasLoading(true);
@@ -488,6 +613,11 @@ export default function OnboardingPage() {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
+    const validRefs = referencePosts
+      .map((u) => u.trim())
+      .filter(
+        (u) => u.length > 0 && /^https?:\/\//i.test(u)
+      );
     const brand: BrandAnalysis = {
       detected_niche: dnaNiches,
       tone_detected: dnaTone,
@@ -502,6 +632,17 @@ export default function OnboardingPage() {
       voice_samples: [],
       tabus: [],
       content_rules: [],
+      ...(validRefs.length > 0
+        ? {
+            __reference_posts: {
+              urls: validRefs,
+              addedAt: new Date().toISOString(),
+            },
+          }
+        : {}),
+      ...(imageAesthetic
+        ? { __image_aesthetic: imageAesthetic }
+        : {}),
     };
     await updateProfile({
       name: displayName || undefined,
@@ -514,6 +655,7 @@ export default function OnboardingPage() {
       tone: dnaTone,
       carousel_style: designId,
       brand_colors: [colorHex],
+      brand_image_refs: brandImageRefs.length > 0 ? brandImageRefs : undefined,
       onboarding_completed: true,
       brand_analysis: brand,
     });
@@ -532,9 +674,9 @@ export default function OnboardingPage() {
     }
     setSaving(false);
 
+    // Gera exatamente quantos temas o user aprovou (min 1, max 3). Antes
+    // era fixo em 3 — user reclamou que falhava com 1-2 selecionados.
     const pickedIdeas = approvedIdeas.slice(0, 3);
-    while (pickedIdeas.length < 3 && ideas[pickedIdeas.length])
-      pickedIdeas.push(ideas[pickedIdeas.length]);
     if (pickedIdeas.length === 0) {
       goto("done");
       return;
@@ -685,6 +827,15 @@ export default function OnboardingPage() {
                 error={analysisError}
                 onRetry={() => runAnalysis(igHandle)}
                 onBack={() => goto("connect")}
+                onNext={() => goto("refs")}
+              />
+            )}
+            {step === "refs" && (
+              <StepRefs
+                key="refs"
+                urls={referencePosts}
+                setUrls={setReferencePosts}
+                onBack={() => goto("analyze")}
                 onNext={() => goto("dna")}
               />
             )}
@@ -707,7 +858,7 @@ export default function OnboardingPage() {
                 setStyleLine={setDnaStyle}
                 pillars={dnaPillars}
                 setPillars={setDnaPillars}
-                onBack={() => goto("analyze")}
+                onBack={() => goto("refs")}
                 onNext={() => goto("photo")}
               />
             )}
@@ -732,6 +883,15 @@ export default function OnboardingPage() {
                 setImageStyleId={setImageStyleId}
                 designId={designId}
                 setDesignId={setDesignId}
+                brandImageRefs={brandImageRefs}
+                onPickBrandRefs={() => brandRefsInputRef.current?.click()}
+                onRemoveBrandRef={removeBrandRef}
+                brandRefsInputRef={brandRefsInputRef}
+                onBrandRefsChange={handleBrandRefsChange}
+                brandImageUploading={brandImageUploading}
+                imageAesthetic={imageAesthetic}
+                aestheticAnalyzing={aestheticAnalyzing}
+                aestheticError={aestheticError}
                 onBack={() => goto("photo")}
                 onNext={() => goto("ideas")}
               />
@@ -1561,6 +1721,130 @@ function StepAnalyze({
   );
 }
 
+// ──────────────────────────────────────────────────────────────────
+// Step: Refs (posts de referência — opcional, skippable)
+// ──────────────────────────────────────────────────────────────────
+function StepRefs({
+  urls,
+  setUrls,
+  onBack,
+  onNext,
+}: {
+  urls: string[];
+  setUrls: (v: string[]) => void;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  function updateAt(i: number, v: string) {
+    const next = [...urls];
+    next[i] = v;
+    setUrls(next);
+  }
+  // Aceita vazio (skip) ou ate 3 URLs validas. URL invalida bloqueia avancar
+  // so se o campo foi preenchido — campo vazio eh ok.
+  const normalized = urls.map((u) => u.trim());
+  const invalid = normalized
+    .map((u, i) => ({ u, i }))
+    .filter(({ u }) => u.length > 0 && !/^https?:\/\//i.test(u));
+  const canAdvance = invalid.length === 0;
+  const filledCount = normalized.filter((u) => u.length > 0).length;
+  return (
+    <Card>
+      <Eyebrow>● Passo extra · Referências</Eyebrow>
+      <H1>
+        Posts que você <em className="italic">ama</em>.
+      </H1>
+      <Sub>
+        Cole até 3 posts que você se inspira (Instagram, LinkedIn, X). A IA
+        usa como referência de estilo quando criar. Pode pular se não quiser.
+      </Sub>
+
+      <div className="grid gap-3">
+        {urls.map((u, i) => {
+          const invalidHere = u.trim().length > 0 && !/^https?:\/\//i.test(u.trim());
+          return (
+            <div key={i} className="flex flex-col gap-1.5">
+              <label
+                className="uppercase"
+                style={{
+                  fontFamily: "var(--sv-mono)",
+                  fontSize: 10,
+                  letterSpacing: "0.18em",
+                  color: "var(--sv-ink)",
+                  fontWeight: 700,
+                }}
+              >
+                Referência {i + 1}
+              </label>
+              <input
+                type="url"
+                value={u}
+                onChange={(e) => updateAt(i, e.target.value)}
+                placeholder="https://instagram.com/p/... ou linkedin.com/posts/..."
+                className="sv-input"
+                style={{
+                  padding: "12px 14px",
+                  fontSize: 13,
+                  fontFamily: "var(--sv-mono)",
+                  border: invalidHere
+                    ? "1.5px solid #C23A1E"
+                    : "1.5px solid var(--sv-ink)",
+                  background: "var(--sv-white)",
+                  outline: 0,
+                }}
+              />
+              {invalidHere && (
+                <span
+                  style={{
+                    fontFamily: "var(--sv-sans)",
+                    fontSize: 12,
+                    color: "#C23A1E",
+                  }}
+                >
+                  Precisa começar com http:// ou https://
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div
+        className="mt-6 flex items-center gap-2"
+        style={{
+          padding: "10px 14px",
+          border: "1.5px dashed var(--sv-ink)",
+          background: "var(--sv-soft)",
+        }}
+      >
+        <span
+          className="uppercase"
+          style={{
+            fontFamily: "var(--sv-mono)",
+            fontSize: 10,
+            letterSpacing: "0.16em",
+            color: "var(--sv-muted)",
+          }}
+        >
+          {filledCount === 0
+            ? "Nenhuma referência colada — pode pular"
+            : `${filledCount} referência${filledCount === 1 ? "" : "s"} · salvas pra uso futuro`}
+        </span>
+      </div>
+
+      <Footer
+        back={{ label: "Voltar", onClick: onBack }}
+        secondary={{ label: "Pular por enquanto", onClick: onNext }}
+        primary={{
+          label: "Próximo →",
+          onClick: onNext,
+          disabled: !canAdvance,
+        }}
+      />
+    </Card>
+  );
+}
+
 function ProfileHeader({ sp }: { sp: ScrapedProfile }) {
   const avatar = sp.avatarUrl ? proxyImage(sp.avatarUrl) : null;
   return (
@@ -2014,6 +2298,15 @@ function StepVisual({
   setImageStyleId,
   designId,
   setDesignId,
+  brandImageRefs,
+  onPickBrandRefs,
+  onRemoveBrandRef,
+  brandRefsInputRef,
+  onBrandRefsChange,
+  brandImageUploading,
+  imageAesthetic,
+  aestheticAnalyzing,
+  aestheticError,
   onBack,
   onNext,
 }: {
@@ -2023,9 +2316,31 @@ function StepVisual({
   setImageStyleId: (v: string) => void;
   designId: DesignTemplateId;
   setDesignId: (v: DesignTemplateId) => void;
+  brandImageRefs: string[];
+  onPickBrandRefs: () => void;
+  onRemoveBrandRef: (idx: number) => void;
+  brandRefsInputRef: React.RefObject<HTMLInputElement | null>;
+  onBrandRefsChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  brandImageUploading: boolean;
+  imageAesthetic: {
+    description: string;
+    palette?: string[];
+    keywords?: string[];
+    updatedAt?: string;
+  } | null;
+  aestheticAnalyzing: boolean;
+  aestheticError: string | null;
   onBack: () => void;
   onNext: () => void;
 }) {
+  // Default = presets; se user subiu referencias, mostra custom mode.
+  const [useCustomRefs, setUseCustomRefs] = useState(
+    () => brandImageRefs.length > 0
+  );
+  // Sync externo — se referencias foram apagadas/adicionadas fora do toggle.
+  useEffect(() => {
+    if (brandImageRefs.length > 0 && !useCustomRefs) setUseCustomRefs(true);
+  }, [brandImageRefs.length, useCustomRefs]);
   return (
     <Card>
       <Eyebrow>● Passo 05 · Identidade visual</Eyebrow>
@@ -2125,9 +2440,237 @@ function StepVisual({
       </div>
 
       <div className="mb-8">
-        <MiniLabel>Estilo de imagem</MiniLabel>
-        <div className="grid sm:grid-cols-3 gap-3">
-          {IMAGE_STYLES.map((s) => {
+        <div className="flex items-center justify-between mb-3">
+          <MiniLabel>Estilo de imagem</MiniLabel>
+          <button
+            type="button"
+            onClick={() => {
+              // Toggle modo custom. Se desligar e tiver refs, nao apaga as
+              // urls — so volta a mostrar os presets. User pode religar
+              // que as imagens continuam la.
+              setUseCustomRefs((v) => !v);
+            }}
+            className="uppercase"
+            style={{
+              padding: "6px 12px",
+              fontFamily: "var(--sv-mono)",
+              fontSize: 10,
+              letterSpacing: "0.16em",
+              fontWeight: 700,
+              background: useCustomRefs ? "var(--sv-pink)" : "var(--sv-white)",
+              color: "var(--sv-ink)",
+              border: "1.5px solid var(--sv-ink)",
+              boxShadow: useCustomRefs ? "2px 2px 0 0 var(--sv-ink)" : "none",
+              cursor: "pointer",
+            }}
+          >
+            {useCustomRefs ? "usando minhas refs" : "colar minhas próprias ↑"}
+          </button>
+        </div>
+
+        {/* Input file escondido — controlado pelo ref do parent */}
+        <input
+          ref={brandRefsInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={onBrandRefsChange}
+          multiple
+          hidden
+        />
+
+        {useCustomRefs ? (
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-3 gap-3">
+              {Array.from({ length: 3 }).map((_, i) => {
+                const url = brandImageRefs[i];
+                if (url) {
+                  return (
+                    <div
+                      key={i}
+                      className="relative"
+                      style={{
+                        aspectRatio: "1",
+                        border: "1.5px solid var(--sv-ink)",
+                        background: "var(--sv-soft)",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={url}
+                        alt={`Referência ${i + 1}`}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => onRemoveBrandRef(i)}
+                        aria-label={`Remover referência ${i + 1}`}
+                        style={{
+                          position: "absolute",
+                          top: 6,
+                          right: 6,
+                          width: 22,
+                          height: 22,
+                          borderRadius: "50%",
+                          background: "var(--sv-ink)",
+                          color: "#fff",
+                          border: "1.5px solid var(--sv-ink)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={onPickBrandRefs}
+                    disabled={brandImageUploading}
+                    style={{
+                      aspectRatio: "1",
+                      border: "1.5px dashed var(--sv-ink)",
+                      background: "var(--sv-soft)",
+                      cursor: brandImageUploading ? "wait" : "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                    }}
+                  >
+                    {brandImageUploading ? (
+                      <Loader2
+                        size={22}
+                        className="animate-spin"
+                        style={{ color: "var(--sv-ink)" }}
+                      />
+                    ) : (
+                      <Upload size={22} color="#0A0A0A" />
+                    )}
+                    <span
+                      className="uppercase"
+                      style={{
+                        fontFamily: "var(--sv-mono)",
+                        fontSize: 9,
+                        letterSpacing: "0.16em",
+                        color: "var(--sv-ink)",
+                      }}
+                    >
+                      {brandImageUploading ? "Enviando…" : "Adicionar"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {aestheticAnalyzing && (
+              <div
+                className="flex items-center gap-3"
+                style={{
+                  padding: "10px 14px",
+                  border: "1.5px solid var(--sv-ink)",
+                  background: "var(--sv-white)",
+                }}
+              >
+                <Loader2
+                  size={14}
+                  className="animate-spin"
+                  style={{ color: "var(--sv-ink)" }}
+                />
+                <span
+                  className="uppercase"
+                  style={{
+                    fontFamily: "var(--sv-mono)",
+                    fontSize: 10,
+                    letterSpacing: "0.18em",
+                    color: "var(--sv-ink)",
+                  }}
+                >
+                  Analisando suas referências…
+                </span>
+              </div>
+            )}
+
+            {imageAesthetic && !aestheticAnalyzing && (
+              <div
+                style={{
+                  padding: "12px 16px",
+                  border: "1.5px solid var(--sv-ink)",
+                  background: "var(--sv-green)",
+                  boxShadow: "3px 3px 0 0 var(--sv-ink)",
+                }}
+              >
+                <div
+                  className="uppercase mb-1.5"
+                  style={{
+                    fontFamily: "var(--sv-mono)",
+                    fontSize: 10,
+                    letterSpacing: "0.18em",
+                    fontWeight: 700,
+                    color: "var(--sv-ink)",
+                  }}
+                >
+                  Estética detectada
+                </div>
+                <p
+                  style={{
+                    fontFamily: "var(--sv-sans)",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    color: "var(--sv-ink)",
+                  }}
+                >
+                  {imageAesthetic.description}
+                </p>
+                {imageAesthetic.palette &&
+                  imageAesthetic.palette.length > 0 && (
+                    <div className="flex items-center gap-2 mt-3">
+                      {imageAesthetic.palette.slice(0, 6).map((hex, i) => (
+                        <span
+                          key={i}
+                          title={hex}
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: "50%",
+                            background: hex,
+                            border: "1.5px solid var(--sv-ink)",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+              </div>
+            )}
+
+            {aestheticError && (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  border: "1.5px solid #C23A1E",
+                  background: "#FFE8E4",
+                  color: "#7A1D0D",
+                  fontFamily: "var(--sv-sans)",
+                  fontSize: 12,
+                }}
+              >
+                Não consegui analisar as referências: {aestheticError}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-3 gap-3">
+            {IMAGE_STYLES.map((s) => {
             const on = imageStyleId === s.id;
             return (
               <button
@@ -2215,7 +2758,8 @@ function StepVisual({
               </button>
             );
           })}
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="mb-2">
@@ -2519,11 +3063,11 @@ function StepIdeas({
     <Card>
       <Eyebrow>● Passo 06 · Ideias</Eyebrow>
       <H1>
-        Escolha <em className="italic">3 temas</em> pra virar carrossel.
+        Escolha <em className="italic">até 3 temas</em> pra virar carrossel.
       </H1>
       <Sub>
-        Geradas em cima do DNA que você acabou de validar. A gente cria os 3
-        carrosséis de verdade agora mesmo.
+        Geradas em cima do DNA que você acabou de validar. A gente cria de 1 a
+        3 carrosséis de verdade agora — você decide quantos.
       </Sub>
 
       <div
@@ -2552,7 +3096,7 @@ function StepIdeas({
             }}
           />
         </div>
-        <span>{approvedCount} de 3 selecionados</span>
+        <span>{approvedCount} de 3 (min 1)</span>
       </div>
 
       {loading && ideas.length === 0 ? (
@@ -2697,17 +3241,19 @@ function StepIdeas({
           </button>
           <button
             onClick={onNext}
-            disabled={approvedCount < 3}
+            disabled={approvedCount < 1}
             className="sv-btn sv-btn-primary"
             style={{
               padding: "14px 22px",
               fontSize: 12,
-              opacity: approvedCount < 3 ? 0.5 : 1,
+              opacity: approvedCount < 1 ? 0.5 : 1,
             }}
           >
-            {approvedCount >= 3
-              ? "Gerar 3 carrosséis →"
-              : `Faltam ${3 - approvedCount}`}
+            {approvedCount >= 1
+              ? `Gerar ${approvedCount} carrossel${
+                  approvedCount === 1 ? "" : "éis"
+                } →`
+              : "Escolhe pelo menos 1"}
           </button>
         </div>
       </div>
@@ -2729,11 +3275,16 @@ function StepGenerating({
   }>;
   saving: boolean;
 }) {
+  const n = progress.length;
   return (
     <Card>
       <Eyebrow>● Passo 07 · Gerando</Eyebrow>
       <H1>
-        Criando seus <em className="italic">3 carrosséis</em>.
+        Criando seu{n === 1 ? "" : "s"}{" "}
+        <em className="italic">
+          {n || 1} carrossel{n === 1 ? "" : "éis"}
+        </em>
+        .
       </H1>
       <Sub>
         A gente gera cada um com o DNA que você validou, as pilares, o tom e a

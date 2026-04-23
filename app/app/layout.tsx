@@ -17,7 +17,6 @@ import {
   Sparkles,
   Search,
   Shield,
-  ImageIcon,
   CalendarClock,
   Rocket,
 } from "lucide-react";
@@ -38,9 +37,8 @@ const NAV_ITEMS: NavItem[] = [
   // 'Criar' removido — ja existe o botao 'Novo carrossel' flutuante acima do
   // card de plano no bottom da sidebar. Mesma rota /app/create/new, redundante.
   { href: "/app/carousels", label: "Carrosséis", icon: FolderOpen },
-  // Galeria temporariamente oculta (/app/gallery, /api/gallery ainda existem).
-  // Pra reativar, descomentar a linha abaixo.
-  // { href: "/app/gallery", label: "Galeria", icon: ImageIcon },
+  // Galeria (/app/gallery) foi removida do app — a rota nao existe mais.
+  // O endpoint /api/gallery ainda pode existir como API interna (não é UI).
   { href: "/app/help", label: "Guia", icon: BookOpen },
   { href: "/app/settings", label: "Ajustes", icon: Settings },
   // Em breve — itens disabled.
@@ -98,7 +96,6 @@ function breadcrumbFor(pathname: string): { kicker: string; title: string } {
     "/app": { kicker: "DASHBOARD", title: "INÍCIO" },
     "/app/create/new": { kicker: "NOVO", title: "CARROSSEL" },
     "/app/carousels": { kicker: "BIBLIOTECA", title: "CARROSSÉIS" },
-    "/app/gallery": { kicker: "IMAGENS", title: "GALERIA" },
     "/app/plans": { kicker: "PLANOS", title: "ASSINAR" },
     "/app/settings": { kicker: "CONTA", title: "AJUSTES" },
     "/app/roadmap": { kicker: "PRODUTO", title: "ROADMAP" },

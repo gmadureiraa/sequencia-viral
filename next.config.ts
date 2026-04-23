@@ -17,9 +17,11 @@ const nextConfig: NextConfig = {
         permanent: false,
       },
       {
+        // Rota `/app/create/legacy` foi deletada. Mantemos o 301 no edge pra
+        // preservar SEO e bookmarks antigos apontando pra cá.
         source: "/app/create/legacy",
         destination: "/app/create/new",
-        permanent: false,
+        permanent: true,
       },
     ];
   },

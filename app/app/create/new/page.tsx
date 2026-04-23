@@ -23,6 +23,8 @@ import { jsonWithAuth } from "@/lib/api-auth-headers";
 type Tone = "editorial" | "informal" | "direto" | "provocativo";
 type Lang = "pt-br" | "en";
 
+// 4 atalhos fixos (2x2 grid desktop / 4x1 mobile). "Case" virou prompt
+// free-form — o usuário escreve direto no textarea se quiser.
 const SHORTCUTS: { label: string; kicker: string; seed: string }[] = [
   {
     kicker: "Nº 01 · TUTORIAL",
@@ -43,11 +45,6 @@ const SHORTCUTS: { label: string; kicker: string; seed: string }[] = [
     kicker: "Nº 04 · REMIX",
     label: "Remixar carrossel",
     seed: "Use esse carrossel como referência mas foca em [ângulo novo]: https://www.instagram.com/p/...",
-  },
-  {
-    kicker: "Nº 05 · CASE",
-    label: "Lições de um case",
-    seed: "O que [marca/pessoa] fez para conseguir [resultado], e as lições aplicáveis ao seu negócio.",
   },
 ];
 
@@ -210,6 +207,11 @@ export default function NewCarouselPage() {
   // Interview mode — IA faz 1-2 perguntas antes de gerar pra melhorar
   // qualidade do conteúdo. Opt-in dentro do Modo Avançado.
   const [advInterview, setAdvInterview] = useState(false);
+
+  // "Ver 3 conceitos antes de gerar" — só aparece em Modo Avançado. Default OFF.
+  // Quando ligado, o fluxo não gera direto: persiste o draft e navega
+  // pra /app/create/[id]/concepts, onde a IA devolve 3 ângulos diferentes.
+  const [advUseConcepts, setAdvUseConcepts] = useState(false);
   const [interviewLoading, setInterviewLoading] = useState(false);
   const [interviewQs, setInterviewQs] = useState<
     { id: string; question: string; why: string; suggestedAnswer?: string }[]
@@ -410,6 +412,12 @@ export default function NewCarouselPage() {
       const { sourceType, sourceUrl } = detectSource(idea);
 
       // 1) Persiste draft vazio pra termos um id.
+      //    variation.style carrega metadata pro fluxo downstream (/concepts
+      //    lê isso pra reconstruir tone/lang/niche/source).
+      const styleMeta: {
+        sourceType: typeof sourceType;
+        sourceUrl?: string;
+      } = { sourceType, sourceUrl };
       const { row } = await upsertUserCarousel(supabase, user.id, {
         id: null,
         title: idea.slice(0, 80),
@@ -418,9 +426,16 @@ export default function NewCarouselPage() {
         status: "draft",
         variation: {
           title: idea.slice(0, 80),
-          style: `${tone}|${lang}|${niche}`,
+          style: `${tone}|${lang}|${niche}|${JSON.stringify(styleMeta)}`,
         },
       });
+
+      // Modo avançado + "Ver 3 conceitos antes de gerar" — pula a geração
+      // direta e manda pra /concepts pro user escolher um ângulo primeiro.
+      if (advOpen && advUseConcepts) {
+        router.push(`/app/create/${row.id}/concepts`);
+        return;
+      }
 
       // Interview answers → injeta no extraContext (se houver).
       const interviewPack =
@@ -1312,6 +1327,51 @@ export default function NewCarouselPage() {
                         >
                           A IA lê seu briefing e devolve 1-2 perguntas cirúrgicas
                           pra melhorar o output. Depois responde e gera.
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* Concepts toggle — usa o fluxo antigo de 3 conceitos. */}
+                    <label
+                      className="flex cursor-pointer items-start gap-3"
+                      style={{
+                        padding: "10px 12px",
+                        border: "1.5px solid var(--sv-ink)",
+                        background: advUseConcepts
+                          ? "var(--sv-green)"
+                          : "var(--sv-white)",
+                        boxShadow: "2px 2px 0 0 var(--sv-ink)",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={advUseConcepts}
+                        onChange={(e) => setAdvUseConcepts(e.target.checked)}
+                        style={{ marginTop: 3 }}
+                      />
+                      <div>
+                        <div
+                          style={{
+                            fontFamily: "var(--sv-sans)",
+                            fontSize: 13,
+                            fontWeight: 700,
+                          }}
+                        >
+                          🎯 Ver 3 conceitos antes de gerar
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 11.5,
+                            color: advUseConcepts
+                              ? "var(--sv-ink)"
+                              : "var(--sv-muted)",
+                            lineHeight: 1.4,
+                            marginTop: 2,
+                          }}
+                        >
+                          Em vez de gerar direto, a IA devolve 3 ângulos
+                          diferentes do seu tema. Escolhe o melhor e aí gera o
+                          carrossel completo.
                         </div>
                       </div>
                     </label>

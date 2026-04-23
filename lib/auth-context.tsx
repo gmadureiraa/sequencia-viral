@@ -24,6 +24,19 @@ export interface BrandAnalysis {
   voice_samples?: string[];
   tabus?: string[];
   content_rules?: string[];
+  /** Posts de referência coletados no onboarding (step refs). URL + timestamp.
+   *  Um extractor futuro le o texto desses posts pra alimentar a voz da IA. */
+  __reference_posts?: {
+    urls: string[];
+    addedAt: string;
+  };
+  /** Aesthetic extraído por Gemini Vision dos brand_image_refs (step visual). */
+  __image_aesthetic?: {
+    description: string;
+    palette?: string[];
+    keywords?: string[];
+    updatedAt?: string;
+  };
 }
 
 export interface UserProfile {

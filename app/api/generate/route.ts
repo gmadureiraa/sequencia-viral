@@ -515,6 +515,8 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
     }
 
     // 1. Gather source content
+    const t0 = Date.now();
+    const timing = { source: 0, ner: 0, writer: 0 };
     let sourceContent = "";
 
     if (sourceType === "link" && sourceUrl) {
@@ -894,9 +896,12 @@ Return valid JSON with exactly 3 variations (data, story, provocative). Cada var
     // Extrai entities/dataPoints/quotes/arguments estruturados do source pra
     // forçar o writer a citar fatos específicos. Custo: ~$0.0005 (Flash).
     // Silent-fail: se der erro, segue sem o facts block.
+    timing.source = Date.now() - t0;
+    const tNer = Date.now();
     const facts = sourceContent
       ? await extractSourceFacts(sourceContent, language)
       : emptyFacts();
+    timing.ner = Date.now() - tNer;
     if (!facts.skipped) {
       console.log(
         `[generate] NER facts: ${facts.entities.length} entities, ${facts.dataPoints.length} dataPoints, ${facts.quotes.length} quotes, ${facts.arguments.length} args (${facts.durationMs}ms, ${facts.inputTokens}+${facts.outputTokens} tok)`
@@ -1016,16 +1021,19 @@ Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer tra
     const ai = new GoogleGenAI({ apiKey: geminiKey });
     const modelId =
       effectiveMode === "layout-only" ? "gemini-2.5-flash" : "gemini-2.5-pro";
-    // Thinking budget aumentado no writer mode (10k → 16k) pra Pro
-    // raciocinar a estrutura 3-atos e escolher dados específicos.
-    // Gabriel pediu qualidade máxima, aceita custo extra.
-    const thinkingBudget = effectiveMode === "layout-only" ? 2000 : 16000;
-    const maxOutputTokens = effectiveMode === "layout-only" ? 10000 : 14000;
+    // Thinking budget calibrado (writer): 12000 dá raciocínio pra estrutura
+    // 3-atos + escolher dados específicos sem pagar pelos tokens de thinking
+    // que o 16000 gerava sem ganho visível de qualidade. Perf: -~3-5s no P50.
+    // Output: 10000 cabe com folga 3 variations × 10 slides (~1500 tokens de
+    // conteúdo), antes 14000 era superdimensionado.
+    const thinkingBudget = effectiveMode === "layout-only" ? 2000 : 12000;
+    const maxOutputTokens = effectiveMode === "layout-only" ? 10000 : 10000;
     const useGrounding = effectiveMode !== "layout-only";
 
     let textResponse: string;
     let inputTokens = 0;
     let outputTokens = 0;
+    const tWriter = Date.now();
     try {
       const genResult = await geminiWithRetry(() =>
         ai.models.generateContent({
@@ -1053,6 +1061,10 @@ Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer tra
         inputTokens = usage.promptTokenCount ?? 0;
         outputTokens = usage.candidatesTokenCount ?? 0;
       }
+      timing.writer = Date.now() - tWriter;
+      console.log(
+        `[generate][timing] source=${timing.source}ms ner=${timing.ner}ms writer=${timing.writer}ms total=${Date.now() - t0}ms mode=${effectiveMode} out_tokens=${outputTokens}`
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const stack = err instanceof Error ? err.stack : undefined;

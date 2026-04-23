@@ -143,8 +143,9 @@ Return ONLY JSON, no markdown:
           temperature: 0.1,
           // 15 keyPoints de 200 chars cada ≈ 3000 chars ≈ 1500 tokens,
           // + summary + quotes + arguments + entities + dataPoints ≈ +1500.
-          // Cap 5000 pra ter folga.
-          maxOutputTokens: 5000,
+          // Cap 3500 já acomoda o JSON completo com folga e reduz latência
+          // (antes 5000, reduzido em 2026-04-22 pra ganhar ~1s no NER).
+          maxOutputTokens: 3500,
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),

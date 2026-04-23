@@ -265,6 +265,9 @@ export default function EditPage(props: {
 
   // Ref do textarea do corpo pra aplicar negrito no range selecionado.
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Guarda o último range de seleção antes do textarea perder foco (o click
+  // no botão B dispara blur antes do click, o que zerava selectionStart/End).
+  const lastBodySelectionRef = useRef<{ start: number; end: number } | null>(null);
 
   // Query customizada pra busca/geração de imagem (quando preenchida,
   // sobrescreve o imageQuery padrão do slide).
@@ -585,8 +588,14 @@ export default function EditPage(props: {
   function applyBoldToBody() {
     const ta = bodyTextareaRef.current;
     if (!ta || !active) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
+    // Se o textarea não está focado (ex: usuário clicou no botão B, o que
+    // dispara blur antes do click), recupera a última seleção salva em
+    // `onSelect`/`onBlur`. Sem isso, selectionStart/End ficam no final do
+    // texto e acabamos inserindo `****` no fim — bug relatado.
+    const isFocused = document.activeElement === ta;
+    const saved = lastBodySelectionRef.current;
+    const start = isFocused ? ta.selectionStart : saved?.start ?? ta.selectionStart;
+    const end = isFocused ? ta.selectionEnd : saved?.end ?? ta.selectionEnd;
     const value = active.body ?? "";
     const selected = value.slice(start, end);
     const before = value.slice(0, start);
@@ -796,7 +805,8 @@ export default function EditPage(props: {
   }
 
   /**
-   * Regenera a CAPA com pipeline 2-pass (Gemini planeja cena → Imagen 4).
+   * Regenera a CAPA com pipeline 2-pass (Gemini planeja cena → Flash Image
+   * Nano Banana, fallback Imagen 4 se Flash Image falhar).
    * Só faz sentido no slide 0 e quando templateId !== "twitter". Demora
    * ~45s — toast avisa.
    */
@@ -1203,6 +1213,11 @@ export default function EditPage(props: {
             </label>
             <button
               type="button"
+              onMouseDown={(e) => {
+                // Evita blur do textarea — preservamos a seleção ativa pra
+                // o click seguinte envolver o range correto com **...**.
+                e.preventDefault();
+              }}
               onClick={applyBoldToBody}
               title="Negrito (⌘B) — selecione um trecho e clique"
               aria-label="Aplicar negrito"
@@ -1229,6 +1244,20 @@ export default function EditPage(props: {
             ref={bodyTextareaRef}
             value={active?.body ?? ""}
             onChange={(e) => updateSlide(activeIndex, { body: e.target.value })}
+            onSelect={(e) => {
+              const t = e.currentTarget;
+              lastBodySelectionRef.current = {
+                start: t.selectionStart,
+                end: t.selectionEnd,
+              };
+            }}
+            onBlur={(e) => {
+              const t = e.currentTarget;
+              lastBodySelectionRef.current = {
+                start: t.selectionStart,
+                end: t.selectionEnd,
+              };
+            }}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
                 e.preventDefault();

@@ -30,7 +30,12 @@ import {
  * - full-photo-bottom: imagem full-bleed + título + body no terço inferior sobre gradient
  */
 
-const ACCENT_DEFAULT = "#FF4500";
+// Default do accent alinhado ao editor (`/app/create/[id]/edit`) que inicializa
+// state com `#7CF067`. Antes era `#FF4500` laranja, o que causava variant
+// `solid-brand` renderizar fundo laranja quando o usuário tinha paleta
+// escolhida mas o render recebia `accentOverride` undefined (ex.: snapshot
+// antigo / draft sem accent_override salvo).
+const ACCENT_DEFAULT = "#7CF067";
 const INK = "#0A0A0A";
 const PAPER = "#F7F5EF";
 const DEFAULT_EDITORIAL_HEADER = "Sequência Viral";

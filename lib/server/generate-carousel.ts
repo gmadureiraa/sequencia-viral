@@ -576,8 +576,11 @@ Source = GROUND TRUTH. Cite NOMES PRÓPRIOS, NÚMEROS/DATAS, FRASES DE IMPACTO l
   const ai = new GoogleGenAI({ apiKey: geminiKey });
   const modelId =
     effectiveMode === "layout-only" ? "gemini-2.5-flash" : "gemini-2.5-pro";
-  const thinkingBudget = effectiveMode === "layout-only" ? 2000 : 16000;
-  const maxOutputTokens = effectiveMode === "layout-only" ? 10000 : 14000;
+  // Perf calibration 2026-04-22: thinkingBudget 16000 → 12000 e output
+  // 14000 → 10000. Paridade com app/api/generate/route.ts. Ganho P50 ~3-5s
+  // sem queda perceptível de qualidade (10k output cabe 3 variations x 10 slides).
+  const thinkingBudget = effectiveMode === "layout-only" ? 2000 : 12000;
+  const maxOutputTokens = effectiveMode === "layout-only" ? 10000 : 10000;
   const useGrounding = effectiveMode !== "layout-only";
 
   const fullSystem = useGrounding

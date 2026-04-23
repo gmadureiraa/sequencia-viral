@@ -229,7 +229,8 @@ export default function NewCarouselPage() {
   } | null>(null);
 
   // Countdown ETA enquanto /api/generate roda. Target 60s — capa
-  // cinematográfica demora ~45s (2-pass: scene planning + Imagen 4).
+  // cinematográfica demora ~45s (2-pass: scene planning + Gemini Flash Image
+  // Nano Banana, com fallback automático pro Imagen 4 se Flash Image falhar).
   const ETA_TARGET_SEC = 60;
   const [etaElapsed, setEtaElapsed] = useState(0);
   const etaStartedRef = useRef<number | null>(null);
@@ -1544,13 +1545,13 @@ export default function NewCarouselPage() {
                 }}
               >
                 {phase === "generating"
-                  ? "Se você mandou link, estou extraindo o conteúdo. Depois gero 6-10 slides."
+                  ? "Lendo fontes, extraindo pontos-chave e escrevendo os slides com Gemini 2.5 Pro."
                   : phase === "images"
                     ? designTemplate === "twitter"
                       ? imagesProgress
                         ? `${imagesProgress.done}/${imagesProgress.total} slides com imagem. Rolando em paralelo.`
                         : "Buscando stock alinhado ao conteúdo de cada slide…"
-                      : "A IA planeja a cena (3s) + Imagen 4 gera (~45s). Vale a pena — capa é a primeira impressão."
+                      : "A IA planeja a cena (3s) + gera imagens com Gemini Flash Image (Nano Banana, ~45s). A capa é a primeira impressão."
                     : "Preparando o editor."}
               </p>
               <div

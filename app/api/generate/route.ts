@@ -975,9 +975,18 @@ Return valid JSON with exactly 3 variations (data, story, provocative). Cada var
     // Extrai entities/dataPoints/quotes/arguments estruturados do source pra
     // forçar o writer a citar fatos específicos. Custo: ~$0.0005 (Flash).
     // Silent-fail: se der erro, segue sem o facts block.
+    //
+    // PIPELINE SIMPLIFICADO PRO INSTAGRAM (24/04 após bug athanasio.team):
+    // Instagram tem 3 etapas pesadas de Gemini antes do writer (OCR dos
+    // slides no extractor, NER aqui, Perplexity depois). Isso triplica
+    // pontos de falha. Pulamos NER + Perplexity e confiamos no OCR da
+    // extração + writer simples. Menos etapas = menos 500/safety/parse
+    // errors. Tradeoff: perde um pouco de citação de fatos explícitos,
+    // mas o writer ainda recebe o content completo com slides transcritos.
+    const shouldRunNer = sourceContent && sourceType !== "instagram";
     timing.source = Date.now() - t0;
     const tNer = Date.now();
-    const facts = sourceContent
+    const facts = shouldRunNer
       ? await extractSourceFacts(sourceContent, language)
       : emptyFacts();
     timing.ner = Date.now() - tNer;
@@ -985,6 +994,8 @@ Return valid JSON with exactly 3 variations (data, story, provocative). Cada var
       console.log(
         `[generate] NER facts: ${facts.entities.length} entities, ${facts.dataPoints.length} dataPoints, ${facts.quotes.length} quotes, ${facts.arguments.length} args (${facts.durationMs}ms, ${facts.inputTokens}+${facts.outputTokens} tok)`
       );
+    } else if (sourceType === "instagram") {
+      console.log("[generate] NER pulado (sourceType=instagram — pipeline simplificado)");
     }
     const factsBlock = formatFactsBlock(facts);
 
@@ -1003,6 +1014,8 @@ Return valid JSON with exactly 3 variations (data, story, provocative). Cada var
     const shouldAutoFactCheck = (() => {
       if (!isPerplexityConfigured()) return false;
       if (mode === "layout-only") return false;
+      // IG skip (pipeline simplificado — ver comentário do NER acima)
+      if (sourceType === "instagram") return false;
       if (useFactCheckFlag) return true;
       if (facts.skipped) return false;
       // Heurística: dataPoint com ano >=2024 ou com $/R$/% ou palavra "bilhão/milhão".
@@ -1174,8 +1187,18 @@ Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer tra
     // - Layout-only mode: Flash + JSON mime (sem grounding — layout é só
     //   formatação, não precisa pesquisa).
     const ai = new GoogleGenAI({ apiKey: geminiKey });
+    // IG source: Flash como writer default. Motivo: IG content (OCR de
+    // slides + caption) é curto e direto, não precisa da "criatividade"
+    // do Pro. Flash é mais rápido (~15s vs 40s), mais obediente em JSON
+    // strict e elimina o ponto de falha do parse que afeta Pro com
+    // prompts de 49K chars. Tradeoff: qualidade editorial um pouco menor
+    // — aceitável dado que IG é ingestão de conteúdo já pronto.
     const modelId =
-      effectiveMode === "layout-only" ? "gemini-2.5-flash" : "gemini-2.5-pro";
+      effectiveMode === "layout-only"
+        ? "gemini-2.5-flash"
+        : sourceType === "instagram"
+          ? "gemini-2.5-flash"
+          : "gemini-2.5-pro";
     // Thinking budget calibrado (writer): 8000 dá raciocínio pra estrutura
     // 3-atos + escolher dados específicos. Antes era 12000 mas gastava ~10s
     // extras sem ganho visível de qualidade (thoughtsTokens P50 ~2200, bem

@@ -1235,11 +1235,38 @@ Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer tra
       // Try extracting JSON from potential wrapper
       const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        result = JSON.parse(jsonMatch[0]);
+        try {
+          result = JSON.parse(jsonMatch[0]);
+        } catch (parseErr) {
+          console.error("[generate] JSON parse falhou mesmo após match:", {
+            userId: user.id,
+            sourceType,
+            sourceUrl: sourceUrl?.slice(0, 200),
+            textResponseLen: textResponse.length,
+            textResponseHead: textResponse.slice(0, 800),
+            parseErrMsg: parseErr instanceof Error ? parseErr.message : String(parseErr),
+          });
+          return Response.json(
+            {
+              error:
+                "Modelo devolveu resposta inválida. Tenta de novo. Se persistir, cole a legenda/texto direto em 'Minha ideia' (modo texto livre).",
+            },
+            { status: 502 }
+          );
+        }
       } else {
-        console.error("[generate] Failed to parse Gemini response:", textResponse.slice(0, 500));
+        console.error("[generate] Nenhum JSON encontrado na resposta Gemini:", {
+          userId: user.id,
+          sourceType,
+          sourceUrl: sourceUrl?.slice(0, 200),
+          textResponseLen: textResponse.length,
+          textResponseHead: textResponse.slice(0, 800),
+        });
         return Response.json(
-          { error: "Failed to parse AI response" },
+          {
+            error:
+              "Modelo devolveu resposta inválida. Tenta de novo. Se persistir, cole a legenda/texto direto em 'Minha ideia' (modo texto livre).",
+          },
           { status: 502 }
         );
       }
@@ -1247,8 +1274,18 @@ Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer tra
 
     // 5. Validate structure
     if (!result.variations || !Array.isArray(result.variations)) {
+      console.error("[generate] Estrutura inválida (sem variations[]):", {
+        userId: user.id,
+        sourceType,
+        sourceUrl: sourceUrl?.slice(0, 200),
+        resultKeys: Object.keys(result ?? {}),
+        variationsType: typeof (result as { variations?: unknown })?.variations,
+      });
       return Response.json(
-        { error: "Invalid AI response structure" },
+        {
+          error:
+            "Modelo devolveu resposta inválida. Tenta de novo. Se persistir, cole a legenda/texto direto em 'Minha ideia' (modo texto livre).",
+        },
         { status: 502 }
       );
     }

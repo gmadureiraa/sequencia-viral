@@ -303,7 +303,14 @@ export default function NewCarouselPage() {
     }
     if (e.status === 401) return "Sessão expirou. Faça login novamente.";
     if (e.status === 503) return "IA indisponível agora. Tenta em 10s.";
-    if (e.status === 502) return "Modelo devolveu resposta inválida. Tenta de novo.";
+    if (e.status === 502) {
+      // Quando erro 502 vier do server com mensagem customizada (ex: dica de
+      // colar legenda como texto), mostra ela em vez do fallback genérico.
+      if (e.message && e.message.toLowerCase().includes("modelo devolveu")) {
+        return e.message;
+      }
+      return "Modelo devolveu resposta inválida. Tenta de novo. Se persistir, cole o texto/legenda direto em 'Minha ideia'.";
+    }
     return e.message;
   }
 

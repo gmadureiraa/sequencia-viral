@@ -62,13 +62,40 @@ const PRICING = {
     output: 0,
   },
   // Unsplash — busca de fotos editoriais stock. Freemium (API pública,
-  // 50 req/h demo, 5000 req/h production). Substitui geração IA quando
-  // decider escolhe mode="stock" (conceito abstrato clássico). Tracking
-  // cosmético — custo zero, mas mantido pra admin enxergar a fonte da
-  // imagem do slide.
+  // 50 req/h demo, 5000 req/h production). Tracking cosmético.
   unsplash: {
     input: 0,
     output: 0,
+  },
+  // Serper.dev — Google Images search. Freemium (2500/mês Starter,
+  // $50/mês Pro). 1 query = 1 request cobrado. Tracking cosmético
+  // pra admin enxergar volume (1 row por chamada).
+  serper: {
+    input: 0,
+    output: 0,
+    perCall: 0.0003, // ~$0.30 / 1000 queries no Starter
+  },
+  // Apify Instagram Scraper — pago por resultado. Tier atual ~$0.02/
+  // request (estimativa conservadora). Usado no instagram-extractor
+  // como scraper primário.
+  apify: {
+    input: 0,
+    output: 0,
+    perCall: 0.02,
+  },
+  // ScrapeCreators — fallback do Apify quando falha. Pago por
+  // request ($0.01 estimativa).
+  scrapecreators: {
+    input: 0,
+    output: 0,
+    perCall: 0.01,
+  },
+  // Supadata — transcrição de áudio (reels IG, YouTube). Freemium.
+  // Tracking cosmético — custo real depende do tier.
+  supadata: {
+    input: 0,
+    output: 0,
+    perCall: 0,
   },
 } as const;
 
@@ -80,6 +107,7 @@ export type PromptType =
   | "concepts"
   | "image"
   | "stock-search"
+  | "image-picker-search"
   | "brand-aesthetic"
   | "brand-analysis"
   | "cover-scene"
@@ -87,6 +115,8 @@ export type PromptType =
   | "post-vision-transcripts"
   | "source-ner"
   | "source-scrape"
+  | "ig-scrape"
+  | "audio-transcript"
   | "fact-check"
   | "feedback-classify";
 
@@ -111,6 +141,16 @@ export function costForImages(
 }
 
 /**
+ * Custo por chamada (API-based pricing — 1 request = 1 cobrança
+ * independente de resposta).
+ */
+export function costForCall(model: ModelId, numberOfCalls: number = 1): number {
+  const p = PRICING[model] as { perCall?: number };
+  const perCall = typeof p?.perCall === "number" ? p.perCall : 0;
+  return Math.round(perCall * numberOfCalls * 1_000_000) / 1_000_000;
+}
+
+/**
  * Grava uma linha em `generations` pra auditoria. Falha silenciosa — se
  * não der pra registrar, a chamada IA não deve quebrar. Aceita cliente
  * opcional pra reuso quando a rota já tem um em mãos.
@@ -119,7 +159,17 @@ export async function recordGeneration(params: {
   userId: string;
   carouselId?: string | null;
   model: ModelId;
-  provider: "google" | "anthropic" | "openai" | "perplexity" | "firecrawl" | "unsplash";
+  provider:
+    | "google"
+    | "anthropic"
+    | "openai"
+    | "perplexity"
+    | "firecrawl"
+    | "unsplash"
+    | "serper"
+    | "apify"
+    | "scrapecreators"
+    | "supadata";
   inputTokens: number;
   outputTokens: number;
   costUsd: number;

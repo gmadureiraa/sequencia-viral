@@ -607,6 +607,23 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
           "@/lib/instagram-extractor"
         );
         sourceContent = await extractInstagramContent(sourceUrl);
+        // Track scrape IG (Apify primário + possível ScrapeCreators
+        // fallback + Gemini Vision OCR dos slides). Admin vê volume.
+        if (sb) {
+          try {
+            await sb.from("generations").insert({
+              user_id: user.id,
+              model: "apify",
+              provider: "apify",
+              input_tokens: 0,
+              output_tokens: 0,
+              cost_usd: 0.02,
+              prompt_type: "ig-scrape",
+            });
+          } catch {
+            /* silent */
+          }
+        }
       } catch (err) {
         console.error("[generate] Instagram extraction failed:", err);
         return Response.json(

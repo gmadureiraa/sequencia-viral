@@ -8,7 +8,11 @@ import {
 } from "@/lib/carousel-templates";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
-import { costForImages, recordGeneration } from "@/lib/server/generation-log";
+import {
+  costForCall,
+  costForImages,
+  recordGeneration,
+} from "@/lib/server/generation-log";
 import { saveToUserGallery } from "@/lib/server/user-images";
 import {
   getCachedThemeImage,
@@ -1052,6 +1056,31 @@ export async function POST(request: Request) {
         fetchUnsplashImages(),
       ]);
 
+      // Log de uso das 2 fontes — admin precisa ver volume de cada API.
+      // Custo cosmético (Unsplash grátis; Serper $0.0003/query).
+      if (serperImgs.length > 0) {
+        void recordGeneration({
+          userId: user.id,
+          model: "serper",
+          provider: "serper",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: costForCall("serper"),
+          promptType: "image-picker-search",
+        });
+      }
+      if (unsplashImgs.length > 0) {
+        void recordGeneration({
+          userId: user.id,
+          model: "unsplash",
+          provider: "unsplash",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          promptType: "image-picker-search",
+        });
+      }
+
       // Dedupe por URL. Intercala serper + unsplash pra variedade visual
       // (em vez de 40 do google + 30 unsplash em blocos).
       const seen = new Set<string>();
@@ -1131,6 +1160,17 @@ export async function POST(request: Request) {
               })
             )
             .filter((img: { url: string }) => !!img.url);
+
+          // Log da chamada Serper (fluxo auto, 1 query = 1 cobrança).
+          void recordGeneration({
+            userId: user.id,
+            model: "serper",
+            provider: "serper",
+            inputTokens: 0,
+            outputTokens: 0,
+            costUsd: costForCall("serper"),
+            promptType: "image-picker-search",
+          });
 
           if (images.length === 0) {
             console.warn(

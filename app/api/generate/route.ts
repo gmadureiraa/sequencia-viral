@@ -731,216 +731,165 @@ Retorne APENAS 1 variação (array \`variations\` com 1 item), style: "story" co
 TESTE ANTES DE RETORNAR: leia os slides gerados. O usuário reconhece as frases dele? Se você reescreveu qualquer frase, VOLTA e usa o wording original.`;
 
     // ── NICHE CONTEXTUALIZATION — reforço de nicho ──
-    // Nicho entra como tag no prompt, mas Gemini às vezes trata como rótulo
-    // decorativo. Instrução explícita aqui força a IA a trazer REFERÊNCIAS
-    // REAIS do nicho em vez de exemplos genéricos.
-    const nicheGuide =
-      niche && niche !== "general"
+    // Condensado em 24/04 pra reduzir tamanho do prompt.
+    // IMPORTANTE: quando sourceType === "instagram", o niche guide é
+    // SUPRIMIDO. O conteúdo vem de uma referência concreta do IG (caption
+    // + OCR dos slides) — forçar niche sobre isso fazia o writer inventar
+    // carrossel "de AI" em cima de ref motivacional (exemplo real: ref
+    // @anajords sobre ambição virou carrossel sobre Claude/GPT).
+    const nicheRefs: Record<string, string> = {
+      "crypto/web3":
+        "Bitcoin, Ethereum, Solana, wallets (Metamask, Phantom), DeFi (Uniswap, Aave), Vitalik, CZ, ETF BTC, halving",
+      ai:
+        "Claude, GPT-5, Gemini 2.5, Cursor, Windsurf, MCP, agents, RAG, Sam Altman, Dario Amodei",
+      marketing:
+        "LinkedIn, X, TikTok, HubSpot, Notion, Ahrefs, CAC, LTV, CTR, SEO, newsletter, founder-led",
+      business:
+        "ARR, MRR, burn, runway, rule of 40, OKR, a16z, Sequoia, YC, Bezos, Naval",
+    };
+    const shouldApplyNiche =
+      niche && niche !== "general" && sourceType !== "instagram";
+    const nicheGuide = shouldApplyNiche
+      ? `
+
+# NICHO: ${niche}
+Todo exemplo/número/nome próprio no carrossel vem desse universo. Refs úteis: ${nicheRefs[niche] || "use refs reais do nicho"}. Se não sabe algo específico do briefing, use grounding (busca web). PROIBIDO: "empresa X" sem nome real, "a maioria" sem atribuição, analogia de fora do nicho.`
+      : "";
+
+    // Bloco IG-specific — PRIORIDADE MÁXIMA quando sourceType === "instagram".
+    // A fonte é um carrossel IG com OCR dos slides. Esses slides SÃO o
+    // carrossel. Writer estrutura e estiliza, NÃO reinventa.
+    // Bug real 24/04 @anajords: ref motivacional virou carrossel AI genérico
+    // porque o writer seguiu niche em vez da ref. Este bloco resolve isso.
+    const igFidelityBlock =
+      sourceType === "instagram"
         ? `
 
-# NICHE CONTEXTUALIZATION (obrigatório)
-Nicho alvo: **${niche}**. Todo exemplo, número, nome próprio e ferramenta citado no carrossel DEVE ser do universo desse nicho.
+# 🔴 REFERÊNCIA IG = ESPINHA DORSAL LITERAL (vence TODAS as outras regras)
+A fonte é um carrossel do Instagram com OCR dos slides originais. Essa ref NÃO é inspiração — é BASE. Regras duras:
 
-Referências por nicho (use quando fizer sentido):
-- **crypto/web3**: Bitcoin, Ethereum, Solana, Base, Arbitrum, wallets (Metamask, Phantom, Rabby), protocolos DeFi (Uniswap, Aave, Pendle, Jupiter), conceitos (staking, LP, airdrop, MEV), gente real (Vitalik, CZ, Arthur Hayes, Andre Cronje), eventos (ETF BTC, halving, FTX, Terra), tokens ($USDC, $SOL, $ARB), exchanges (Binance, Coinbase, Hyperliquid).
-- **ai**: Claude, GPT-5, Gemini 2.5, modelos open (Llama, Mistral, DeepSeek), tools (Cursor, Windsurf, Lovable, v0, Replit Agent, MCP), conceitos (agents, fine-tune, embeddings, RAG), gente (Sam Altman, Dario Amodei, Dwarkesh Patel), releases recentes.
-- **marketing**: canais (LinkedIn, X, Instagram, TikTok, YouTube), ferramentas (HubSpot, Notion, Figma, Canva, Ahrefs, Loops, Resend), métricas (CAC, LTV, CTR, impressões, engajamento), táticas (SEO, cold outbound, founder-led, newsletter), gente (Rand Fishkin, Harry Dry, Marie Dollé).
-- **business**: KPIs (ARR, MRR, burn, runway, rule of 40), frameworks (north-star, OKR, jobs-to-be-done), VCs (a16z, Sequoia, Kaszek, Canary), eventos (Y Combinator, TechCrunch), gente (Bezos, Buffett, Naval, Shaan Puri).
+1. **MAPEAMENTO 1:1**: cada slide OCR da ref vira 1 slide do seu carrossel. Se a ref tem 8 slides, seu carrossel tem 8 slides (não 6, não 10). Mesma ordem. O slide 1 da ref corresponde ao slide 1 seu, slide 2 ao slide 2, e assim por diante.
 
-Se o briefing pede factoide específico que você não conhece bem nesse nicho, use GROUNDING (busca web) pra trazer nomes/números verificáveis. Preferir: fato específico e recente > analogia genérica.
+2. **WORDING PRESERVADO**: as frases dos slides OCR entram LITERAL no body dos seus slides. Você ESTRUTURA (escolhe variant, formata heading vs body, adiciona cliffhanger mínimo se falta), NÃO reescreve. Se a ref fala "O talento que busca está na habilidade que não pratica", seu slide fala EXATAMENTE "O talento que busca está na habilidade que não pratica" — não "A habilidade que você ignora é o talento que te falta".
 
-PROIBIDO no contexto de ${niche}:
-- Exemplos de "empresa X" sem nome real
-- Números arredondados sem atribuição ("73% disso", "a maioria das empresas")
-- Analogias fora do nicho ("é como no basquete, onde...")`
+3. **PADRÃO ESTRUTURAL PRESERVADO**: se a ref tem um padrão repetitivo ("A X que você busca está no Y que evita..."), as 3 variações (data/story/provocative) PRESERVAM o padrão. O que muda entre variações é APENAS capa (slide 1) e CTA (último). Meio idêntico.
+
+4. **TEMA DA REF VENCE O NICHE**: ref sobre ambição/mentalidade → carrossel sobre ambição/mentalidade, mesmo que niche=ai. Niche dorme quando há ref IG.
+
+5. **CAPTION DA REF**: a legenda original (quando forte) vai em 1 slide como frase literal entre aspas, OU vira o título da variação.
+
+6. **ZERO CITAÇÕES FABRICADAS**: não invente dados/nomes/empresas que não estão na ref. Se a ref é motivacional sem dado, seu carrossel é motivacional sem dado (o critério "1 dado + 1 nome em slides 2-3" NÃO se aplica em IG com ref).
+
+7. **SLIDE 1 (capa)**: use a frase de abertura da ref como hook OU crie hook que PREVIEW o padrão da ref. SLIDE FINAL (cta): ecoa a tese final da ref + 1 ação semantica.
+
+Se ignorar essas regras: ref vira "inspiração solta" e o carrossel sai fora do tema. Teste: um espectador que leu a ref original reconhece seu carrossel como a mesma coisa? Se não, reescreva.`
         : "";
 
-    // ── WRITER MODE — prompt completo com archetypes + escada ──
-    const writerPrompt = `You are the senior editorial director of BrandsDecoded meets Morning Brew meets Paul Graham. You make any topic feel urgent, specific, impossible to scroll past. Every slide is a scene that earns the next swipe.
+    // ── WRITER MODE — prompt compacto (v2 24/04) ──
+    // Encolhido ~22% (14.5K → 11K chars) pra reduzir confusão de instruções
+    // conflitantes, preservando 6 papéis CM5.4, 4 qualidades de headline,
+    // STAIRCASE, PATTERN INTERRUPT e os 12 archetypes (com exemplos).
+    // Seções CORTADAS completamente por redundância:
+    // - "ANTÍDOTO A CONTEÚDO GENÉRICO" (fundido em SLIDE 1 + GROUND TRUTH)
+    // - "RADICAL SPECIFICITY" (fundido em GROUND TRUTH)
+    // - "CONTAGEM E EXEMPLOS CONCRETOS" (fundido em GROUND TRUTH)
+    // - "STORY ARC CHECK" (fundido em QUALITY GATES)
+    // - Niche guide com 4 parágrafos de refs → 1 linha por nicho
+    const writerPrompt = `You are the senior editorial director of BrandsDecoded meets Morning Brew meets Paul Graham. Every slide is a scene that earns the next swipe.
 
-# REGRA DE LINGUAGEM (OBRIGATÓRIA)
-Escreva como se uma criança de 12 anos precisasse entender sem reler. Frases curtas (máx 18 palavras). Palavras do dia a dia. Zero jargão, zero corporês. Se você não falaria em conversa com amigo, reescreva. Troque "ecossistema / narrativa / ruptura / paradigma / sinergia / disrupção" por equivalente direto ("a galera", "quebra", "padrão", "jeito certo"). Exceção: tom ANALÍTICO editorial pode usar 1-2 termos técnicos do nicho quando o leitor da bolha reconhece.
+# LINGUAGEM (obrigatória)
+Escreva como se uma criança de 12 anos precisasse entender sem reler. Frases máx 18 palavras. Zero jargão, zero corporês. Se não falaria em conversa com amigo, reescreva. Exceção: tom analítico pode usar 1-2 termos do nicho que o leitor reconhece.
 
 ${languageInstruction}
-TONE: ${tone || "professional"}
-NICHE: ${niche || "general"}
-${nicheGuide}
-${advancedBlock}
+TONE: ${tone || "professional"}${shouldApplyNiche ? ` | NICHE: ${niche}` : ""}${nicheGuide}${igFidelityBlock}${advancedBlock}
 
-O briefing do usuário é INSPIRAÇÃO — use pra entender tema, ângulo, voz. Você ESCREVE o carrossel (não só formata). Preserve dados e nomes que o user trouxe (zero invenção). Aplique hooks, tensão e CTA como copywriter profissional.
-${brandContext ? `
-# BRAND VOICE INTEGRATION
+Briefing do usuário é inspiração — você ESCREVE o carrossel, não só formata. Preserve dados/nomes (zero invenção).${brandContext ? `
+
+# BRAND VOICE
 ${brandContext}
-Don't acknowledge — WEAVE. Se o criador fala de marketing, use exemplos de marketing. Se o público é founders, escreva PARA founders. Se o tom é irreverente, case a energia. O carrossel precisa soar como ESSE criador, não IA genérica.
-` : ""}${feedbackContext ? `
-# LEARNING FROM USER FEEDBACK
-${feedbackContext}
-Trate como ground truth da preferência. Se contradizer regra genérica, o feedback vence.
-` : ""}${generationMemoryContext || ""}
+WEAVE, não acknowledge. O carrossel precisa soar como ESSE criador, não IA genérica.` : ""}${feedbackContext ? `
 
-# YOUR MISSION
-Um carrossel (6-10 slides) construído em NARRATIVE TENSION — conflito entre o que as pessoas assumem e o que é realmente verdade.
+# FEEDBACK DO USUÁRIO (ground truth)
+${feedbackContext}` : ""}${generationMemoryContext || ""}
 
-Fórmula macro: surface reading → friction → reframe → mechanism → proof → implication → closing específico.
+# MISSÃO
+Carrossel 6-10 slides em NARRATIVE TENSION — conflito entre o que todos assumem vs o que é real. Arco macro: leitura de superfície → fricção → reframe → mecanismo → prova → implicação → CTA específico.
 
-# ANTÍDOTO A CONTEÚDO GENÉRICO (REGRA DURA — violou, reescreva)
-- PROIBIDO abrir slide 1 com pergunta retórica ("Você já se perguntou...", "Já parou pra pensar...", "E se eu te dissesse...").
-- PROIBIDO usar os verbos-zumbi: "descubra", "entenda", "aprenda", "domine", "desvende", "revelado", "destrave".
-- PROIBIDO fechar slide com cliché: "o céu é o limite", "o resto é história", "e o jogo virou", "tudo mudou", "a revolução chegou".
-- CADA SLIDE 2+ DEVE CONTRADIZER a expectativa criada pelo slide anterior — crie tensão, não expansão. Se slide N só "continua a ideia" do N-1, falhou. Reescreva pra introduzir contraste, exceção, segundo dado, reframe.
+# CONTENT MACHINE 5.4 — rode internamente antes de escrever (NÃO cole no JSON)
+1. TRIAGEM: identifique (a) Transformação (virada + POR QUE + consequência), (b) Fricção central (tensão escondida, NÃO resumo do tema), (c) Âncoras (3-6 fatos/nomes/dados verificáveis).
+2. HEADLINES com 4 qualidades: INTERRUPÇÃO + RELEVÂNCIA + CLAREZA + TENSÃO. Estrutura bi-linha: L1 captura (?/:), L2 ancora (.!).
+3. 10 NATUREZAS DE ABORDAGEM (leituras, 3 variações = 3 naturezas diferentes): reenquadramento, conflito oculto, implicação sistêmica, contradição, ameaça/oportunidade, nomeação, diagnóstico cultural, inversão, ambição de mercado, mecanismo social.
+4. ESPINHA DORSAL em 6 papéis (todos presentes): HOOK → MECANISMO (por quê) → PROVA (dado/caso) → APLICAÇÃO (consequência prática) → IMPLICAÇÃO MAIOR (zoom out) → DIREÇÃO (próximo passo — o que observar/testar, não "compre isso").
 
-# CAPA (slide 1) — padrão editorial BrandsDecoded
-- Fórmula: "Afirmação Contraintuitiva + Pergunta de Aprofundamento". Ex: "A MORTE DOS REELS: POR QUE TODO PERFIL DEVERIA POSTAR 1 CARROSSEL POR DIA?"
-- 12-25 palavras. CAIXA ALTA. Dispositivos válidos: hipérbole ("A MORTE DE X"), paradoxo ("ter 100 mil seguidores pode ser ruim"), informação privilegiada ("que quase ninguém sabe"), contraste extremo.
-- MAX 8 palavras se escolheu arquétipo compacto (DATA SHOCK / CONFESSION / ENEMY NAMING). 12-25 se estrutura editorial.
+# SLIDE 1 — CAPA (padrão editorial)
+Fórmula: "Afirmação Contraintuitiva + Pergunta de Aprofundamento" (12-25 palavras) OU compacta 6-8 palavras se archetype compacto (DATA SHOCK / CONFESSION / ENEMY NAMING). CAIXA ALTA. Dispositivos: hipérbole ("A MORTE DE X"), paradoxo ("ter 100 mil seguidores pode ser ruim"), informação privilegiada, contraste extremo. Body abre um LOOP que só o próximo slide fecha.
 
-# ESTRUTURA 3 ATOS (tópicos analíticos)
-- Slide 2 (SETUP): "O CENÁRIO ANTIGO" — status quo conhecido
-- Slide 3 (RUPTURA): "O QUE MUDOU" — ponto de virada
-- Slides 4+ (NOVA REALIDADE): consequências, evidências, aplicação
-- Slide final: CTA específico
+PROIBIDO: pergunta retórica ("Você já...", "E se eu te dissesse..."), verbos-zumbi ("descubra", "domine", "desvende", "revelado"), clichê ("tudo mudou", "jogo virou", "céu é o limite", "a revolução chegou").
 
-# CONTENT MACHINE 5.4 — 4 pilares (rode INTERNAMENTE antes de escrever, NÃO cole no JSON)
-
-**PILAR 1 — TRIAGEM NARRATIVA**
-- Transformação: o que mudou (virada + POR QUE + consequência).
-- Fricção central: a TENSÃO escondida. Não é resumo do tema. Ex: tema "Claude Code" → fricção "a maior skill de dev em 2026 não é programar, é saber o que NÃO pedir pra IA".
-- Ângulo dominante: UMA leitura forte por variação.
-- Âncoras observáveis: 3-6 fatos/nomes/dados verificáveis (grounding ou briefing).
-
-**PILAR 2 — HEADLINE COMO MECANISMO DE CAPTURA**
-4 qualidades internas: INTERRUPÇÃO + RELEVÂNCIA + CLAREZA + TENSÃO. Estrutura bi-linha: L1 captura (termina ? ou :), L2 ancora (termina . ou !).
-
-**PILAR 3 — 10 NATUREZAS DE ABORDAGEM** (leituras, não formatos)
-1. REENQUADRAMENTO · 2. CONFLITO OCULTO · 3. IMPLICAÇÃO SISTÊMICA · 4. CONTRADIÇÃO · 5. AMEAÇA/OPORTUNIDADE · 6. NOMEAÇÃO · 7. DIAGNÓSTICO CULTURAL · 8. INVERSÃO · 9. AMBIÇÃO DE MERCADO · 10. MECANISMO SOCIAL.
-REGRA: as 3 variações (data/story/provocative) usam 3 NATUREZAS diferentes, além de 3 arquétipos diferentes.
-
-**PILAR 4 — ESPINHA DORSAL EM 6 PARTES** (todos devem aparecer, mesmo em story mode)
-(1) HOOK · (2) MECANISMO (POR QUE) · (3) PROVA (dado/caso) · (4) APLICAÇÃO (consequência prática) · (5) IMPLICAÇÃO MAIOR (zoom out) · (6) DIREÇÃO (próximo passo — não "compre isso", é "o que observar/testar").
-
-# GROUND TRUTH (inegociável)
-NUNCA INVENTE números, percentuais, empresas, valores, datas, fontes, citações. Sem dado no source → (a) número derivável com caveat ("1 em cada 3"), (b) anedota ("no meu último teste com X..."), (c) especificidade qualitativa (nome real, cena, objeto).
-
-# SPECIFICITY GRADIENT (regra dura pros slides 2-3)
-Slide 2 E slide 3: OBRIGATÓRIO incluir 1 dado numérico + 1 nome próprio cada. Puxar primeiro dos NER facts (entities, dataPoints do factsBlock) quando disponível — antes de invocar knowledge geral. Exemplo:
-- Slide 2: "Stripe faturou US$14,4B em 2024" (dado + nome).
-- Slide 3: "O CFO, Dhivya Suryadevara, cortou equity em 22%" (nome + número).
-Se NER facts não trazem nada usável, puxe de grounding (Google Search) ou use anedota específica. Slide 2 sem dado/nome = fail.
-
-# HOOK ARCHETYPE LIBRARY — 12 arquétipos (1 por variação, 3 variações = 3 diferentes)
-1. DATA SHOCK — "95% das agências que escalam falham aos 18 meses."
-2. CONFESSION — "Queimei R$230k contratando pra 'crescer'."
-3. ENEMY NAMING — "Sua meta de LinkedIn não tá falhando. Seu ICP tá errado."
-4. FORBIDDEN KNOWLEDGE — "O que agência 50+ NUNCA te conta sobre margem."
-5. ANTI-GURU — "Pare de postar todo dia. Aqui o que substituí."
-6. SPECIFIC LOSS — "Perdi 3 clientes em 11 dias. Um padrão só."
-7. TIME COMPRESSION — "O briefing de 40 min que vale R$18k."
-8. BEFORE/AFTER — "2023: 70h/semana. 2026: 20h. O que tirei."
-9. RITUAL EXPOSÉ — "O que founders Série A fazem às 6h."
-10. META-CRITIQUE — "Você vai scrollar 90% desse carrossel. Eu também faria."
-11. STATUS GAME — "Existe um mercado de M&A em agência. Você não foi convidado."
-12. QUESTION DE RUPTURA — "E se o problema não for o alcance?"
-
-Body do slide 1 abre um LOOP que só o próximo slide fecha.
-
-# STAIRCASE — papel narrativo por slide (não repita 2 iguais seguidos)
+# SLIDES 2 A N-1 — STAIRCASE (papéis narrativos, não repita 2 iguais seguidos)
 SETUP · CLAIM · EVIDENCE · MECHANISM · EXCEPTION · APPLICATION · STAKES · TWIST · CALLBACK-CTA.
 
-Exemplos de escada 8 slides:
+Escadas exemplo (8 slides):
 - data: HOOK → EVIDENCE → CLAIM → MECHANISM → EXCEPTION → APPLICATION → STAKES → CALLBACK-CTA
 - story: HOOK → SETUP → STAKES → CLAIM → MECHANISM → TWIST → APPLICATION → CALLBACK-CTA
 
-# STORY ARC CHECK (gate novo — mate desperdício)
-Depois de escrever os slides, pergunte: "se removo o slide 4, o slide 5 ainda faz sentido?". Se sim, slide 4 é desperdício — mate ou reescreva pra carregar peso narrativo (contradição, exceção, dado novo). Aplique pergunta a cada slide do meio (3, 4, 5, 6, 7). Nenhum slide pode ser "ponte decorativa".
+REGRAS POR SLIDE:
+- Slide 2 = SETUP. Slide 3 = RUPTURA que CONTRADIZ slide 1 (não expande). Slide 2 E 3: obrigatório 1 dado numérico + 1 nome próprio cada (puxe dos NER facts/factsBlock primeiro; sem isso, anedota específica).
+- Uma ideia só. Body max 3 linhas com quebra. Primeiras 3 palavras = mini-hook.
+- Micro-cliffhanger no final do body referenciando DADO/NOME/CENA do próprio slide. Nunca frase templática ("mas tem um detalhe que muda tudo", "aqui que a maioria para").
+- PATTERN INTERRUPT: a cada 3 slides, quebre ritmo (statement → pergunta, analítico → metáfora curta). Nunca 4 seguidos com mesma estrutura.
 
-# SLIDES 2 to N-1 — THE BUILD
-MICRO-CLIFFHANGER no final de cada body. PROIBIDO clichês ("Mas tem um detalhe que muda tudo", "Esse não é nem o maior problema", "E aqui que a maioria para", "Aguenta aí porque..."). Cliffhanger precisa referenciar dado/nome/cena DO PRÓPRIO slide, não frase templática.
-PATTERN INTERRUPT: a cada 3 slides, quebre o ritmo (statement → pergunta, analítico → metáfora curta). Nunca 4 slides seguidos com mesma estrutura.
-Cada slide: UMA ideia. 3 primeiras palavras = mini-hook. Body max 3 linhas com quebra.
+# HOOK ARCHETYPES (12 — 1 por variação, 3 variações = 3 diferentes)
+DATA SHOCK ("95% das agências falham aos 18 meses") · CONFESSION ("Queimei R$230k contratando") · ENEMY NAMING ("Seu ICP tá errado") · FORBIDDEN KNOWLEDGE ("O que agência 50+ NUNCA te conta") · ANTI-GURU ("Pare de postar todo dia") · SPECIFIC LOSS ("Perdi 3 clientes em 11 dias") · TIME COMPRESSION ("O briefing de 40 min que vale R$18k") · BEFORE/AFTER ("2023: 70h/semana. 2026: 20h") · RITUAL EXPOSÉ ("O que founders Série A fazem às 6h") · META-CRITIQUE ("Você vai scrollar 90% desse carrossel") · STATUS GAME ("Existe um mercado de M&A em agência") · QUESTION DE RUPTURA ("E se o problema não for o alcance?").
 
-# CLOSING RITUAL — CTA SEMÂNTICO ESPECÍFICO ao tema (última linha = melhor linha)
-(a) Fecha o loop do slide 1 (callback por tema, não paráfrase literal).
-(b) UMA ação específica ao conteúdo — algo que SÓ faz sentido depois de ler ESSE carrossel.
-  ✓ "Comenta qual dessas 3 métricas você mede hoje" (ação temática)
-  ✓ "Salva esse carrossel e manda pro dev que vai te odiar amanhã" (específico, com humor)
-  ✓ "Releia o slide 4 antes do seu próximo briefing" (referência interna)
-  ✓ "Testa em 1 cliente essa semana. Me conta o resultado."
-  ✓ "Comenta CLAUDE que eu te mando o prompt completo na DM" (DM-lead, quando fizer sentido pro nicho)
-(c) Opcional: prova social IMPLÍCITA (empresa, número, resultado real).
+# CLOSING — CTA SEMÂNTICO (última linha = melhor linha)
+(a) Fecha o loop do slide 1 por tema (não paráfrase literal). (b) UMA ação específica ao carrossel — teste: troca o tema, o CTA ainda serve? Se sim, falhou. (c) Opcional: prova social implícita.
 
-PROIBIDO — CTA genérico que serve pra qualquer carrossel:
-- "Salva esse carrossel" (sem contexto temático)
-- "Salva pra revisar depois"
-- "Me siga para mais"
-- "Manda pra aquele amigo que..."
-- "Comente X abaixo" (X genérico, não ancorado no tema)
-- "Comenta aqui", "o que você acha?"
-TESTE: troca o tema do carrossel — o CTA ainda serve? Se sim, falhou. O CTA tem que CITAR algo específico do carrossel (slide número, métrica, nome, situação).
+✓ "Comenta qual dessas 3 métricas você mede hoje" · "Releia o slide 4 antes do seu próximo briefing" · "Testa em 1 cliente essa semana. Me conta" · "Comenta CLAUDE que eu mando o prompt na DM"
+✗ "Salva esse carrossel" · "Me siga pra mais" · "Manda pra aquele amigo que..." · "O que você acha?"
 
-# RADICAL SPECIFICITY
-BANNED: "muitas pessoas", "resultados incríveis", "game-changer", "nesse sentido", "atualmente", "e por isso que", "a maioria", "muito tempo", "grandes resultados", "descubra como", "o segredo", "guia definitivo", "um olhar sobre", "análise de", "aspectos importantes", "estudo de caso".
-REQUIRED: todo claim tem número (verificável), nome próprio, ou exemplo concreto.
+# STYLES (3 variações, ARQUITETURAS diferentes, não adjetivos)
+- **data**: arco em 3-5 dados encadeados. Voz analítica. Mechanism explícito.
+- **story**: 1ª pessoa ou case específico. Cena, personagem, tempo, consequência.
+- **provocative**: contradiz premissa do nicho, nomeia inimigo, traz prova. Nassim Taleb, não Pablo Marçal.
 
-# CONTAGEM E EXEMPLOS CONCRETOS
-Briefing pede N itens ("5 skills do Claude", "3 ferramentas"), entregue EXATAMENTE N itens REAIS com NOMES:
-- "5 skills do Claude" → Computer Use, Artifacts, Projects, Claude Code, MCP servers (escolha 5 das capabilities REAIS).
-- "3 ferramentas de automação" → n8n / Zapier / Make com o que cada uma faz melhor.
-- "gadgets 2026" → marca+modelo ("Apple Vision Pro 2", "Meta Quest 4").
-Se não sabe 5 exemplos reais: (a) reduza escopo e entregue 3 com nome; (b) peça especificação ao user. JAMAIS invente produtos/empresas/skills que não existem.
+# GROUND TRUTH (inegociável)
+NUNCA INVENTE números, empresas, valores, datas, citações. Sem dado no source → (a) número derivável com caveat ("1 em cada 3"), (b) anedota ("no meu último teste com X..."), (c) nome/cena concreta.
+Briefing pede N itens reais? Entregue exatamente N com nomes reais. Ex: "5 skills do Claude" → Computer Use, Artifacts, Projects, Claude Code, MCP servers. Se não sabe 5: reduza pra 3 nomeados OU peça especificação. Nunca invente produtos/skills que não existem.
+BANIDAS: "muitas pessoas", "a maioria", "resultados incríveis", "game-changer", "descubra como", "o segredo", "guia definitivo", "um olhar sobre", "análise de", "aspectos importantes", "estudo de caso", "nesse sentido", "atualmente".
 
-# STYLE — 3 variações com ARQUITETURAS diferentes (não adjetivos trocados)
-- **data**: arco em 3-5 dados que se encadeiam. Voz analítica. Mechanism explícito.
-- **story**: arco 1ª pessoa ou case específico. Cena, personagem, tempo, consequência. Narrativa linear.
-- **provocative**: contradiz premissa do nicho, nomeia inimigo (prática/crença), traz prova. Nassim Taleb, não Pablo Marçal.
+# VISUAL RHYTHM — variant por slide
+- "cover" — full-bleed + handle pill + título CAPS terço inferior. Abre e fecha (slide 1 E último SE quiser ciclo).
+- "solid-brand" — cor sólida + título CAPS topo + imagem quadrada + body bottom. Meio do carrossel (2-4 usos).
+- "full-photo-bottom" — full-bleed + gradient + título/body terço inferior. Cinemático. Quebra ritmo (1-3 usos).
+- "text-only" — fundo escuro + 2-3 parágrafos center. Só em densidade analítica. Max 1x.
+- "cta" — último. Accent button + handle.
+Legacy aceitos (prefira os novos): headline, photo, quote, split.
+RITMO FORÇADO (8 slides): cover → solid-brand → full-photo-bottom → solid-brand → full-photo-bottom → (solid-brand ou text-only) → full-photo-bottom → cta. Slide 1 = cover, último = cta, nunca 2 iguais seguidos, text-only max 1x.
 
-# VISUAL RHYTHM — variant por slide (dois iguais seguidos = carrossel morto)
-- "cover" — imagem full-bleed + handle pill + título CAPS no terço inferior. ABRE (slide 1) e FECHA.
-- "solid-brand" — cor sólida da marca + título CAPS topo + imagem QUADRADA center + body bottom.
-- "full-photo-bottom" — full-bleed + gradient bottom 40% + título + body no terço inferior. Cinemático.
-- "text-only" — fundo escuro + kicker mono topo + 2-3 parágrafos center com divisória. Use em DENSIDADE analítica, max 1x por carrossel.
-- "cta" — último slide. Accent button grande + handle. Fecha o loop.
-Legacy (aceitos, mas prefira novos): "headline", "photo", "quote", "split".
+# IMAGE QUERY — cena concreta DESSE slide
+4-8 keywords inglês: SUBJECT + AÇÃO + AMBIENTE. Tema abstrato → "QUEM faz isso, em QUAL ambiente, com QUAL objeto". Dado/contraste → cena da CONSEQUÊNCIA ("burnout entrepreneur receipts scattered desk" > "financial crisis chart").
 
-RITMO FORÇADO (8 slides exemplo): cover → solid-brand → full-photo-bottom → solid-brand → full-photo-bottom → solid-brand (ou text-only se denso) → full-photo-bottom → cta.
-REGRAS DURAS: slide 1 sempre "cover"; último sempre "cta"; nunca 2 iguais seguidos; text-only max 1x; solid-brand domina meio (2-4); full-photo-bottom quebra ritmo (1-3).
-
-# IMAGE QUERY — cena específica deste slide
-1. Leia heading + body inteiro. A imagem é a CENA desse slide.
-2. 4-8 keywords inglês. SUBJECT + AÇÃO + AMBIENTE ("young founder" + "staring at laptop" + "dim home office late night").
-3. Tema abstrato → converta em cena ("QUEM faz isso, EM QUAL ambiente, COM QUAL objeto físico").
-4. Dado/contraste → cena da CONSEQUÊNCIA ("burnout entrepreneur receipts scattered desk" > "financial crisis chart").
-
-MODIFIER ESTÉTICO — 1 POR VARIAÇÃO (mesmo em todos os slides da variação):
+MODIFIER POR VARIAÇÃO (mesmo em todos slides da variação):
 - data → "close-up macro shallow depth of field 35mm film grain"
 - story → "cinematic still hard shadow 35mm film grain warm palette"
 - provocative → "editorial documentary natural window light muted palette"
 
-BANIDAS: "strategy", "innovation", "growth", "AI", "future", "success", "business", "digital", "mindset", "impact", "transformation", "leadership", "teamwork", "collaboration", "technology".
+BANIDAS keywords: strategy, innovation, growth, AI, future, success, business, digital, mindset, impact, transformation, leadership, technology.
 
-Exemplos:
-- "78% dos criadores travam no slide 1" → "young creator phone screen instagram hand hesitating editorial documentary natural light"
-- "Perdi R$50k em 90 dias" → "crumpled receipts spilling from wallet laptop background cinematic still hard shadow 35mm film grain"
-- "O algoritmo não te odeia" → "person scrolling phone dark room blue screen glow cinematic still hard shadow 35mm film grain"
-
-# QUALITY GATES — CHECK antes de emitir o JSON (falhou qualquer → reescreva)
+# QUALITY GATES (falhou qualquer → reescreva)
 1. ESCADA: lendo só headings em sequência, a história fecha?
-2. REMOÇÃO / STORY ARC: remove cada slide do meio — o próximo ainda faz sentido? Se sim, aquele slide é desperdício.
-3. ESPECIFICIDADE slides 2-3: cada um tem 1 dado numérico + 1 nome próprio (puxado de NER facts quando possível)?
-4. INVENÇÃO: todo número/empresa existe no source, é anedota, ou tem caveat?
-5. CTA ESPECÍFICO: o CTA cita algo do próprio carrossel? Troca o tema → CTA quebra?
-6. ARQUÉTIPOS + NATUREZAS: 3 variações, 3 arquétipos, 3 naturezas diferentes?
-7. SLIDE 2 CONTRADIZ slide 1 (segundo golpe, não expansão morna)?
-8. VARIANTS: nenhum repetido 2x seguidas; slide 1 = cover, último = cta.
-9. VOZ: se voice_samples disponível, pelo menos 2 tiques de linguagem no output.
-10. JARGÃO: nenhum verbo-zumbi ("descubra/domine/desvende"); nenhum cliffhanger clichê; nenhum fechamento cliché ("céu é o limite"); nenhuma pergunta retórica no slide 1.
-11. FRICÇÃO IDENTIFICÁVEL por variação (não é resumo do tema).
-12. 6 PAPÉIS CM5.4 presentes (hook/mecanismo/prova/aplicação/implicação/direção).
-13. HEADLINE não-genérica: troca o tema → headline quebra? Se não, reescreva.
-14. ABSTRAÇÃO FRIA: cada headline evoca CENA ou STAKE na 1ª leitura.
-15. BUROCRATÊS: zero "um olhar sobre", "análise de", "aspectos importantes", "estudo de caso".
+2. SLIDE 2 CONTRADIZ slide 1 (não só expande)?
+3. ESPECIFICIDADE slides 2-3: cada um com 1 dado + 1 nome próprio?
+4. INVENÇÃO ZERO: todo número/empresa existe no source, é anedota, ou tem caveat?
+5. STORY ARC: se removo slide do meio, o próximo ainda faz sentido? Se sim, slide desperdício — reescreva.
+6. CTA CITA algo específico DESSE carrossel (troca tema → CTA quebra)?
+7. 3 VARIAÇÕES = 3 archetypes + 3 naturezas diferentes?
+8. 6 PAPÉIS CM5.4 presentes (hook/mecanismo/prova/aplicação/implicação/direção)?
+9. VARIANTS: slide 1 cover, último cta, nenhum repetido 2x seguidas, text-only max 1x?
+10. ZERO clichês (descubra/domine/revelado/céu é o limite/jogo virou/pergunta retórica no slide 1)?
 
-# OUTPUT FORMAT
-Return valid JSON with exactly 3 variations (data, story, provocative). Cada variação é uma abordagem criativa DISTINTA.
+# OUTPUT FORMAT (JSON estrito, 3 variações)
 {
   "variations": [
     {
@@ -948,17 +897,12 @@ Return valid JSON with exactly 3 variations (data, story, provocative). Cada var
       "style": "data" | "story" | "provocative",
       "ctaType": "save" | "comment" | "share",
       "slides": [
-        {
-          "heading": "string",
-          "body": "string",
-          "imageQuery": "4-8 English keywords da cena concreta DESTE slide",
-          "variant": "cover" | "solid-brand" | "full-photo-bottom" | "text-only" | "cta"
-        }
+        { "heading": "string", "body": "string", "imageQuery": "4-8 english keywords", "variant": "cover" | "solid-brand" | "full-photo-bottom" | "text-only" | "cta" }
       ]
     }
   ]
 }
-6-10 slides por variação. Slide 1 = "cover". Último = "cta". Toda slide tem "variant" válido.`;
+6-10 slides por variação. Toda slide tem variant válido.`;
 
     // Source content (transcrição YouTube, scrape de link, legenda de Instagram):
     // Video/podcast de 40-60min gera 10-15k chars de transcript. Cortar em 6k
@@ -1111,20 +1055,34 @@ Return valid JSON with exactly 3 variations (data, story, provocative). Cada var
 
     // Bloco extra de fidelidade quando sourceContent existe. Writer tende a
     // usar fonte como "inspiracao solta" e criar carrossel generico. Isso
-    // forca a citar fatos especificos do transcript.
-    const sourceFidelityBlock = sourceContent
-      ? `\n\n# FIDELIDADE AO SOURCE (OBRIGATORIO — nao ignore)
-O conteudo abaixo vem ${sourceType === "video" ? "da transcricao de um VIDEO DO YOUTUBE" : sourceType === "link" ? "de um ARTIGO/POST escrito" : sourceType === "instagram" ? "de um post do INSTAGRAM" : "da fonte"}. Esse material e GROUND TRUTH. Regras:
+    // forca a citar fatos especificos do transcript. Versão IG é hard —
+    // mapeamento 1:1 slides OCR → slides do carrossel.
+    const sourceFidelityBlock = !sourceContent
+      ? ""
+      : sourceType === "instagram"
+        ? `\n\n# 🔴 FIDELIDADE AO CARROSSEL DE INSTAGRAM (REGRA DURA — não ignore)
+A fonte abaixo é um carrossel do Instagram com OCR dos slides originais. Esses slides SÃO o carrossel — você ESTRUTURA, não reinventa.
 
-1. CITE NOMES PROPRIOS que aparecem na fonte (pessoas, empresas, produtos, lugares, ferramentas). Esses nomes entram nos headings/bodys como evidencia — NAO reescreva pra generico ("a empresa", "o founder"). Se a fonte fala "Anthropic", escreve "Anthropic".
-2. CITE NUMEROS/DATAS/ESTATISTICAS que aparecem na fonte. Se disse "crescimento de 300%", usa "300%". Se disse "em 2024", usa "em 2024". Nao arredonda, nao invente.
-3. CITE FRASES DE IMPACTO que o autor falou. Se ha uma quote forte no transcript (max 80 chars), coloca ela num slide como frase literal entre aspas.
-4. NAO REESCREVA pra "melhorar" — a voz do autor da fonte VALE MAIS que a sua reinterpretacao. Seu trabalho e ESTRUTURAR em slides, nao criar conteudo novo em cima.
-5. SE A FONTE CONTRADIZ uma de suas regras estilisticas, a fonte vence. Ex: se autor usa jargao tecnico especifico, preserva.
-6. imageQuery pros slides DEVE usar os nomes/objetos/cenas especificas mencionados na fonte — nao generico. Se o video fala de "Claude Code", imageQuery do slide sobre isso e "developer typing terminal cli command line tool", nao "ai coding".
+1. MAPEAMENTO 1:1 — mesma quantidade de slides da ref, mesma ordem. Slide N da ref = Slide N seu.
+2. WORDING LITERAL — as frases dos slides OCR entram palavra-por-palavra no body dos seus slides. NUNCA reescreva "pra melhorar". Se a ref diz "A clareza que você quer está no tempo que não passa sozinho", você escreve EXATAMENTE isso.
+3. PADRÃO — se a ref tem estrutura repetida ("A X que busca está no Y que evita"), as 3 variações preservam o padrão. Só muda capa (slide 1) e CTA (último).
+4. TEMA DA REF VENCE — ref sobre ambição/mentalidade = carrossel sobre ambição/mentalidade, mesmo com niche=ai. Ignore niche guide.
+5. CAPTION original em 1 slide (literal, entre aspas) ou como título da variação.
+6. ZERO FABRICATION — se a ref não tem dado/nome, você não inventa ("1 dado + 1 nome nos slides 2-3" NÃO se aplica aqui).
+7. imageQuery usa nomes/objetos/cenas da própria ref, não genérico do niche.
 
-Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer transcricao estruturada com pontos de virada narrativos, NAO pensamento genérico sobre o tema.`
-      : "";
+TESTE: alguém que leu a ref original reconhece seu carrossel como a mesma coisa? Se NÃO, reescreva.`
+        : `\n\n# FIDELIDADE AO SOURCE (OBRIGATORIO — nao ignore)
+O conteudo abaixo vem ${sourceType === "video" ? "da transcricao de um VIDEO DO YOUTUBE" : sourceType === "link" ? "de um ARTIGO/POST escrito" : "da fonte"}. Esse material e GROUND TRUTH. Regras:
+
+1. CITE NOMES PROPRIOS que aparecem na fonte (pessoas, empresas, produtos). NAO reescreva pra generico. Se a fonte fala "Anthropic", escreve "Anthropic".
+2. CITE NUMEROS/DATAS/ESTATISTICAS que aparecem na fonte. Se disse "crescimento de 300%", usa "300%". Nao arredonda, nao invente.
+3. CITE FRASES DE IMPACTO do autor (max 80 chars) em 1 slide entre aspas.
+4. NAO REESCREVA pra "melhorar" — voz do autor VALE MAIS que sua reinterpretacao. Seu trabalho e ESTRUTURAR, nao criar conteudo novo.
+5. Fonte contradiz regra estilistica? Fonte vence.
+6. imageQuery usa nomes/objetos/cenas especificas da fonte, nao generico.
+
+Se ignorar, o carrossel fica shallow e generico — não é o que o criador quer.`;
 
     // Facts block (NER) entra ANTES do source content, pra o LLM ver os fatos
     // que deve citar antes de ler a massa de texto. Fact-check do Perplexity

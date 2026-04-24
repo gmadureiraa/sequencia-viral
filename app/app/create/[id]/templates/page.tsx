@@ -68,12 +68,23 @@ const TEMPLATE_DESC: Record<TemplateId, string> = {
   futurista: "Navy + ciano · Space Grotesk · tech-lean (legado)",
   autoral: "Zine · serif itálica · colagem editorial (legado)",
   twitter: "Mockup de tweet · avatar + handle limpo",
-  ambitious: "Motivacional · foto moody full-bleed · bold italic altura variável",
+  ambitious: "Motivacional · foto moody full-bleed · sans bold altura variável",
   blank: "Editorial educativo · serif Playfair + sans · cada slide um layout",
 };
 
 const TEMPLATE_NAME_OVERRIDE: Partial<Record<TemplateId, string>> = {
   manifesto: "Futurista",
+};
+
+/**
+ * Templates em dev — visíveis no picker com badge "em breve" mas NÃO
+ * selecionáveis. Pedido Gabriel 24/04: Ambição precisa diminuir fonte
+ * bastante e Editorial ainda tá em ajuste de variantes. Soltos assim
+ * que estabilizarem.
+ */
+const COMING_SOON: Partial<Record<TemplateId, true>> = {
+  ambitious: true,
+  blank: true,
 };
 
 function buildPreviewProfile(profile: {
@@ -241,12 +252,19 @@ export default function TemplatesPage(props: {
         {TEMPLATE_ORDER.map((tplId) => {
           const meta = TEMPLATES_META.find((m) => m.id === tplId)!;
           const isOn = selected === tplId;
+          const comingSoon = Boolean(COMING_SOON[tplId]);
           const sample = slides.slice(0, 3);
           return (
             <button
               key={tplId}
               type="button"
-              onClick={() => setSelected(tplId)}
+              onClick={() => {
+                if (comingSoon) {
+                  toast.info("Template em breve — tô ajustando os detalhes.");
+                  return;
+                }
+                setSelected(tplId);
+              }}
               className="relative text-left"
               style={{
                 background: "var(--sv-white)",
@@ -255,12 +273,13 @@ export default function TemplatesPage(props: {
                   ? "6px 6px 0 0 var(--sv-green)"
                   : "3px 3px 0 0 var(--sv-ink)",
                 overflow: "hidden",
-                cursor: "pointer",
+                cursor: comingSoon ? "not-allowed" : "pointer",
                 transition: "transform .15s, box-shadow .15s",
                 transform: isOn ? "translate(-2px,-2px)" : "translate(0,0)",
+                opacity: comingSoon ? 0.55 : 1,
               }}
             >
-              {isOn && (
+              {isOn && !comingSoon && (
                 <div
                   aria-hidden="true"
                   style={{
@@ -271,6 +290,28 @@ export default function TemplatesPage(props: {
                     zIndex: 2,
                   }}
                 />
+              )}
+              {comingSoon && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 12,
+                    right: 12,
+                    zIndex: 3,
+                    padding: "6px 10px",
+                    background: "var(--sv-ink)",
+                    color: "var(--sv-paper)",
+                    fontFamily: "var(--sv-mono)",
+                    fontSize: 9.5,
+                    letterSpacing: "0.18em",
+                    textTransform: "uppercase",
+                    fontWeight: 700,
+                    border: "1.5px solid var(--sv-ink)",
+                    boxShadow: "2px 2px 0 0 var(--sv-green)",
+                  }}
+                >
+                  Em breve
+                </div>
               )}
 
               {/* Preview stack com 3 slides reais, offset + rotate */}

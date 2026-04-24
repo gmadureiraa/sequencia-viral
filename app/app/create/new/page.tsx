@@ -812,29 +812,41 @@ export default function NewCarouselPage() {
                   },
                   {
                     id: "ambitious" as const,
-                    name: "Ambitious",
-                    mood: "Motivacional · foto full-bleed bold italic",
+                    name: "Ambição",
+                    mood: "Motivacional · foto full-bleed sans bold",
                     imageType: "IA cinematográfico",
                     accent: "#EACB7C",
+                    comingSoon: true,
                   },
                   {
                     id: "blank" as const,
-                    name: "Blank Editorial",
+                    name: "Editorial",
                     mood: "Editorial educativo · serif + sans",
                     imageType: "IA editorial",
                     accent: "#222222",
+                    comingSoon: true,
                   },
                 ] as const
               ).map((tpl) => {
                 const selected = designTemplate === tpl.id;
+                const comingSoon = "comingSoon" in tpl && tpl.comingSoon;
                 return (
                   <button
                     key={tpl.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    onClick={() => setDesignTemplate(tpl.id)}
-                    className="text-left transition-all"
+                    aria-disabled={comingSoon}
+                    onClick={() => {
+                      if (comingSoon) {
+                        toast.info(
+                          "Template em breve — tô ajustando os detalhes."
+                        );
+                        return;
+                      }
+                      setDesignTemplate(tpl.id);
+                    }}
+                    className="text-left transition-all relative"
                     style={{
                       padding: "10px 12px",
                       border: "1.5px solid var(--sv-ink)",
@@ -845,9 +857,30 @@ export default function NewCarouselPage() {
                       boxShadow: selected
                         ? `3px 3px 0 0 ${tpl.accent}`
                         : "2px 2px 0 0 var(--sv-ink)",
-                      cursor: "pointer",
+                      cursor: comingSoon ? "not-allowed" : "pointer",
+                      opacity: comingSoon ? 0.6 : 1,
                     }}
                   >
+                    {comingSoon && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: 6,
+                          right: 6,
+                          padding: "2px 6px",
+                          background: "var(--sv-ink)",
+                          color: "var(--sv-paper)",
+                          fontFamily: "var(--sv-mono)",
+                          fontSize: 8,
+                          letterSpacing: "0.18em",
+                          textTransform: "uppercase",
+                          fontWeight: 700,
+                          border: "1px solid var(--sv-paper)",
+                        }}
+                      >
+                        Em breve
+                      </span>
+                    )}
                     <div className="flex items-center gap-1.5">
                       <span
                         aria-hidden

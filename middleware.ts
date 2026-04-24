@@ -37,14 +37,17 @@ export function middleware(request: NextRequest) {
   );
 
   // Content Security Policy — protects against XSS from AI-generated content.
-  // Removido 'unsafe-eval' (Next.js não precisa com turbopack runtime atual).
-  // img-src agora só aceita https: (não http:) — evita mixed content + tracking
-  // pixel leak. Se algo quebrar em dev, deixar http: localizado.
+  // Em DEV: React precisa de 'unsafe-eval' pra hot-reload + stack traces
+  // (sem isso a página trava em loop infinito). Prod mantém policy estrita.
+  const isDev = process.env.NODE_ENV === "development";
+  const scriptSrc = isDev
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com https://vercel.live https://www.googletagmanager.com https://www.google-analytics.com"
+    : "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://vercel.live https://www.googletagmanager.com https://www.google-analytics.com";
   response.headers.set(
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://vercel.live https://www.googletagmanager.com https://www.google-analytics.com",
+      scriptSrc,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",

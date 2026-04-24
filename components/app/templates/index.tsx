@@ -65,13 +65,13 @@ export const TEMPLATES_META: TemplateMeta[] = [
   },
   {
     id: "ambitious",
-    name: "Ambitious",
+    name: "Ambição",
     kicker: "Nº 05 · MOTIVACIONAL",
     palette: ["#0A0A0A", "#EACB7C", "#F5F5F5"],
   },
   {
     id: "blank",
-    name: "Blank Editorial",
+    name: "Editorial",
     kicker: "Nº 06 · EDITORIAL MIX",
     palette: ["#F9F9F9", "#222222", "#111111"],
   },

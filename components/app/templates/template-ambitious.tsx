@@ -5,40 +5,37 @@ import type { SlideProps } from "./types";
 import { resolveImgSrc, renderRichText, CANVAS_W, CANVAS_H } from "./utils";
 
 /**
- * Template 05 — Ambitious (motivacional)
+ * Template 05 — Ambição (motivacional)
  *
- * Ref visual: @anajords Instagram post C-5R-65uI8c.
- * Foto full-bleed em cada slide + texto central grande em sans-serif BOLD ITALIC
- * branco, posição vertical variando (alto / meio / baixo) pra criar ritmo.
+ * Ref visual: @anajords IG `C-5R-65uI8c` (8 slides em
+ * `docs/template-refs/ambitious/`).
  *
- * Hashtag `#beambitious` (ou accent customizável) aparece sutil como assinatura.
- *
- * Variantes internas (mapeadas das `SlideVariantName`):
- *  - cover            → texto alto (terço superior), eagle glyph
- *  - headline         → texto centralizado vertical
- *  - photo            → texto baixo (terço inferior)
- *  - full-photo-bottom→ alias de photo (layout baixo)
- *  - solid-brand      → alias de headline (centralizado)
- *  - text-only        → alias de cover (alto)
- *  - cta              → texto centralizado + pílula #beambitious destacada
- *
- * A altura do texto é o vocabulário principal. Todas as variantes compartilham
- * o mesmo tratamento: imagem dominante + shadow difusa pra texto legível + peso
- * italic forte. Isso garante que slides de voz/OCR não quebrem o ritmo visual.
+ * Foto full-bleed + UM bloco curto de texto branco. Tipografia é o ponto-chave:
+ * sans-serif **NÃO condensada**, peso 600-700, **caixa baixa**,
+ * **sem italic**. Stack mira SF Pro Display (system) → Inter Display →
+ * fallbacks. Texto centrado horizontal com sombra discreta. Posição
+ * vertical varia entre slides (top / center-mid / bottom) e é a única
+ * coisa que muda visualmente entre os slides.
  */
 
 const INK = "#0A0A0A";
 const PAPER = "#F5F5F5";
-const ACCENT_DEFAULT = "#EACB7C"; // amber (eagle-like) suave, igual ao mood @anajords
+const ACCENT_DEFAULT = "#EACB7C";
 
 type VPos = "top" | "center" | "bottom";
 
 function resolveVPos(slideNumber: number, variant?: string): VPos {
   if (variant === "cover" || variant === "text-only") return "top";
   if (variant === "photo" || variant === "full-photo-bottom") return "bottom";
-  if (variant === "headline" || variant === "solid-brand" || variant === "cta")
+  if (
+    variant === "headline" ||
+    variant === "solid-brand" ||
+    variant === "cta" ||
+    variant === "quote" ||
+    variant === "split"
+  )
     return "center";
-  // rotação default slide-index
+  // rotação default por slide-index — top / center / bottom em ciclo
   const mod = slideNumber % 3;
   return mod === 1 ? "top" : mod === 2 ? "bottom" : "center";
 }
@@ -55,10 +52,6 @@ const TemplateAmbitious = forwardRef<HTMLDivElement, SlideProps>(
       heading,
       body,
       imageUrl,
-      slideNumber,
-      totalSlides,
-      profile,
-      isLastSlide,
       scale = 0.38,
       exportMode = false,
       accentOverride,
@@ -67,6 +60,7 @@ const TemplateAmbitious = forwardRef<HTMLDivElement, SlideProps>(
       variant,
       bgColor,
       layers,
+      slideNumber,
     },
     ref
   ) {
@@ -77,25 +71,25 @@ const TemplateAmbitious = forwardRef<HTMLDivElement, SlideProps>(
     const showBg = layers?.bg !== false;
 
     const accent = accentOverride || ACCENT_DEFAULT;
-    const handleLabel = (profile.handle || "").replace(/^@/, "").trim();
     const vPos = resolveVPos(slideNumber, variant);
 
-    // Stack: sans-serif bold italic pra replicar a voz dos prints @anajords.
-    // Inter/SVInter suporta italic variável — usamos fontStyle italic + weight 900.
+    // Stack que mira SF Pro Display (system Apple), depois Inter Display
+    // e Inter regular. NÃO inclui Anton/Oswald — refs do @anajords são
+    // claramente sans-serif não condensadas.
     const defaultDisplay =
-      '"SVInter", "Inter", "Helvetica Neue", Arial, system-ui, sans-serif';
+      '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter Display", "SVInter", "Inter", "Helvetica Neue", system-ui, sans-serif';
     const displayStack = displayFontOverride || defaultDisplay;
     const ts = Math.max(0.6, Math.min(1.6, textScale));
 
-    // Tamanho do texto principal é grande, mas respira — 64px default. Evita
-    // cortar linhas longas em 1080px de canvas.
-    const mainSize = 60 * ts;
-    const bodySize = 26 * ts;
+    // Tamanho médio (não gigante) — mira ~38-42px @ preview 0.38, ou seja
+    // ~100-110px @ canvas 1080. Igual ref.
+    const mainSize = 78 * ts;
 
-    // Fallback bg escuro quando não tem imagem (mantém a estética dark).
     const fallbackBg = bgColor || INK;
 
-    const isCta = variant === "cta" || isLastSlide;
+    // Combina heading + body como um bloco único — sem hierarquia h1/p.
+    const combinedText = [heading, body].filter(Boolean).join("\n\n");
+    const showText = (showTitle || showBody) && combinedText.trim().length > 0;
 
     return (
       <div
@@ -126,7 +120,6 @@ const TemplateAmbitious = forwardRef<HTMLDivElement, SlideProps>(
             fontFamily: displayStack,
           }}
         >
-          {/* ── Full-bleed image ── */}
           {showBg && hasImage && (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -143,21 +136,20 @@ const TemplateAmbitious = forwardRef<HTMLDivElement, SlideProps>(
                   zIndex: 0,
                 }}
               />
-              {/* Shadow sutil em cima + embaixo pra garantir legibilidade do
-                  texto em qualquer vPos. Zona do meio fica limpa. */}
+              {/* Overlay bem leve só pra dar contraste ao texto sem
+                  escurecer a foto (igual ref). */}
               <div
                 style={{
                   position: "absolute",
                   inset: 0,
                   background:
-                    "linear-gradient(180deg, rgba(10,10,10,0.45) 0%, rgba(10,10,10,0.08) 30%, rgba(10,10,10,0.08) 65%, rgba(10,10,10,0.55) 100%)",
+                    "linear-gradient(180deg, rgba(10,10,10,0.28) 0%, rgba(10,10,10,0.05) 35%, rgba(10,10,10,0.05) 65%, rgba(10,10,10,0.32) 100%)",
                   zIndex: 1,
                 }}
               />
             </>
           )}
 
-          {/* ── Texto principal, posição vertical varia ── */}
           <div
             style={{
               position: "relative",
@@ -168,124 +160,32 @@ const TemplateAmbitious = forwardRef<HTMLDivElement, SlideProps>(
               justifyContent: justifyFor(vPos),
               padding:
                 vPos === "top"
-                  ? "110px 80px 40px"
+                  ? "150px 110px 40px"
                   : vPos === "bottom"
-                    ? "40px 80px 130px"
-                    : "40px 80px 40px",
-              gap: 22,
+                    ? "40px 110px 150px"
+                    : "40px 110px 40px",
             }}
           >
-            {showTitle && heading && (
-              <h1
+            {showText && (
+              <p
                 style={{
                   fontFamily: displayStack,
-                  fontWeight: 900,
-                  fontStyle: "italic",
+                  fontWeight: 600,
                   fontSize: mainSize,
-                  lineHeight: 1.05,
-                  letterSpacing: "-0.012em",
+                  lineHeight: 1.18,
+                  letterSpacing: "-0.01em",
                   margin: 0,
                   color: PAPER,
                   textAlign: "center",
                   textShadow:
-                    "0 2px 18px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.45)",
+                    "0 2px 14px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.35)",
                   whiteSpace: "pre-line",
                 }}
               >
-                {renderRichText(heading, accent)}
-              </h1>
-            )}
-            {showBody && body && (
-              <p
-                style={{
-                  fontFamily: displayStack,
-                  fontWeight: 500,
-                  fontStyle: "italic",
-                  fontSize: bodySize,
-                  lineHeight: 1.35,
-                  letterSpacing: "0.005em",
-                  margin: 0,
-                  color: "rgba(245,245,245,0.92)",
-                  textAlign: "center",
-                  textShadow: "0 1px 8px rgba(0,0,0,0.6)",
-                  whiteSpace: "pre-line",
-                  maxWidth: 820,
-                  marginLeft: "auto",
-                  marginRight: "auto",
-                }}
-              >
-                {renderRichText(body, accent)}
+                {renderRichText(combinedText, accent)}
               </p>
             )}
-
-            {/* CTA → pílula accent com handle ou #beambitious */}
-            {isCta && (
-              <div
-                style={{
-                  marginTop: 20,
-                  alignSelf: "center",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 14,
-                  padding: "16px 28px",
-                  background: accent,
-                  color: INK,
-                  fontFamily: displayStack,
-                  fontStyle: "italic",
-                  fontWeight: 900,
-                  fontSize: 24,
-                  letterSpacing: "0.02em",
-                  textTransform: "uppercase",
-                  borderRadius: 999,
-                  boxShadow: "0 6px 18px rgba(0,0,0,0.35)",
-                }}
-              >
-                {handleLabel ? `Seguir @${handleLabel}` : "#beambitious"}
-                <span style={{ fontSize: 26, fontStyle: "normal" }}>🦅</span>
-              </div>
-            )}
           </div>
-
-          {/* ── Hashtag/assinatura bottom-left (escondida no CTA pra não duplicar) ── */}
-          {!isCta && (
-            <div
-              style={{
-                position: "absolute",
-                left: 60,
-                bottom: 40,
-                zIndex: 3,
-                fontFamily: displayStack,
-                fontStyle: "italic",
-                fontSize: 22,
-                fontWeight: 700,
-                letterSpacing: "0.02em",
-                color: "rgba(245,245,245,0.82)",
-                textShadow: "0 1px 6px rgba(0,0,0,0.6)",
-              }}
-            >
-              #beambitious
-              <span style={{ marginLeft: 8, color: accent }}>🦅</span>
-            </div>
-          )}
-
-          {/* ── Slide counter bottom-right ── */}
-          {!isCta && (
-            <div
-              style={{
-                position: "absolute",
-                right: 60,
-                bottom: 40,
-                zIndex: 3,
-                fontFamily: displayStack,
-                fontSize: 20,
-                fontWeight: 700,
-                color: "rgba(245,245,245,0.72)",
-                textShadow: "0 1px 6px rgba(0,0,0,0.6)",
-              }}
-            >
-              {slideNumber}/{totalSlides}
-            </div>
-          )}
         </div>
       </div>
     );

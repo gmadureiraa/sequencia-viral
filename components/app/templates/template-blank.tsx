@@ -5,30 +5,30 @@ import type { SlideProps } from "./types";
 import { resolveImgSrc, renderRichText, CANVAS_W, CANVAS_H } from "./utils";
 
 /**
- * Template 06 — Blank Editorial
+ * Template 06 — Editorial
  *
- * Ref visual: @blankschoolbr Instagram post DT28nYbDWoO.
- * Estética editorial minimalista tipo revista/e-book educativo: fundo off-white
- * #F9F9F9, titulos em serif PLAYFAIR/INSTRUMENT negrito, corpo em SANS
- * Plus Jakarta/Inter regular, com bullets + listas + miniaturas.
+ * Ref visual: @blankschoolbr IG `DT28nYbDWoO` (10 slides em
+ * `docs/template-refs/blank/`).
  *
- * Diferencial: CADA SLIDE tem um layout diferente, não é "capa + corpo
- * uniforme". A variante manda:
- *  - cover              → foto full-bleed com texto bottom (serif sobre escuro)
- *  - headline           → texto puro topo, parágrafos + CTA final (para frase
- *                         introdutória densa com mix de sans e serif)
- *  - photo              → título esquerda + imagem direita (2 colunas)
- *  - split              → duas colunas: texto esquerda + imagem vertical direita
- *  - full-photo-bottom  → imagem topo + texto corpo + chamada final
- *  - solid-brand        → título grande centralizado (fundo paper) + body
- *                         diretamente abaixo (sem imagem)
- *  - text-only          → só texto: título serif + parágrafos + bullets
+ * Estética editorial minimalista tipo revista/e-book: fundo off-white
+ * #F9F9F9, titulos em serif (Instrument Serif/Playfair) negrito, corpo em
+ * SANS Inter regular com bullets + listas (numeradas e por marcador).
+ *
+ * Cada slide tem layout DIFERENTE — capa + corpo uniforme não funciona
+ * pra essa estética. Variantes:
+ *  - cover              → foto full-bleed + título serif gigante (centro-baixo)
+ *  - photo-overlay      → foto full-bleed + texto serif/sans alinhado topo-left
+ *  - photo              → texto esquerda + imagem direita (50/50)
+ *  - split              → texto esquerda + imagem vertical direita (1/0.75)
+ *  - full-photo-bottom  → imagem topo grande + título serif + lista (numerada
+ *                         ou bullets) embaixo
+ *  - solid-brand        → título serif gigante centralizado, body abaixo
+ *  - text-only          → título serif + parágrafos sans + bullets
  *  - quote              → serif italic centrado (citação)
- *  - cta                → '✦ Blank' + promessa serif + CTA sans destacado
+ *  - cta                → tese serif (com mix preto/cinza) + sub sans bold
  *
- * Paleta: paper #F9F9F9, ink #222, muted #555. Accent: preto (sem destaque
- * de cor, a marca é a tipografia e a composição). Accent prop só altera
- * o glifo `✦ Blank` e bullets.
+ * Paleta: paper #F9F9F9, ink #222, muted #555. Accent só pinta bullets e
+ * grifos rich-text — a marca é a tipografia.
  */
 
 const PAPER = "#F9F9F9";
@@ -53,17 +53,33 @@ function splitParagraphs(body: string): string[] {
 }
 
 /**
- * Detecta linhas-bullet no body (começam com '-', '•' ou '* ').
- * Retorna array de strings sem o marker, ou null se o parágrafo não é lista.
+ * Detecta listas no parágrafo. Retorna `{ kind: 'bullet' | 'numbered', items }`
+ * ou `null` quando não é lista. Lista numerada precisa de pelo menos 2 linhas
+ * que começam por `1.`, `2.`, `1)`, etc.
  */
-function parseBullets(para: string): string[] | null {
+function parseList(
+  para: string
+): { kind: "bullet" | "numbered"; items: string[] } | null {
   const lines = para
     .split(/\n/)
     .map((l) => l.trim())
     .filter(Boolean);
   if (lines.length < 2) return null;
-  if (!lines.every((l) => /^([-•*]|\d+[.)])\s+/.test(l))) return null;
-  return lines.map((l) => l.replace(/^([-•*]|\d+[.)])\s+/, ""));
+  const allNumbered = lines.every((l) => /^\d+[.)]\s+/.test(l));
+  if (allNumbered) {
+    return {
+      kind: "numbered",
+      items: lines.map((l) => l.replace(/^\d+[.)]\s+/, "")),
+    };
+  }
+  const allBulleted = lines.every((l) => /^[-•*]\s+/.test(l));
+  if (allBulleted) {
+    return {
+      kind: "bullet",
+      items: lines.map((l) => l.replace(/^[-•*]\s+/, "")),
+    };
+  }
+  return null;
 }
 
 const TemplateBlank = forwardRef<HTMLDivElement, SlideProps>(
@@ -74,7 +90,6 @@ const TemplateBlank = forwardRef<HTMLDivElement, SlideProps>(
       imageUrl,
       slideNumber,
       totalSlides,
-      profile,
       isLastSlide,
       scale = 0.38,
       exportMode = false,
@@ -95,7 +110,6 @@ const TemplateBlank = forwardRef<HTMLDivElement, SlideProps>(
 
     const accent = accentOverride || ACCENT_DEFAULT;
     const bg = bgColor || PAPER;
-    const handleLabel = (profile.handle || "").replace(/^@/, "").trim();
     const ts = Math.max(0.6, Math.min(1.6, textScale));
 
     // Display font override é aplicado ao heading serif. Se user definiu
@@ -103,10 +117,12 @@ const TemplateBlank = forwardRef<HTMLDivElement, SlideProps>(
     const serifStack = displayFontOverride || SERIF_STACK;
 
     // Variant resolution — cada slide do carrossel ganha um layout distinto.
-    // Rotação default quando sem variant: cover → headline → photo → split →
-    // text-only → full-photo-bottom → solid-brand → cta.
+    // Rotação default segue a estrutura observada em `docs/template-refs/blank/`:
+    // capa → photo-overlay → text-only → split → text-only → text-only →
+    // photo → solid-brand → full-photo-bottom → cta.
     const defaultRotation: Array<
       | "cover"
+      | "photo-overlay"
       | "headline"
       | "photo"
       | "split"
@@ -117,14 +133,14 @@ const TemplateBlank = forwardRef<HTMLDivElement, SlideProps>(
       | "cta"
     > = [
       "cover",
-      "headline",
+      "photo-overlay",
       "text-only",
       "split",
+      "text-only",
+      "text-only",
       "photo",
-      "text-only",
-      "full-photo-bottom",
       "solid-brand",
-      "text-only",
+      "full-photo-bottom",
       "cta",
     ];
     const resolvedVariant =
@@ -174,6 +190,18 @@ const TemplateBlank = forwardRef<HTMLDivElement, SlideProps>(
               accent={accent}
               ts={ts}
               serifStack={serifStack}
+              showTitle={showTitle}
+              showBody={showBody}
+            />
+          ) : effectiveVariant === "photo-overlay" ? (
+            <PhotoOverlayLayout
+              heading={heading}
+              body={body}
+              imageSrc={hasImage && showBg ? bodyImgSrc : undefined}
+              accent={accent}
+              ts={ts}
+              serifStack={serifStack}
+              paragraphs={paragraphs}
               showTitle={showTitle}
               showBody={showBody}
             />
@@ -241,7 +269,6 @@ const TemplateBlank = forwardRef<HTMLDivElement, SlideProps>(
               accent={accent}
               ts={ts}
               serifStack={serifStack}
-              handleLabel={handleLabel}
               showTitle={showTitle}
               showBody={showBody}
             />
@@ -259,25 +286,12 @@ const TemplateBlank = forwardRef<HTMLDivElement, SlideProps>(
             />
           )}
 
-          {/* ── Footer: ✦ Blank + slide counter (oculto no cover + cta) ── */}
-          {effectiveVariant !== "cover" && effectiveVariant !== "cta" && (
-            <>
-              <div
-                style={{
-                  position: "absolute",
-                  left: 70,
-                  bottom: 40,
-                  zIndex: 3,
-                  fontFamily: SANS_STACK,
-                  fontSize: 18,
-                  fontWeight: 700,
-                  letterSpacing: "0.04em",
-                  color: INK,
-                }}
-              >
-                <span style={{ color: accent, marginRight: 6 }}>✦</span>
-                Blank
-              </div>
+          {/* Footer Blank removido (24/04 — pedido Gabriel). Mantemos só
+              o slide-counter discreto (canto inferior direito) nas variantes
+              que não cobrem foto inteira. */}
+          {effectiveVariant !== "cover" &&
+            effectiveVariant !== "photo-overlay" &&
+            effectiveVariant !== "cta" && (
               <div
                 style={{
                   position: "absolute",
@@ -292,8 +306,7 @@ const TemplateBlank = forwardRef<HTMLDivElement, SlideProps>(
               >
                 {slideNumber}/{totalSlides}
               </div>
-            </>
-          )}
+            )}
         </div>
       </div>
     );
@@ -373,19 +386,6 @@ function CoverLayout({
           padding: "70px 80px 90px",
         }}
       >
-        <div
-          style={{
-            fontFamily: SANS_STACK,
-            fontSize: 22,
-            fontWeight: 700,
-            letterSpacing: "0.04em",
-            color: PAPER,
-          }}
-        >
-          <span style={{ color: accent, marginRight: 8 }}>✦</span>
-          Blank
-        </div>
-
         <div style={{ flex: 1 }} />
 
         {showTitle && heading && (
@@ -427,6 +427,83 @@ function CoverLayout({
             {renderRichText(body, accent)}
           </p>
         )}
+      </div>
+    </>
+  );
+}
+
+/** PHOTO-OVERLAY — foto full-bleed igual cover, mas com texto serif/sans
+ *  alinhado no terço SUPERIOR-ESQUERDO do canvas (igual slide 2 da ref).
+ *  Preserva legibilidade com gradiente top→bottom forte no topo. */
+function PhotoOverlayLayout({
+  heading,
+  body,
+  imageSrc,
+  accent,
+  ts,
+  serifStack,
+  paragraphs,
+  showTitle,
+  showBody,
+}: LayoutWithImageProps) {
+  return (
+    <>
+      {imageSrc && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageSrc}
+            crossOrigin="anonymous"
+            alt={heading}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              zIndex: 0,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(180deg, rgba(245,245,240,0.92) 0%, rgba(245,245,240,0.78) 35%, rgba(245,245,240,0.18) 70%, rgba(15,15,20,0.05) 100%)",
+              zIndex: 1,
+            }}
+          />
+        </>
+      )}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 2,
+          flex: "1 1 0",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-start",
+          padding: "100px 80px 60px",
+          gap: 22,
+        }}
+      >
+        {showTitle && heading && (
+          <h2
+            style={{
+              fontFamily: serifStack,
+              fontWeight: 700,
+              fontSize: 50 * ts,
+              lineHeight: 1.05,
+              letterSpacing: "-0.015em",
+              margin: 0,
+              color: INK,
+              whiteSpace: "pre-line",
+            }}
+          >
+            {renderRichText(heading, accent)}
+          </h2>
+        )}
+        {showBody && renderParagraphs(paragraphs, body, ts, accent)}
       </div>
     </>
   );
@@ -522,7 +599,7 @@ function SolidTitleLayout({
   );
 }
 
-/** PHOTO-RIGHT — 2 colunas: texto esquerda + imagem direita colada na borda. */
+/** PHOTO-RIGHT — 2 colunas 50/50: texto esquerda + imagem direita full-height. */
 function PhotoRightLayout({
   heading,
   body,
@@ -541,18 +618,26 @@ function PhotoRightLayout({
         zIndex: 2,
         flex: "1 1 0",
         display: "grid",
-        gridTemplateColumns: "1.1fr 0.9fr",
-        gap: 50,
-        padding: "90px 80px 110px",
+        gridTemplateColumns: "1fr 1fr", // meio-a-meio (era 1.1/0.9)
+        gap: 0,
+        padding: 0,
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          gap: 24,
+          padding: "90px 70px 100px 80px",
+        }}
+      >
         {showTitle && heading && (
           <h2
             style={{
               fontFamily: serifStack,
               fontWeight: 700,
-              fontSize: 48 * ts,
+              fontSize: 52 * ts,
               lineHeight: 1.05,
               letterSpacing: "-0.015em",
               margin: 0,
@@ -569,10 +654,8 @@ function PhotoRightLayout({
         <div
           style={{
             position: "relative",
-            borderRadius: 20,
             overflow: "hidden",
             minHeight: 0,
-            boxShadow: "0 8px 28px rgba(0,0,0,0.12)",
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -591,7 +674,6 @@ function PhotoRightLayout({
       ) : (
         <div
           style={{
-            borderRadius: 20,
             border: `1.5px dashed ${MUTED}`,
             background: "#EFEEEA",
           }}
@@ -679,7 +761,8 @@ function SplitVerticalLayout({
   );
 }
 
-/** PHOTO-TOP — imagem horizontal cobre terço superior, texto embaixo. */
+/** PHOTO-TOP — imagem horizontal cobre terço superior, texto embaixo bem
+ *  formatado. Igual ref @blankschoolbr "Matt Gray". */
 function PhotoTopLayout({
   heading,
   body,
@@ -699,16 +782,13 @@ function PhotoTopLayout({
         flex: "1 1 0",
         display: "flex",
         flexDirection: "column",
-        padding: "90px 80px 110px",
-        gap: 32,
       }}
     >
       {imageSrc ? (
         <div
           style={{
             width: "100%",
-            height: 380,
-            borderRadius: 20,
+            height: 480,
             overflow: "hidden",
             flexShrink: 0,
           }}
@@ -727,23 +807,33 @@ function PhotoTopLayout({
           />
         </div>
       ) : null}
-      {showTitle && heading && (
-        <h2
-          style={{
-            fontFamily: serifStack,
-            fontWeight: 700,
-            fontSize: 46 * ts,
-            lineHeight: 1.05,
-            letterSpacing: "-0.015em",
-            margin: 0,
-            color: INK,
-            whiteSpace: "pre-line",
-          }}
-        >
-          {renderRichText(heading, accent)}
-        </h2>
-      )}
-      {showBody && renderParagraphs(paragraphs, body, ts, accent)}
+      <div
+        style={{
+          flex: 1,
+          padding: "60px 80px 110px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 28,
+        }}
+      >
+        {showTitle && heading && (
+          <h2
+            style={{
+              fontFamily: serifStack,
+              fontWeight: 700,
+              fontSize: 50 * ts,
+              lineHeight: 1.05,
+              letterSpacing: "-0.015em",
+              margin: 0,
+              color: INK,
+              whiteSpace: "pre-line",
+            }}
+          >
+            {renderRichText(heading, accent)}
+          </h2>
+        )}
+        {showBody && renderParagraphs(paragraphs, body, ts, accent)}
+      </div>
     </div>
   );
 }
@@ -819,17 +909,16 @@ function QuoteLayout({
   );
 }
 
-/** CTA — '✦ Blank' marcador topo, promessa serif média, call-to-action */
+/** CTA — promessa serif centralizada, sem botão (apenas tese fechando) */
 function CtaLayout({
   heading,
   body,
   accent,
   ts,
   serifStack,
-  handleLabel,
   showTitle,
   showBody,
-}: LayoutProps & { handleLabel: string }) {
+}: LayoutProps) {
   return (
     <div
       style={{
@@ -838,35 +927,25 @@ function CtaLayout({
         flex: "1 1 0",
         display: "flex",
         flexDirection: "column",
-        padding: "110px 80px 110px",
-        gap: 26,
+        justifyContent: "center",
+        alignItems: "center",
+        textAlign: "center",
+        padding: "110px 100px 110px",
+        gap: 32,
       }}
     >
-      <div
-        style={{
-          fontFamily: SANS_STACK,
-          fontSize: 22,
-          fontWeight: 700,
-          letterSpacing: "0.04em",
-          color: INK,
-        }}
-      >
-        <span style={{ color: accent, marginRight: 8 }}>✦</span>
-        Blank
-      </div>
-
       {showTitle && heading && (
         <h2
           style={{
-            marginTop: 24,
             fontFamily: serifStack,
             fontWeight: 700,
-            fontSize: 52 * ts,
+            fontSize: 64 * ts,
             lineHeight: 1.05,
-            letterSpacing: "-0.015em",
+            letterSpacing: "-0.02em",
             color: INK,
             whiteSpace: "pre-line",
             margin: 0,
+            maxWidth: 900,
           }}
         >
           {renderRichText(heading, accent)}
@@ -877,40 +956,18 @@ function CtaLayout({
         <p
           style={{
             fontFamily: SANS_STACK,
-            fontSize: 24 * ts,
+            fontSize: 26 * ts,
             fontWeight: 500,
             lineHeight: 1.42,
             margin: 0,
             color: MUTED,
             whiteSpace: "pre-line",
-            maxWidth: 720,
+            maxWidth: 760,
           }}
         >
           {renderRichText(body, accent)}
         </p>
       )}
-
-      <div style={{ flex: 1 }} />
-
-      <div
-        style={{
-          display: "inline-flex",
-          alignSelf: "flex-start",
-          alignItems: "center",
-          gap: 14,
-          padding: "20px 32px",
-          background: INK,
-          color: PAPER,
-          fontFamily: SANS_STACK,
-          fontSize: 22,
-          fontWeight: 700,
-          letterSpacing: "0.02em",
-          borderRadius: 999,
-        }}
-      >
-        {handleLabel ? `Seguir @${handleLabel}` : "Comente para receber"}
-        <span style={{ fontSize: 24 }}>→</span>
-      </div>
     </div>
   );
 }
@@ -941,8 +998,8 @@ function renderParagraphs(
       }}
     >
       {list.map((para, i) => {
-        const bullets = parseBullets(para);
-        if (bullets) {
+        const parsed = parseList(para);
+        if (parsed) {
           return (
             <ul
               key={i}
@@ -952,28 +1009,29 @@ function renderParagraphs(
                 listStyle: "none",
                 display: "flex",
                 flexDirection: "column",
-                gap: 8,
+                gap: 10,
               }}
             >
-              {bullets.map((item, j) => (
+              {parsed.items.map((item, j) => (
                 <li
                   key={j}
                   style={{
                     display: "flex",
-                    gap: 12,
+                    gap: 14,
                     alignItems: "flex-start",
                     color: INK,
                   }}
                 >
                   <span
                     style={{
-                      color: accent,
-                      fontWeight: 900,
+                      color: parsed.kind === "numbered" ? INK : accent,
+                      fontWeight: parsed.kind === "numbered" ? 700 : 900,
                       lineHeight: 1.45,
                       flexShrink: 0,
+                      minWidth: parsed.kind === "numbered" ? 24 : "auto",
                     }}
                   >
-                    •
+                    {parsed.kind === "numbered" ? `${j + 1}.` : "•"}
                   </span>
                   <span style={{ whiteSpace: "pre-line" }}>
                     {renderRichText(item, accent)}

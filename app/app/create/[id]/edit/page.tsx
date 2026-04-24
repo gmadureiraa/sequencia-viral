@@ -195,6 +195,35 @@ function fontIdFromFamily(family: string | undefined): string {
   return FONT_OPTS.find((f) => f.family === family)?.id ?? "inter-black";
 }
 
+/**
+ * Fontes display por template — cada template tem 1-5 opções que combinam
+ * com sua estética. Twitter NÃO oferece opção (usa fonte fixa do Twitter).
+ * Futurista é a referência (default + 4 alternativas display sans condensadas).
+ *
+ * Atualizado 24/04 a pedido do Gabriel: cada estética tem família própria.
+ */
+const FONTS_PER_TEMPLATE: Record<string, string[]> = {
+  // Futurista: opções já validadas (mantém)
+  futurista: ["inter-black", "archivo", "bebas", "anton", "oswald"],
+  // Manifesto: editorial cinematográfico — sans bold + serif italic
+  manifesto: ["inter-black", "archivo", "anton", "serif"],
+  // Autoral: zine artesanal — fontes condensadas + serif (variedade)
+  autoral: ["bebas", "anton", "barlow", "oswald", "serif"],
+  // Twitter: sem opção (UI esconde o seletor)
+  twitter: [],
+  // Ambição: sans-serif geométrica NÃO condensada (ref @anajords usa SF Pro
+  // Display). Inter como sans display + Archivo Black como peso forte.
+  ambitious: ["inter-black", "archivo"],
+  // Editorial: serif elegante + sans clean
+  blank: ["serif", "inter-black", "archivo"],
+};
+
+function fontsForTemplate(templateId: string | null | undefined): typeof FONT_OPTS {
+  const ids = FONTS_PER_TEMPLATE[templateId || ""] || [];
+  if (ids.length === 0) return [];
+  return FONT_OPTS.filter((f) => ids.includes(f.id));
+}
+
 function buildPreviewProfile(profile: {
   name: string;
   twitter_handle?: string;
@@ -232,14 +261,10 @@ function pickThumbFg(hex: string): string {
 
 type MobileTab = "sidebar" | "canvas";
 
-/** Swatches do painel "Background". Aplicados por-slide via `slide.bgColor`. */
-const BG_SWATCHES = [
-  "#0A0A0A",
-  "#7CF067",
-  "#D262B2",
-  "#FFFFFF",
-  "#0B0F1E",
-];
+/** Swatches default do painel "Background" — só preto e branco fixos.
+ *  As cores da marca do user (Settings → DNA da marca) entram via
+ *  `bgSwatches` no scope do componente. */
+const BG_SWATCHES_DEFAULT = ["#0A0A0A", "#FFFFFF"];
 
 const DEFAULT_LAYERS: SlideLayers = { title: true, body: true, bg: true };
 
@@ -294,6 +319,27 @@ export default function EditPage(props: {
       seen.add(k);
       out.push(c);
       if (out.length >= 12) break;
+    }
+    return out;
+  }, [profile?.brand_colors]);
+
+  // Swatches do painel "Background" — preto + branco SEMPRE + cores da
+  // marca do user (Settings → DNA). Deduped, max 8.
+  const bgSwatches = useMemo(() => {
+    const brand = Array.isArray(profile?.brand_colors)
+      ? profile!.brand_colors!.filter(
+          (c): c is string => typeof c === "string" && c.trim().length > 0
+        )
+      : [];
+    const merged = [...BG_SWATCHES_DEFAULT, ...brand];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of merged) {
+      const k = c.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(c);
+      if (out.length >= 8) break;
     }
     return out;
   }, [profile?.brand_colors]);
@@ -1086,7 +1132,7 @@ export default function EditPage(props: {
         Background
       </h4>
       <div className="flex gap-1.5 flex-wrap items-center">
-        {BG_SWATCHES.map((color) => {
+        {bgSwatches.map((color) => {
           const selected = active?.bgColor === color;
           return (
             <button
@@ -1438,45 +1484,55 @@ export default function EditPage(props: {
         lock — ocupava espaco sem agregar. Editor so tem fonte + tamanho.
       */}
 
-      <h4
-        style={{
-          fontFamily: "var(--sv-mono)",
-          fontSize: 9.5,
-          letterSpacing: "0.2em",
-          textTransform: "uppercase",
-          color: "var(--sv-muted)",
-          fontWeight: 700,
-        }}
-      >
-        Fonte display
-      </h4>
-      <div className="flex flex-wrap gap-1.5">
-        {FONT_OPTS.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => {
-              setFontId(f.id);
-              setFontTouched(true);
-            }}
-            style={{
-              padding: "7px 11px",
-              border: "1.5px solid var(--sv-ink)",
-              background: fontId === f.id ? "var(--sv-ink)" : "var(--sv-white)",
-              color: fontId === f.id ? "var(--sv-paper)" : "var(--sv-ink)",
-              cursor: "pointer",
-              fontFamily: f.family,
-              fontStyle: f.italic ? "italic" : "normal",
-              fontWeight: 900,
-              textTransform: "uppercase",
-              fontSize: 11,
-              lineHeight: 1,
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+      {(() => {
+        const templateFonts = fontsForTemplate(templateId);
+        if (templateFonts.length === 0) return null; // Twitter sem opção
+        return (
+          <>
+            <h4
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: 9.5,
+                letterSpacing: "0.2em",
+                textTransform: "uppercase",
+                color: "var(--sv-muted)",
+                fontWeight: 700,
+              }}
+            >
+              Fonte display
+            </h4>
+            <div className="flex flex-wrap gap-1.5">
+              {templateFonts.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => {
+                    setFontId(f.id);
+                    setFontTouched(true);
+                  }}
+                  style={{
+                    padding: "7px 11px",
+                    border: "1.5px solid var(--sv-ink)",
+                    background:
+                      fontId === f.id ? "var(--sv-ink)" : "var(--sv-white)",
+                    color:
+                      fontId === f.id ? "var(--sv-paper)" : "var(--sv-ink)",
+                    cursor: "pointer",
+                    fontFamily: f.family,
+                    fontStyle: f.italic ? "italic" : "normal",
+                    fontWeight: 900,
+                    textTransform: "uppercase",
+                    fontSize: 11,
+                    lineHeight: 1,
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </>
+        );
+      })()}
 
       {/* Cor de destaque removida — locked no brand color do user (settings). */}
 
@@ -1771,6 +1827,12 @@ export default function EditPage(props: {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.2 }}
       className="w-full"
+      style={{
+        // Bg bege estende até o fim da página (em vez de quebrar pra branco
+        // depois do conteúdo). Pedido Gabriel 24/04.
+        background: "var(--sv-paper)",
+        minHeight: "100vh",
+      }}
     >
       {/* Popup 30% off — usuário acabou de ver o primeiro carrossel pronto,
           momento perfeito pra oferta. Só dispara pra plano free, 1x. */}
@@ -1915,8 +1977,9 @@ export default function EditPage(props: {
             borderRight: "1.5px solid var(--sv-ink)",
             background: "var(--sv-white)",
             minWidth: 0,
-            maxHeight: "calc(100vh - 180px)",
-            overflowY: "auto",
+            // Scroll interno removido 24/04 — sidebar cresce com conteúdo
+            // e scroll passa pra página toda. Antes: maxHeight 100vh-180px
+            // + overflowY:auto criava scroll aninhado incômodo.
             display: "flex",
             flexDirection: "column",
             gap: 18,

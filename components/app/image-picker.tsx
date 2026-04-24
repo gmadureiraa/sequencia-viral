@@ -57,7 +57,10 @@ export function ImagePicker({
         body: JSON.stringify({
           query: q,
           mode: "search",
-          count: 24,
+          // 40 = cap do Serper free; 1 query Serper = 1 request cobrado,
+          // independente da quantidade retornada. Então pedir 40 custa o
+          // mesmo que pedir 5 e dá muito mais escolha pro usuário.
+          count: 40,
         }),
       });
       const body = await res.json().catch(() => null);

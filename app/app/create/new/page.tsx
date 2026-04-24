@@ -187,7 +187,7 @@ export default function NewCarouselPage() {
   // - twitter: busca stock (Serper)
   // - manifesto/futurista/autoral: gera imagem cinematográfica (Imagen)
   const [designTemplate, setDesignTemplate] = useState<
-    "manifesto" | "twitter"
+    "manifesto" | "twitter" | "ambitious" | "blank"
   >("manifesto");
 
   // Modo avançado — dá mais controle ao usuário sobre a geração.
@@ -809,6 +809,20 @@ export default function NewCarouselPage() {
                     mood: "Tweet screenshot · candid",
                     imageType: "Busca stock",
                     accent: "#1D9BF0",
+                  },
+                  {
+                    id: "ambitious" as const,
+                    name: "Ambitious",
+                    mood: "Motivacional · foto full-bleed bold italic",
+                    imageType: "IA cinematográfico",
+                    accent: "#EACB7C",
+                  },
+                  {
+                    id: "blank" as const,
+                    name: "Blank Editorial",
+                    mood: "Editorial educativo · serif + sans",
+                    imageType: "IA editorial",
+                    accent: "#222222",
                   },
                 ] as const
               ).map((tpl) => {

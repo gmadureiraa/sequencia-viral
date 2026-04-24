@@ -52,17 +52,24 @@ function fillVariants<T extends { variant?: SlideVariant }>(slides: T[]): T[] {
  * usando os slides do rascunho. Baseado em `v-templates` do handoff.
  */
 
-// Apenas 2 templates disponíveis por enquanto — Futurista (id interno
-// "manifesto", renomeado no UI) e Twitter. Autoral + Futurista antigo
-// (dark tech) escondidos mas ainda renderizáveis se o user tem draft
-// salvo com visualTemplate dessas variantes.
-const TEMPLATE_ORDER: TemplateId[] = ["manifesto", "twitter"];
+// 4 templates disponíveis — Futurista (id interno "manifesto"), Twitter,
+// Ambitious (motivacional @anajords) e Blank (editorial @blankschoolbr).
+// Autoral + Futurista antigo (dark tech) escondidos mas ainda renderizáveis
+// se o user tem draft salvo com visualTemplate dessas variantes.
+const TEMPLATE_ORDER: TemplateId[] = [
+  "manifesto",
+  "twitter",
+  "ambitious",
+  "blank",
+];
 
 const TEMPLATE_DESC: Record<TemplateId, string> = {
   manifesto: "Editorial cinemático · caps dramático · imagem dominante",
   futurista: "Navy + ciano · Space Grotesk · tech-lean (legado)",
   autoral: "Zine · serif itálica · colagem editorial (legado)",
   twitter: "Mockup de tweet · avatar + handle limpo",
+  ambitious: "Motivacional · foto moody full-bleed · bold italic altura variável",
+  blank: "Editorial educativo · serif Playfair + sans · cada slide um layout",
 };
 
 const TEMPLATE_NAME_OVERRIDE: Partial<Record<TemplateId, string>> = {

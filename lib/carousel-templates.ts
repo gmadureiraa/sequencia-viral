@@ -5,7 +5,13 @@
  * - Paleta e mood coerentes entre os 8 slides de um carrossel
  */
 
-export type DesignTemplateId = "twitter" | "manifesto" | "futurista" | "autoral";
+export type DesignTemplateId =
+  | "twitter"
+  | "manifesto"
+  | "futurista"
+  | "autoral"
+  | "ambitious"
+  | "blank";
 
 /** Template default quando nada é especificado. */
 export const DEFAULT_DESIGN_TEMPLATE: DesignTemplateId = "manifesto";
@@ -149,6 +155,44 @@ export const DESIGN_TEMPLATES: DesignTemplateMeta[] = [
     preferPalette: ["#FFFFFF", "#0A0A0A", "#1D9BF0"],
     avoidPalette: [],
   },
+  {
+    id: "ambitious",
+    emoji: "🦅",
+    name: "Ambitious",
+    desc: "Motivacional estilo @anajords: foto full-bleed moody + frase bold italic atravessando o slide em posição vertical variável.",
+    color: "#EACB7C",
+    blockCount: 8,
+    figmaLabel: "Template Ambitious",
+    imageSearchStyleHint:
+      "moody cinematic lifestyle photography ambitious entrepreneurial aesthetic luxury success late night work golden hour film grain -watermark -shutterstock -getty -istock",
+    imageGenRealismFragment:
+      "Cinematic aspirational lifestyle photograph — moody lighting, golden hour glow or late-night lamp. Looks like a real photo: luxury subtle cues, focus and discipline. Not illustration, not 3D render.",
+    styleGuidePrompt:
+      "Cinematic moody lifestyle photography referencing @anajords aesthetic: rich dark tones, warm amber highlights (golden hour or single lamp), shallow depth of field, small luxury cues (watch, leather, cashmere, espresso, well-organized desk). Subjects: solo focused figures, hands, cityscape from penthouse, open book + journal, food styled sparsely, training gear. Mood: ambition, solitude, discipline, quiet intensity. Camera: Sony A7 + 50mm f/1.2 or film Portra 800 push. AVOID: bright daylight parties, crowds, flat corporate stock, 3D render, cartoon.",
+    slideAestheticModifier:
+      "cinematic moody lifestyle photography amber highlight shallow depth film grain aspirational",
+    preferPalette: ["#0A0A0A", "#1A1818", "#EACB7C", "#C79A52"],
+    avoidPalette: ["#00F0A0", "#1D9BF0", "#7CF067"],
+  },
+  {
+    id: "blank",
+    emoji: "✦",
+    name: "Blank Editorial",
+    desc: "Editorial educativo estilo @blankschoolbr: paper off-white #F9F9F9 + serif Playfair + sans Jakarta, cada slide com layout único (capa, texto, 2 colunas, imagem topo).",
+    color: "#222222",
+    blockCount: 10,
+    figmaLabel: "Template Blank Editorial",
+    imageSearchStyleHint:
+      "editorial documentary portrait landscape cinematic warm neutral tones magazine spread natural light -watermark -shutterstock -getty -istock",
+    imageGenRealismFragment:
+      "Editorial documentary photograph — warm neutral palette, natural light, magazine feature feel (no stock corporate vibe). Real photo, not illustration, not 3D render.",
+    styleGuidePrompt:
+      "Editorial documentary photography in Monocle / Wallpaper / The Gentlewoman aesthetic: warm neutral palette (cream, stone, rust, olive), natural window or golden-hour light, real environments (cabin, desk, paper notebooks, nature, architecture, handwritten pages, cozy studio). Medium format compression, shallow DoF, soft film grain. Subjects: single focused person, hands on notebook, craft objects, outdoor solo figure, bookshelves, coffee on wood table, print mockups. Mood: intellectual, intentional, long-form, slow content. AVOID: neon tech, 3D render, stock smiling office, high-saturation synthetic colors.",
+    slideAestheticModifier:
+      "editorial documentary photography warm neutral palette natural light magazine feature soft grain",
+    preferPalette: ["#F9F9F9", "#D6CDC2", "#8A6C4A", "#222222"],
+    avoidPalette: ["#00F0A0", "#1D9BF0", "#7CF067", "#D262B2"],
+  },
 ] as const;
 
 export const EDITORIAL_ACCENT = "#FF5500";
@@ -164,6 +208,8 @@ const VALID_TEMPLATE_IDS: readonly DesignTemplateId[] = [
   "futurista",
   "autoral",
   "twitter",
+  "ambitious",
+  "blank",
 ];
 
 /** Normaliza qualquer string em um DesignTemplateId válido (default: manifesto). */
@@ -188,6 +234,8 @@ export const CONTENT_MACHINE_RENDER_SPECS: Record<
   futurista: { blocks: 8, rules: CONTENT_MACHINE_NARRATIVE_RULES },
   autoral: { blocks: 8, rules: CONTENT_MACHINE_NARRATIVE_RULES },
   twitter: { blocks: 10, rules: CONTENT_MACHINE_NARRATIVE_RULES },
+  ambitious: { blocks: 8, rules: CONTENT_MACHINE_NARRATIVE_RULES },
+  blank: { blocks: 10, rules: CONTENT_MACHINE_NARRATIVE_RULES },
 };
 
 export function usesNativeSlidePreview(_template: DesignTemplateId): boolean {

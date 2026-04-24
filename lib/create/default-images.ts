@@ -77,11 +77,47 @@ const TWITTER: string[] = [
   IMG("photo-1587440871875-191322ee64b0"), // blue minimal
 ];
 
+/**
+ * Ambitious — fotografia cinemática/lifestyle moody inspirando disciplina,
+ * foco, rotina premium noturna (ref: @anajords).
+ */
+const AMBITIOUS: string[] = [
+  IMG("photo-1498049794561-7780e7231661"), // keyboard close warm
+  IMG("photo-1504196606672-aef5c9cefc92"), // coffee + laptop dark
+  IMG("photo-1491497895121-1334fc14d8c9"), // book reading mood
+  IMG("photo-1519682337058-a94d519337bc"), // street editorial
+  IMG("photo-1522071820081-009f0129c71c"), // people focus work
+  IMG("photo-1523240795612-9a054b0db644"), // watch detail macro
+  IMG("photo-1483389127117-b6a2102724ae"), // city lights night
+  IMG("photo-1507842217343-583bb7270b66"), // luxury notebook
+  IMG("photo-1526045478516-99145907023c"), // espresso + paper
+  IMG("photo-1511376777868-611b54f68947"), // gym / training low light
+];
+
+/**
+ * Blank Editorial — revista intelectual, cabana, escrita, livros, natureza,
+ * sessão de estudo (ref: @blankschoolbr).
+ */
+const BLANK: string[] = [
+  IMG("photo-1519681393784-d120267933ba"), // landscape mountain mood
+  IMG("photo-1455390582262-044cdead277a"), // notebook + handwritten
+  IMG("photo-1481627834876-b7833e8f5570"), // editorial typography
+  IMG("photo-1456513080510-7bf3a84b82f8"), // man outdoor portrait
+  IMG("photo-1516979187457-637abb4f9353"), // notebook writing
+  IMG("photo-1499209974431-9dddcece7f88"), // log cabin editorial
+  IMG("photo-1589395937772-f67057e233df"), // cozy study
+  IMG("photo-1505063366573-38928ae5567e"), // camera tripod
+  IMG("photo-1486329819088-9bc2ee5c1f50"), // man reading cabin
+  IMG("photo-1513623935135-c896b59073c1"), // field creative
+];
+
 const POOLS: Record<TemplateId, string[]> = {
   manifesto: MANIFESTO,
   futurista: FUTURISTA,
   autoral: AUTORAL,
   twitter: TWITTER,
+  ambitious: AMBITIOUS,
+  blank: BLANK,
 };
 
 /**

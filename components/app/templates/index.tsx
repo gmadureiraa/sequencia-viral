@@ -5,6 +5,8 @@ import TemplateManifesto from "./template-manifesto";
 import TemplateFuturista from "./template-futurista";
 import TemplateAutoral from "./template-autoral";
 import TemplateTwitter from "./template-twitter";
+import TemplateAmbitious from "./template-ambitious";
+import TemplateBlank from "./template-blank";
 import type { SlideProps, TemplateId, TemplateMeta } from "./types";
 
 export type { SlideProps, TemplateId, TemplateMeta } from "./types";
@@ -26,6 +28,10 @@ export const TemplateRenderer = forwardRef<
       return <TemplateAutoral ref={ref} {...rest} />;
     case "twitter":
       return <TemplateTwitter ref={ref} {...rest} />;
+    case "ambitious":
+      return <TemplateAmbitious ref={ref} {...rest} />;
+    case "blank":
+      return <TemplateBlank ref={ref} {...rest} />;
     default:
       return <TemplateTwitter ref={ref} {...rest} />;
   }
@@ -57,6 +63,25 @@ export const TEMPLATES_META: TemplateMeta[] = [
     kicker: "Nº 04 · SCREENSHOT",
     palette: ["#FFFFFF", "#1D9BF0", "#0A0A0A"],
   },
+  {
+    id: "ambitious",
+    name: "Ambitious",
+    kicker: "Nº 05 · MOTIVACIONAL",
+    palette: ["#0A0A0A", "#EACB7C", "#F5F5F5"],
+  },
+  {
+    id: "blank",
+    name: "Blank Editorial",
+    kicker: "Nº 06 · EDITORIAL MIX",
+    palette: ["#F9F9F9", "#222222", "#111111"],
+  },
 ];
 
-export { TemplateManifesto, TemplateFuturista, TemplateAutoral, TemplateTwitter };
+export {
+  TemplateManifesto,
+  TemplateFuturista,
+  TemplateAutoral,
+  TemplateTwitter,
+  TemplateAmbitious,
+  TemplateBlank,
+};

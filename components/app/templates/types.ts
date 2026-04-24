@@ -5,7 +5,13 @@
  * `SlideProps` com tratamento visual distinto.
  */
 
-export type TemplateId = "manifesto" | "futurista" | "autoral" | "twitter";
+export type TemplateId =
+  | "manifesto"
+  | "futurista"
+  | "autoral"
+  | "twitter"
+  | "ambitious"
+  | "blank";
 
 export type SlideVariantName =
   | "cover"

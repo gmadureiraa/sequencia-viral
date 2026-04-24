@@ -8,7 +8,14 @@ import {
 } from "@/lib/carousel-templates";
 import type { TemplateId as VisualTemplateId } from "@/components/app/templates/types";
 
-const VISUAL_TEMPLATE_IDS = ["manifesto", "futurista", "autoral", "twitter"] as const;
+const VISUAL_TEMPLATE_IDS = [
+  "manifesto",
+  "futurista",
+  "autoral",
+  "twitter",
+  "ambitious",
+  "blank",
+] as const;
 
 function normalizeVisualTemplate(raw: unknown): VisualTemplateId | undefined {
   if (typeof raw !== "string") return undefined;
@@ -477,6 +484,54 @@ export async function upsertUserCarousel(
       .eq("id", payload.id)
       .eq("user_id", userId)
       .maybeSingle();
+
+    // Se payload.id veio mas o carrossel NÃO existe no DB (onboarding
+    // cria ID client-side antes de persistir), cai pro INSERT com id
+    // explícito em vez de tentar UPDATE de linha inexistente (PGRST116).
+    if (!existingRow) {
+      const insertWithId: Record<string, unknown> = {
+        id: payload.id,
+        user_id: userId,
+        title: payload.title,
+        slides: payload.slides,
+        style,
+        status: payload.status,
+      };
+      if (typeof payload.promptUsed === "string") {
+        insertWithId.prompt_used = payload.promptUsed;
+      }
+      if (payload.imagePeopleMode) {
+        (insertWithId.style as Record<string, unknown>).image_people_mode =
+          payload.imagePeopleMode;
+      }
+      let { data: insData, error: insErr } = await client
+        .from("carousels")
+        .insert(insertWithId)
+        .select(CAROUSEL_LIST_FIELDS)
+        .single();
+      if (insErr && isMissingColumnError(insErr)) {
+        const fb = { ...insertWithId };
+        delete fb.prompt_used;
+        const retry = await client
+          .from("carousels")
+          .insert(fb)
+          .select(CAROUSEL_DETAIL_FIELDS_FALLBACK)
+          .single();
+        insData = (retry.data as unknown) as typeof insData;
+        insErr = retry.error;
+      }
+      if (insErr) {
+        console.error(
+          "[upsertUserCarousel] insert-with-id error:",
+          insErr.message,
+          insErr.details,
+          insErr.hint
+        );
+        throw insErr;
+      }
+      return { row: insData as unknown as CarouselRow, inserted: true };
+    }
+
     const prev =
       existingRow?.style && typeof existingRow.style === "object"
         ? (existingRow.style as Record<string, unknown>)

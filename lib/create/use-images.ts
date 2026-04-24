@@ -18,7 +18,13 @@ export interface RefetchImageInput {
   contextHeading?: string;
   contextBody?: string;
   /** Template visual do carrossel — determina style guide do prompt Imagen. */
-  designTemplate?: "manifesto" | "futurista" | "autoral" | "twitter";
+  designTemplate?:
+    | "manifesto"
+    | "futurista"
+    | "autoral"
+    | "twitter"
+    | "ambitious"
+    | "blank";
   /** Se true, ativa pipeline 2-pass (cover-scene → Imagen) com composição cinematográfica. */
   isCover?: boolean;
   /**

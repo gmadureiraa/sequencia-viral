@@ -76,7 +76,11 @@ import {
   buildFallbackImageQuery,
 } from "@/lib/server/generate-carousel";
 
-export const maxDuration = 60;
+// 120s cobre com folga: IG extract (~12s) + NER (~5s) + Pro writer (~45s)
+// + retry Flash (~15s) + overhead. Antes era 60s — bug recorrente em gerações
+// com URL Instagram justamente porque o pipeline todo passava de 60s quando
+// incluía Apify + Gemini Vision OCR + Pro + retry strict.
+export const maxDuration = 120;
 
 /**
  * Frameworks narrativos opcionais (Content Machine 5.4 — BrandsDecoded).
@@ -1172,12 +1176,22 @@ Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer tra
     const ai = new GoogleGenAI({ apiKey: geminiKey });
     const modelId =
       effectiveMode === "layout-only" ? "gemini-2.5-flash" : "gemini-2.5-pro";
-    // Thinking budget calibrado (writer): 12000 dá raciocínio pra estrutura
-    // 3-atos + escolher dados específicos sem pagar pelos tokens de thinking
-    // que o 16000 gerava sem ganho visível de qualidade. Perf: -~3-5s no P50.
-    // Output: 10000 cabe com folga 3 variations × 10 slides (~1500 tokens de
-    // conteúdo), antes 14000 era superdimensionado.
-    const thinkingBudget = effectiveMode === "layout-only" ? 2000 : 12000;
+    // Thinking budget calibrado (writer): 8000 dá raciocínio pra estrutura
+    // 3-atos + escolher dados específicos. Antes era 12000 mas gastava ~10s
+    // extras sem ganho visível de qualidade (thoughtsTokens P50 ~2200, bem
+    // abaixo do limite). Output: 10000 cabe com folga 3 variations × 10
+    // slides (~1500 tokens de conteúdo).
+    //
+    // IG source especial: content curto (captions + OCR de slides,
+    // ~1000 chars), não precisa de thinking pesado. 6000 já sobra.
+    // Isso reduz latência total: 60s → ~48s no P95 pra gerar a partir
+    // de Instagram, evitando timeout do Vercel.
+    const thinkingBudget =
+      effectiveMode === "layout-only"
+        ? 2000
+        : sourceType === "instagram"
+          ? 6000
+          : 8000;
     const maxOutputTokens = effectiveMode === "layout-only" ? 10000 : 10000;
     // GROUNDING DESATIVADO como default após descoberta (24/04) que Pro +
     // grounding + system "output JSON" retorna JSON DENTRO de ```json fences
@@ -1208,23 +1222,44 @@ Se ignorar essas regras, o carrossel fica shallow e generico. O criador quer tra
           retryable: boolean;
         };
 
+    // Prompt MINIMAL pra retry estrito. O systemPrompt original tem ~49k
+    // chars (12k tokens) — enorme e às vezes confunde Gemini sobre o
+    // formato de output. O prompt minimal abaixo força JSON cru sem
+    // gastar contexto em voice coaching (mesmo modelo já foi treinado
+    // nas instruções na attempt 1).
+    const minimalStrictSystemPrompt = `Você é um gerador de carrossel Instagram em português brasileiro.
+
+Gere 3 variações do carrossel (data, story, provocative) a partir do conteúdo fornecido pelo usuário.
+
+OUTPUT OBRIGATÓRIO — apenas este JSON, sem fences, sem markdown, sem texto antes ou depois:
+
+{
+  "variations": [
+    {
+      "title": "string",
+      "style": "data",
+      "slides": [
+        { "heading": "string", "body": "string", "imageQuery": "string em inglês" }
+      ]
+    },
+    { "title": "...", "style": "story", "slides": [...] },
+    { "title": "...", "style": "provocative", "slides": [...] }
+  ]
+}
+
+Regras:
+- 6-8 slides por variação
+- heading curto (≤ 60 chars), body ≤ 180 chars
+- imageQuery em inglês, 4-6 palavras, cena concreta
+- texto em português brasileiro, tom direto, sem guru
+- Primeiro caractere da resposta é '{', último é '}'`;
+
     async function runWriterAttempt(strict: boolean): Promise<AttemptResult> {
-      // Diagnóstico exaustivo do bug do athanasio.team (24/04):
-      // Testes reveleram que:
-      //   - Pro + grounding ON + "output JSON" → envolve em ```json fences``` às vezes
-      //   - Pro + no grounding + responseMimeType=json → JSON cru sempre
-      //   - Flash + no grounding → JSON cru sempre (mais obediente ainda)
-      // Conclusão: grounding é o culpado. Desativamos como default.
-      //
-      // Attempt normal (strict=false):
-      //   - Pro + no grounding + responseMimeType=json + temp 0.85 + prompt original
-      //
-      // Retry strict (strict=true):
-      //   - Flash + no grounding + responseMimeType=json + temp 0.3 + prompt reforço
-      const strictSystemSuffix = strict
-        ? `\n\n# RETRY ESTRITO\nA tentativa anterior devolveu algo inválido. Agora responde APENAS o objeto JSON cru — sem fences \`\`\`, sem prefixo, sem sufixo, sem comentários. Primeiro caractere '{', último '}'. Valide mentalmente que parseia antes de devolver.`
-        : "";
-      const attemptSystem = `${systemPrompt}${strictSystemSuffix}`;
+      // Attempt 1 (strict=false): Pro + systemPrompt completo + JSON mode + temp 0.85
+      // Attempt 2 (strict=true):  Flash + systemPrompt MINIMAL + JSON mode + temp 0.3
+      //                           — troca prompt de 49K chars por ~600 chars pra
+      //                           eliminar recency bias e confusão de formato.
+      const attemptSystem = strict ? minimalStrictSystemPrompt : systemPrompt;
       const attemptModel = strict ? "gemini-2.5-flash" : modelId;
       const attemptThinkingBudget = strict ? 4000 : thinkingBudget;
 

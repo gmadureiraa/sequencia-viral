@@ -67,6 +67,7 @@ import {
 import { perplexityQuery, isPerplexityConfigured } from "@/lib/perplexity";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { rateLimit, getRateLimitKey, getRequestIp } from "@/lib/server/rate-limit";
+import { captureRouteError } from "@/lib/server/sentry";
 import { getPostHogClient } from "@/lib/posthog-server";
 import {
   geminiWithRetry,
@@ -1803,6 +1804,10 @@ Regras:
       message: msg,
       stack: error instanceof Error ? error.stack : undefined,
       name: error instanceof Error ? error.name : typeof error,
+    });
+    captureRouteError(error, {
+      route: "/api/generate",
+      tags: { stage: "unhandled" },
     });
     return Response.json(
       {

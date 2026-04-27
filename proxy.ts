@@ -21,6 +21,21 @@ const ALLOWED_ORIGINS = new Set([
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Audit P1: handler dedicado pra OPTIONS preflight. Antes,
+  // preflight era roteado pra rota real e podia falhar antes de
+  // setar CORS headers, quebrando requisições cross-origin do browser.
+  if (request.method === "OPTIONS") {
+    return new NextResponse(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": request.headers.get("origin") ?? "*",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Device-Id",
+        "Access-Control-Max-Age": "86400",
+      },
+    });
+  }
+
   // Block /api/debug in production
   if (pathname === "/api/debug" && process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

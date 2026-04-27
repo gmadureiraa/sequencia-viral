@@ -1,8 +1,21 @@
 # Audit — Sequência Viral
 
-_Gerado em 2026-04-21_
+_Gerado em 2026-04-21 · Update 2026-04-25 (passo 1 de fixes aplicado)_
 
-Aplicação em produção (https://viral.kaleidos.com.br) com users ativos. Auditoria read-only — nenhuma alteração de código foi feita.
+Aplicação em produção (https://viral.kaleidos.com.br) com users ativos.
+
+**Status pós-passo 1 (2026-04-25):**
+- ✅ `app/not-found.tsx` custom adicionado (P1 fechado)
+- ✅ `loading.tsx` em 6 rotas críticas (P1 fechado)
+- ✅ Sitemap com `lastModified` estável (P1 fechado)
+- ✅ Usage indicator com barra colorida no sidebar (PLAN.md 2.1)
+- ✅ 25 testes adicionados (template-lock + image query validation)
+- ✅ `docs/technical/ARCHITECTURE.md` (setup, custo, novo template)
+- ⏳ Rename `middleware.ts` → `proxy.ts` (Next 16) — bloqueado por sandbox, ver TODO
+- ⏳ Canonical em `/blog/*`, `/privacy`, `/terms`, `/roadmap` — JÁ ESTAVA presente (audit estava desatualizado)
+- ⏳ Rate limit migration pra Upstash — não feito (P1 grande, fora de escopo do passo)
+- ⏳ `STRIPE_PRICE_PRO`/`BUSINESS` em prod — só missing env, requer ação manual
+- ⏳ Consolidar fontes Google — não feito
 
 - **Stack:** Next.js 16.2.3 (Turbopack) + React 19.2.4 + Tailwind 4 + Supabase (auth + DB) + Stripe + Anthropic + Gemini + Resend + PostHog.
 - **Último deploy prod:** `dpl_5fnTsgUE3FeJ7568NgsB97p868nw` (23h atrás, Ready) em `iad1`.

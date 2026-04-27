@@ -381,19 +381,28 @@ export default function EditPage(props: {
   // o slide alvo pra reutilizar o mesmo file input oculto.
   const uploadTargetRef = useRef<number | null>(null);
 
-  // Hidrata do draft quando carrega.
+  // Hidrata do draft quando carrega — UMA ÚNICA VEZ por draftId.
+  // BUG FIX 2026-04-27: antes esse effect tinha `profile` como dep e
+  // re-rodava sempre que profile re-renderizava (auth refresh, tab focus,
+  // updateProfile, etc), SOBRESCREVENDO as mudanças do user nos slides
+  // com o estado original do draft. User editava imagens, profile
+  // dispara re-render, slides voltavam ao zero. Reportado como
+  // "todas fotos e alterações se perderam".
+  //
+  // Fix: ref pra marcar que já hidratou esse draft. Profile foi movido
+  // pra effect separado (só atualiza kicker/handle, sem tocar slides).
+  const hydratedDraftIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!draft) return;
+    if (hydratedDraftIdRef.current === draft.id) return;
+    hydratedDraftIdRef.current = draft.id;
+
     setTitle(draft.title);
     setSlides(draft.slides.length ? draft.slides : []);
     setSlideStyle(draft.style === "dark" ? "dark" : "white");
     if (!initialTemplate && draft.visualTemplate) {
       setTemplateId(draft.visualTemplate);
     }
-    // Hidrata overrides persistidos (accent/font/text scale).
-    // Prioridade pro accent: draft.accentOverride (salvo) → profile.brand_colors[0]
-    // (cor da marca do user) → default #7CF067. Sem o fallback da marca, template
-    // Futurista usava sempre ACCENT_DEFAULT laranja mesmo quando user escolheu verde.
     if (draft.accentOverride) {
       setAccent(draft.accentOverride);
       setAccentTouched(true);
@@ -403,7 +412,7 @@ export default function EditPage(props: {
       typeof profile!.brand_colors![0] === "string"
     ) {
       setAccent(profile!.brand_colors![0]);
-      setAccentTouched(true); // passa pro TemplateRenderer como accentOverride
+      setAccentTouched(true);
     }
     if (draft.displayFont) {
       setFontId(fontIdFromFamily(draft.displayFont));
@@ -413,17 +422,22 @@ export default function EditPage(props: {
       setTextScale(draft.textScale);
       setScaleTouched(true);
     }
-    if (profile) {
-      setKicker(profile.name || "Seu nome");
-      setHandle(
-        profile.twitter_handle
-          ? `@${profile.twitter_handle}`
-          : profile.instagram_handle
-            ? `@${profile.instagram_handle}`
-            : "@seuhandle"
-      );
-    }
-  }, [draft, initialTemplate, profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, initialTemplate]);
+
+  // Effect separado pra kicker/handle — pode atualizar se profile muda
+  // sem risco de sobrescrever os slides editados.
+  useEffect(() => {
+    if (!profile) return;
+    setKicker(profile.name || "Seu nome");
+    setHandle(
+      profile.twitter_handle
+        ? `@${profile.twitter_handle}`
+        : profile.instagram_handle
+          ? `@${profile.instagram_handle}`
+          : "@seuhandle"
+    );
+  }, [profile]);
 
   const previewProfile = useMemo(
     () => ({

@@ -84,6 +84,7 @@ import {
   validateImageQuery,
   buildFallbackImageQuery,
 } from "@/lib/server/generate-carousel";
+import { translateSourceIfNeeded } from "@/lib/server/translate-source";
 
 // 120s cobre com folga: IG extract (~12s) + NER (~5s) + Pro writer (~45s)
 // + retry Flash (~15s) + overhead. Antes era 60s — bug recorrente em gerações
@@ -675,6 +676,11 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
       }
     }
 
+    // 1.5. Pre-translate source if it's in a divergent language vs target.
+    // Sem isso, o writer (com prompt cheio de "cite literal do source") tende
+    // a copiar o idioma do source e ignorar a regra de LANGUAGE.
+    sourceContent = await translateSourceIfNeeded(sourceContent, language);
+
     // 2. Build the prompt
     const langCode = (language || "pt-br").toLowerCase();
     const isPtBr = langCode === "pt-br" || langCode === "pt";
@@ -713,7 +719,17 @@ Se algum desses itens contradizer outra instrução genérica, o direcionamento 
     // ── LAYOUT-ONLY MODE — prompt minimalista, NÃO escreve ──
     // 2026-04-25: templateLockBlock também aqui — mesmo no layout-only o
     // template trava blockCount, variants permitidas e modifier do imageQuery.
-    const layoutOnlyPrompt = `Você é um FORMATADOR de texto em slides de carrossel. O usuário já escreveu o conteúdo. Sua ÚNICA função é distribuir esse texto em slides de Instagram/LinkedIn.
+    const layoutOnlyPrompt = `🔒 REGRA INVIOLÁVEL #1 — IDIOMA DA SAÍDA
+
+LANGUAGE = ${language === "pt-br" ? "português brasileiro (pt-BR)" : language}
+
+Esta regra VENCE qualquer outra instrução deste prompt — incluindo "fidelidade ao source", citações literais, exemplos. Se o source/refs estão em outro idioma, você TRADUZ E ADAPTA mantendo significado, não copia o idioma original.
+
+Exceção única: nomes próprios (pessoas, marcas, ferramentas), termos técnicos universalmente conhecidos (API, framework, ROI), e códigos/símbolos. TUDO o mais é traduzido.
+
+Use "você" (não "tu" ou "tú"). Tom natural brasileiro, não Portugal.
+
+Você é um FORMATADOR de texto em slides de carrossel. O usuário já escreveu o conteúdo. Sua ÚNICA função é distribuir esse texto em slides de Instagram/LinkedIn.
 
 ${templateLockBlock}
 
@@ -834,7 +850,17 @@ Se ignorar essas regras: ref vira "inspiração solta" e o carrossel sai fora do
     // 2026-04-25: templateLockBlock injetado NO TOPO. Sem isso, o writer
     // ignora o template visual e gera slides com layout/paleta/quantidade
     // fora da referência. Bloco vence qualquer regra estética abaixo.
-    const writerPrompt = `You are the senior editorial director of BrandsDecoded meets Morning Brew meets Paul Graham. Every slide is a scene that earns the next swipe.
+    const writerPrompt = `🔒 REGRA INVIOLÁVEL #1 — IDIOMA DA SAÍDA
+
+LANGUAGE = ${language === "pt-br" ? "português brasileiro (pt-BR)" : language}
+
+Esta regra VENCE qualquer outra instrução deste prompt — incluindo "fidelidade ao source", citações literais, exemplos. Se o source/refs estão em outro idioma, você TRADUZ E ADAPTA mantendo significado, não copia o idioma original.
+
+Exceção única: nomes próprios (pessoas, marcas, ferramentas), termos técnicos universalmente conhecidos (API, framework, ROI), e códigos/símbolos. TUDO o mais é traduzido.
+
+Use "você" (não "tu" ou "tú"). Tom natural brasileiro, não Portugal.
+
+You are the senior editorial director of BrandsDecoded meets Morning Brew meets Paul Graham. Every slide is a scene that earns the next swipe.
 
 ${templateLockBlock}
 

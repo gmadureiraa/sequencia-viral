@@ -26,6 +26,7 @@ import {
   formatFactsBlock,
   type SourceFacts,
 } from "@/lib/server/source-ner";
+import { translateSourceIfNeeded } from "@/lib/server/translate-source";
 
 export type GenerationMode = "writer" | "layout-only";
 export type SlideVariant =
@@ -324,6 +325,11 @@ export async function runGeneration(
     extractionMethod = "instagram-apify";
   }
 
+  // ── 1.5. Pré-tradução do source quando idioma divergente ──
+  // Sem isso, o writer com regra "cite literal do source" copia o idioma
+  // original e ignora a LANGUAGE pedida pelo usuário.
+  sourceContent = await translateSourceIfNeeded(sourceContent, language);
+
   // ── 2. NER pre-processing ──
   const facts = sourceContent
     ? await extractSourceFacts(sourceContent, language)
@@ -401,7 +407,17 @@ ${advHookDirection ? `- Gancho deve: ${advHookDirection}\n` : ""}${advCustomCta 
     : "";
 
   // ── 4. Prompts (copiados da rota, mantendo paridade) ──
-  const layoutOnlyPrompt = `Você é um FORMATADOR de texto em slides. PRESERVE O WORDING, PRESERVE A ORDEM, PRESERVE DADOS E NOMES, PRESERVE O CTA. Zero reescrita. Divide em 6-10 slides. Retorne variations com 1 item. ${languageInstruction} ${advancedBlock}
+  const layoutOnlyPrompt = `🔒 REGRA INVIOLÁVEL #1 — IDIOMA DA SAÍDA
+
+LANGUAGE = ${language === "pt-br" ? "português brasileiro (pt-BR)" : language}
+
+Esta regra VENCE qualquer outra instrução deste prompt — incluindo "fidelidade ao source", citações literais, exemplos. Se o source/refs estão em outro idioma, você TRADUZ E ADAPTA mantendo significado, não copia o idioma original.
+
+Exceção única: nomes próprios (pessoas, marcas, ferramentas), termos técnicos universalmente conhecidos (API, framework, ROI), e códigos/símbolos. TUDO o mais é traduzido.
+
+Use "você" (não "tu" ou "tú"). Tom natural brasileiro, não Portugal.
+
+Você é um FORMATADOR de texto em slides. PRESERVE O WORDING, PRESERVE A ORDEM, PRESERVE DADOS E NOMES, PRESERVE O CTA. Zero reescrita. Divide em 6-10 slides. Retorne variations com 1 item. ${languageInstruction} ${advancedBlock}
 
 # OUTPUT
 \`\`\`json
@@ -420,7 +436,17 @@ Nicho: **${niche}**. Todo exemplo/nome/ferramenta/número do carrossel DEVE ser 
 Se não tem fato específico, use grounding. Proibido: "empresa X", números sem atribuição, analogias fora do nicho.`
       : "";
 
-  const writerPrompt = `You are a narrative architect for Instagram carousels and LinkedIn document posts.
+  const writerPrompt = `🔒 REGRA INVIOLÁVEL #1 — IDIOMA DA SAÍDA
+
+LANGUAGE = ${language === "pt-br" ? "português brasileiro (pt-BR)" : language}
+
+Esta regra VENCE qualquer outra instrução deste prompt — incluindo "fidelidade ao source", citações literais, exemplos. Se o source/refs estão em outro idioma, você TRADUZ E ADAPTA mantendo significado, não copia o idioma original.
+
+Exceção única: nomes próprios (pessoas, marcas, ferramentas), termos técnicos universalmente conhecidos (API, framework, ROI), e códigos/símbolos. TUDO o mais é traduzido.
+
+Use "você" (não "tu" ou "tú"). Tom natural brasileiro, não Portugal.
+
+You are a narrative architect for Instagram carousels and LinkedIn document posts.
 
 # REGRA DE LINGUAGEM
 Escreva como se uma criança de 12 anos precisasse entender sem reler. Frases curtas (max 18 palavras). Palavras do dia a dia. Zero jargão. Se puder usar palavra simples, use. Sem "ecossistema", "narrativa", "ruptura", "paradigma", "sinergia", "disrupção".

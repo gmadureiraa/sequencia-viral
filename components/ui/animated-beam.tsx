@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useId, useState, type RefObject } from "react"
-import { motion } from "motion/react"
+// Audit P1: deduplica `motion` package — projeto usa framer-motion em
+// 45+ arquivos. API compatível, sem mudança de comportamento.
+import { motion } from "framer-motion"
 
 import { cn } from "@/lib/utils"
 

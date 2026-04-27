@@ -7,7 +7,7 @@ import {
   normalizeImagePeopleMode,
 } from "@/lib/carousel-templates";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import {
   costForCall,
   costForImages,
@@ -205,10 +205,15 @@ export async function POST(request: Request) {
     // mais restrito que search (Serper, ~grátis). Quando useDecider=true
     // tratamos como generate-tier (pessimistic) já que ainda não sabemos
     // a escolha do agente mas provavelmente vai custar imagem.
+    // Audit P1: trocado checkRateLimit (sync, in-memory only) por
+    // await rateLimit (async, usa Upstash Redis quando configurado).
+    // Rate limit in-memory por instância serverless permitia bypass
+    // trivial em /api/images — usuário podia atingir Nx limite real
+    // se requests caíssem em N instâncias diferentes.
     const rlLikelyGenerate = mode === "generate" || useDecider;
     const rlBucket = rlLikelyGenerate ? "images-generate" : "images-search";
     const rlLimit = rlLikelyGenerate ? 40 : 120;
-    const limiter = checkRateLimit({
+    const limiter = await rateLimit({
       key: getRateLimitKey(request, rlBucket, user.id),
       limit: rlLimit,
       windowMs: 60 * 60 * 1000,

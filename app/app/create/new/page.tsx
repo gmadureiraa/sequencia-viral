@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { upsertUserCarousel } from "@/lib/carousel-storage";
 import { useGenerate, type GenerationError } from "@/lib/create/use-generate";
 import { DiscountPopup } from "@/components/app/discount-popup";
-import { jsonWithAuth } from "@/lib/api-auth-headers";
+import { authHeaders, jsonWithAuth } from "@/lib/api-auth-headers";
 import { isAdminEmail } from "@/lib/admin-emails";
 
 /**
@@ -321,13 +321,18 @@ export default function NewCarouselPage() {
   }
 
   async function handleAdvancedUpload(files: FileList | null) {
-    if (!files || files.length === 0 || !user || !supabase) return;
+    if (!files || files.length === 0 || !user) return;
     if (advUploadedUrls.length + files.length > 8) {
       toast.error("Máximo de 8 imagens no modo avançado.");
       return;
     }
     setAdvUploading(true);
     try {
+      // Roteia via /api/upload (service role) em vez de upload client-side
+      // direto pro Storage. RLS do bucket `carousel-images` bloqueia INSERT
+      // de usuário autenticado — só service role escreve. Bug pré-fix
+      // (2026-04-27): client-side upload retornava "row-level security
+      // policy violation" e travava o user no modo avançado.
       const uploads = Array.from(files).map(async (file) => {
         if (!file.type.startsWith("image/")) {
           throw new Error(`"${file.name}" não é imagem.`);
@@ -335,20 +340,28 @@ export default function NewCarouselPage() {
         if (file.size > 5 * 1024 * 1024) {
           throw new Error(`"${file.name}" maior que 5MB.`);
         }
-        const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-        const path = `user-uploads/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const { error } = await supabase!.storage
-          .from("carousel-images")
-          .upload(path, file, {
-            contentType: file.type,
-            upsert: false,
-            cacheControl: "31536000",
-          });
-        if (error) throw new Error(error.message);
-        const { data: pub } = supabase!.storage
-          .from("carousel-images")
-          .getPublicUrl(path);
-        return pub.publicUrl;
+        const form = new FormData();
+        form.set("file", file);
+        form.set("carouselId", "user-uploads");
+        // slideIndex usa timestamp+suffix pra evitar colisão entre uploads
+        // simultâneos (cada um vira "slide" único na galeria do user).
+        form.set(
+          "slideIndex",
+          String(Math.floor(Math.random() * 1_000))
+        );
+        // authHeaders (não jsonWithAuth) — multipart precisa que o browser
+        // monte o Content-Type com boundary; jsonWithAuth força app/json e
+        // o servidor retorna "Arquivo não enviado".
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          headers: authHeaders(session),
+          body: form,
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok || !body?.url) {
+          throw new Error(body?.error || `Upload falhou (${res.status})`);
+        }
+        return body.url as string;
       });
       const urls = await Promise.all(uploads);
       setAdvUploadedUrls((prev) => [...prev, ...urls]);

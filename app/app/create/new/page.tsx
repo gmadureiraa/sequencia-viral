@@ -11,6 +11,7 @@ import { upsertUserCarousel } from "@/lib/carousel-storage";
 import { useGenerate, type GenerationError } from "@/lib/create/use-generate";
 import { DiscountPopup } from "@/components/app/discount-popup";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
+import { isAdminEmail } from "@/lib/admin-emails";
 
 /**
  * Tela 01 — Nova criação. User escreve brief → persiste rascunho + já gera
@@ -187,7 +188,7 @@ export default function NewCarouselPage() {
   // - twitter: busca stock (Serper)
   // - manifesto/futurista/autoral: gera imagem cinematográfica (Imagen)
   const [designTemplate, setDesignTemplate] = useState<
-    "manifesto" | "twitter" | "ambitious" | "blank"
+    "manifesto" | "twitter" | "ambitious" | "blank" | "bohdan"
   >("manifesto");
 
   // Modo avançado — dá mais controle ao usuário sobre a geração.
@@ -797,44 +798,58 @@ export default function NewCarouselPage() {
               }}
               role="radiogroup"
             >
-              {(
-                [
+              {(() => {
+                const isAdmin = isAdminEmail(user?.email);
+                const templates: Array<{
+                  id: "manifesto" | "twitter" | "ambitious" | "blank" | "bohdan";
+                  name: string;
+                  mood: string;
+                  imageType: string;
+                  accent: string;
+                  betaOnlyAdmin?: boolean;
+                }> = [
                   {
-                    // "manifesto" é o id interno; UX chama de "Futurista"
-                    // (mood cinematográfico, caps, preto + imagem dramática).
-                    id: "manifesto" as const,
+                    id: "manifesto",
                     name: "Futurista",
                     mood: "Editorial cinemático · caps dramático",
                     imageType: "IA cinematográfico",
                     accent: "#0A0A0A",
                   },
                   {
-                    id: "twitter" as const,
+                    id: "twitter",
                     name: "Thread (X)",
                     mood: "Tweet screenshot · candid",
                     imageType: "Busca stock",
                     accent: "#1D9BF0",
                   },
                   {
-                    id: "ambitious" as const,
+                    id: "ambitious",
                     name: "Ambição",
                     mood: "Motivacional · foto full-bleed sans bold",
                     imageType: "IA cinematográfico",
                     accent: "#EACB7C",
-                    comingSoon: true,
+                    betaOnlyAdmin: true,
                   },
                   {
-                    id: "blank" as const,
+                    id: "blank",
                     name: "Editorial",
                     mood: "Editorial educativo · serif + sans",
                     imageType: "IA editorial",
                     accent: "#222222",
-                    comingSoon: true,
+                    betaOnlyAdmin: true,
                   },
-                ] as const
-              ).map((tpl) => {
+                  {
+                    id: "bohdan",
+                    name: "Bohdan",
+                    mood: "Design-forward · B&W contraste alto · serif italic lime",
+                    imageType: "IA editorial B&W",
+                    accent: "#C8FF3D",
+                    betaOnlyAdmin: true,
+                  },
+                ];
+                return templates.map((tpl) => {
                 const selected = designTemplate === tpl.id;
-                const comingSoon = "comingSoon" in tpl && tpl.comingSoon;
+                const comingSoon = Boolean(tpl.betaOnlyAdmin && !isAdmin);
                 return (
                   <button
                     key={tpl.id}
@@ -933,7 +948,8 @@ export default function NewCarouselPage() {
                     </div>
                   </button>
                 );
-              })}
+                });
+              })()}
             </div>
           </div>
 

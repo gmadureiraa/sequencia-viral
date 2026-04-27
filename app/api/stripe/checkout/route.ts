@@ -1,6 +1,6 @@
 import { stripe, PLANS, PlanId, AUTOPUBLISH_BUMP } from "@/lib/stripe";
 import { getAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import type Stripe from "stripe";
 
 const ALLOWED_ORIGINS = [
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const limiter = checkRateLimit({
+    const limiter = await rateLimit({
       key: getRateLimitKey(request, "stripe-checkout", user.id),
       limit: 10,
       windowMs: 60 * 60 * 1000,

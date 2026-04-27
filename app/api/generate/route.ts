@@ -66,7 +66,7 @@ import {
 } from "@/lib/firecrawl";
 import { perplexityQuery, isPerplexityConfigured } from "@/lib/perplexity";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey, getRequestIp } from "@/lib/server/rate-limit";
 import { getPostHogClient } from "@/lib/posthog-server";
 import {
   geminiWithRetry,
@@ -261,11 +261,19 @@ export async function POST(request: Request) {
     }
     const { user } = auth;
 
-    const limiter = checkRateLimit({
-      key: getRateLimitKey(request, "generate", user.id),
-      limit: 50,
-      windowMs: 60 * 60 * 1000,
-    });
+    // Throttle por IP (5/min) para mitigar abuso quando atacante cria
+    // múltiplos usuários autenticados rapidamente. Roda em paralelo com
+    // o limite por user.id (50/h).
+    const ipKey = `generate-ip:${getRequestIp(request)}`;
+    const [ipLimiter, userLimiter] = await Promise.all([
+      rateLimit({ key: ipKey, limit: 5, windowMs: 60 * 1000 }),
+      rateLimit({
+        key: getRateLimitKey(request, "generate", user.id),
+        limit: 50,
+        windowMs: 60 * 60 * 1000,
+      }),
+    ]);
+    const limiter = !ipLimiter.allowed ? ipLimiter : userLimiter;
     if (!limiter.allowed) {
       return Response.json(
         { error: "Rate limit exceeded. Try again later." },

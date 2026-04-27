@@ -1,7 +1,6 @@
 import type { DesignTemplateId } from "@/lib/carousel-templates";
 import {
   buildTemplateLockBlock,
-  getDesignTemplateMeta,
   normalizeDesignTemplate,
 } from "@/lib/carousel-templates";
 

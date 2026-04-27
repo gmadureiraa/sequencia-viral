@@ -3,12 +3,11 @@
  * O formato thread estilo Twitter usa tipografia fixa —
  * `EDITORIAL_THREAD_FIXED_FONT_STACK` (abaixo).
  *
- * ⚠️ As variáveis --font-dm-serif, --font-playfair, --font-outfit,
- * --font-inter, --font-source-sans e --font-literata NÃO estão mais
- * carregadas pelo root layout (removidas em abr/2026 pra ganhar LCP).
- * Os stacks caem no fallback nativo (Georgia, system-ui, Times, etc).
- * Se voltar a oferecer essas fontes como opção, carregar via next/font
- * dentro do layout de edição, não no root.
+ * As variáveis --font-dm-serif, --font-playfair, --font-outfit, --font-inter,
+ * --font-source-sans e --font-literata são carregadas SOMENTE no layout do
+ * editor (`app/app/create/[id]/edit/layout.tsx`) — fora dele os stacks
+ * caem no fallback nativo (Georgia, system-ui, Times, etc), o que mantém
+ * o root layout enxuto pra LCP da landing.
  */
 
 /** Thread / screenshot estilo Twitter — mesma stack do `carousel-slide` legado; sem troca de fonte na UI. */

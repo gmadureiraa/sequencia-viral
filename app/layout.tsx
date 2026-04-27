@@ -14,9 +14,8 @@ const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 // ── Fontes root layout: apenas 3 (Jakarta sans, Instrument Serif display, JetBrains mono).
 // Fontes editoriais extras (DM Serif, Playfair, Outfit, Inter, Source Sans 3, Literata)
-// eram carregadas eager no root mesmo sem uso real — foram removidas pra reduzir
-// LCP da landing. Se algum futuro editor quiser oferecê-las como opção, usar
-// Next/Font DENTRO do layout `/app/create/[id]/edit` em vez do root.
+// vivem no layout do editor (`app/app/create/[id]/edit/layout.tsx`) — só carregam
+// quando o user abre a tela de edição. Mantém o root layout enxuto pra LCP da landing.
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-sans",
   subsets: ["latin"],

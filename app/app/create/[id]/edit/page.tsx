@@ -799,6 +799,22 @@ export default function EditPage(props: {
     setActiveIndex(afterIndex + 1);
   }
 
+  function deleteSlide(index: number) {
+    if (slides.length <= 1) {
+      toast.error("Carrossel precisa de pelo menos 1 slide.");
+      return;
+    }
+    if (!confirm(`Apagar o slide ${index + 1}?`)) return;
+    setSlides((prev) => prev.filter((_, i) => i !== index));
+    // Ajusta activeIndex pra não apontar pra slide deletado.
+    setActiveIndex((prev) => {
+      if (prev > index) return prev - 1;
+      if (prev === index) return Math.max(0, index - 1);
+      return prev;
+    });
+    toast.success("Slide apagado.");
+  }
+
   async function handleUploadImage(file: File, targetIndex: number) {
     if (!file) return;
     const url = await imagesHook.uploadImage(targetIndex, file, id);
@@ -1504,6 +1520,49 @@ export default function EditPage(props: {
                 >
                   {String(i + 1).padStart(2, "0")}
                 </span>
+                {/* Delete só aparece no slide ATIVO + se houver mais de 1
+                    slide. stopPropagation pra não selecionar o slide ao
+                    clicar no X. */}
+                {i === activeIndex && slides.length > 1 && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Apagar slide ${i + 1}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteSlide(i);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        deleteSlide(i);
+                      }
+                    }}
+                    style={{
+                      position: "absolute",
+                      top: 3,
+                      right: 3,
+                      width: 18,
+                      height: 18,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "var(--sv-pink, #D262B2)",
+                      color: "var(--sv-paper)",
+                      border: "1.5px solid var(--sv-ink)",
+                      fontFamily: "var(--sv-mono)",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      cursor: "pointer",
+                      userSelect: "none",
+                    }}
+                    title="Apagar slide"
+                  >
+                    ×
+                  </span>
+                )}
               </button>
               {/* Setinhas mobile: só aparecem se tiver mais de 1 slide */}
               {slides.length > 1 && (

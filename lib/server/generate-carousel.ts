@@ -440,7 +440,7 @@ Você é um FORMATADOR de texto em slides. PRESERVE O WORDING, PRESERVE A ORDEM,
 
 # OUTPUT
 \`\`\`json
-{"variations":[{"title":"...","style":"story","ctaType":"save","slides":[{"heading":"...","body":"...","imageQuery":"english keywords","variant":"cover|solid-brand|full-photo-bottom|text-only|cta"}]}]}
+{"variations":[{"title":"...","style":"story","ctaType":"save","slides":[{"heading":"...","body":"...","imageQuery":"english keywords","variant":"cover|solid-brand|full-photo-bottom|text-only|cta","imageRef":"number 1-based ou null"}]}]}
 \`\`\``;
 
   const nicheGuide =
@@ -551,7 +551,7 @@ Return valid JSON with 3 variations (data, story, provocative).
       "style": "data"|"story"|"provocative",
       "ctaType": "save"|"comment"|"share",
       "slides": [
-        {"heading":"string","body":"string","imageQuery":"english keywords concrete scene","variant":"cover"|"solid-brand"|"full-photo-bottom"|"text-only"|"cta"}
+        {"heading":"string","body":"string","imageQuery":"english keywords concrete scene","variant":"cover"|"solid-brand"|"full-photo-bottom"|"text-only"|"cta","imageRef": number | null}
       ]
     }
   ]

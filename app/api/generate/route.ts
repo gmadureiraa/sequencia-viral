@@ -791,7 +791,7 @@ Retorne APENAS 1 variação (array \`variations\` com 1 item), style: "story" co
       "style": "story",
       "ctaType": "save",
       "slides": [
-        { "heading": "string literal do user", "body": "resto do trecho preservado", "imageQuery": "english keywords", "variant": "cover|solid-brand|full-photo-bottom|text-only|cta" }
+        { "heading": "string literal do user", "body": "resto do trecho preservado", "imageQuery": "english keywords", "variant": "cover|solid-brand|full-photo-bottom|text-only|cta", "imageRef": "number 1-based ou null se não usar imagem do user" }
       ]
     }
   ]
@@ -983,7 +983,7 @@ BANIDAS keywords: strategy, innovation, growth, AI, future, success, business, d
       "style": "data" | "story" | "provocative",
       "ctaType": "save" | "comment" | "share",
       "slides": [
-        { "heading": "string", "body": "string", "imageQuery": "4-8 english keywords", "variant": "cover" | "solid-brand" | "full-photo-bottom" | "text-only" | "cta" }
+        { "heading": "string", "body": "string", "imageQuery": "4-8 english keywords", "variant": "cover" | "solid-brand" | "full-photo-bottom" | "text-only" | "cta", "imageRef": number | null }
       ]
     }
   ]

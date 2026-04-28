@@ -8,39 +8,18 @@ import { supabase } from "@/lib/supabase";
 import { fetchUserCarousels, type SavedCarousel } from "@/lib/carousel-storage";
 import EditorialSlide from "@/components/app/editorial-slide";
 import { CarouselListSkeleton } from "@/components/app/carousel-skeleton";
-import { jsonWithAuth } from "@/lib/api-auth-headers";
 import { DiscountPopup } from "@/components/app/discount-popup";
 
 /* ============================================================================
  *  Dashboard · Sequência Viral (brutalist editorial Kaleidos)
  * ============================================================================
  *  Ref: design_handoff_sequencia_viral/03-app.html → #v-dashboard
- *  Grid com stat row (4 cols), rascunhos, publicados, ideias sugeridas.
+ *  Grid com stat row, rascunhos e publicados.
+ *  28/04: bloco "Ideias sugeridas" removido (decisão Gabriel —
+ *  simplificação pré-lançamento). /api/suggestions desligado.
  * ========================================================================= */
 
 const CONTAINER_MAX = 1180;
-
-// Temas pra ideias sugeridas (variam por nicho do profile.niche[0])
-const IDEA_DECK: Array<{ n: string; theme: string; title: string; body: string }> = [
-  {
-    n: "01",
-    theme: "MARKETING",
-    title: "O método dos três zeros da Coca-Cola pra posts virais.",
-    body: "Sem açúcar, sem cafeína, sem calorias. A ausência virou ativo — e o princípio funciona pra qualquer post que precise quebrar padrão.",
-  },
-  {
-    n: "02",
-    theme: "CONTEÚDO",
-    title: "Por que threads com 3 bullets ranqueiam mais que textões.",
-    body: "Um estudo interno mostrou que posts com densidade numérica convertem 2,7× mais saves. Um carrossel sobre densidade explica tudo.",
-  },
-  {
-    n: "03",
-    theme: "ESTRATÉGIA",
-    title: "A regra do ‘slide 02’ — o hook real mora no segundo frame.",
-    body: "A capa só compra 1,5s de atenção. O que prende é o que acontece no swipe — transforme isso num carrossel editorial.",
-  },
-];
 
 function planLabel(plan?: string | null): string {
   const p = (plan ?? "free").toLowerCase();
@@ -75,21 +54,11 @@ function formatSince(iso?: string | null): string {
   return d.toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
 }
 
-type RemoteIdea = {
-  id: string;
-  title: string;
-  hook?: string;
-  angle?: string;
-  style?: string;
-};
-
 export default function DashboardPage() {
-  const { profile, user, session } = useAuth();
+  const { profile, user } = useAuth();
   const [carousels, setCarousels] = useState<SavedCarousel[]>([]);
   const [carouselLoading, setCarouselLoading] = useState(true);
   const [carouselError, setCarouselError] = useState<string | null>(null);
-  const [remoteIdeas, setRemoteIdeas] = useState<RemoteIdea[] | null>(null);
-  const [ideasLoading, setIdeasLoading] = useState(false);
 
   const loadCarousels = useCallback(async () => {
     setCarouselError(null);
@@ -116,36 +85,6 @@ export default function DashboardPage() {
     }, 0);
     return () => window.clearTimeout(t);
   }, [loadCarousels]);
-
-  // Carrega ideias sugeridas reais (cache 24h via backend). Se user clicar
-  // 'Gerar mais ideias', chama com ?refresh=1 e substitui as atuais.
-  const loadIdeas = useCallback(
-    async (refresh = false) => {
-      if (!session) return;
-      setIdeasLoading(true);
-      try {
-        const url = refresh ? "/api/suggestions?refresh=1" : "/api/suggestions";
-        const res = await fetch(url, { headers: jsonWithAuth(session) });
-        const data = (await res.json().catch(() => ({}))) as {
-          items?: RemoteIdea[];
-          error?: string;
-        };
-        if (res.ok && Array.isArray(data.items) && data.items.length > 0) {
-          setRemoteIdeas(data.items.slice(0, 6));
-        }
-      } catch (err) {
-        console.warn("[dashboard] suggestions failed:", err);
-      } finally {
-        setIdeasLoading(false);
-      }
-    },
-    [session]
-  );
-
-  useEffect(() => {
-    if (!session) return;
-    void loadIdeas(false);
-  }, [session, loadIdeas]);
 
   // ─── Derivações ────────────────────────────────────────────────────────────
   const firstName = useMemo(() => {
@@ -178,39 +117,6 @@ export default function DashboardPage() {
   const memberSince = formatSince(
     (user?.created_at as string | undefined) ?? null
   );
-
-  // Ideias sugeridas — prefere respostas reais da IA (cache 24h no backend),
-  // cai no deck mock curado se ainda não carregou ou a IA está indisponível.
-  const firstNiche =
-    profile?.niche && profile.niche.length > 0 ? profile.niche[0] : null;
-  const ideas = useMemo(() => {
-    if (remoteIdeas && remoteIdeas.length > 0) {
-      return remoteIdeas.map((it, idx) => ({
-        n: String(idx + 1).padStart(2, "0"),
-        theme:
-          (it.style || firstNiche || "EDITORIAL").toString().toUpperCase(),
-        title: it.title,
-        body:
-          it.angle ||
-          (it.hook ? it.hook.replace(/\s*\|\s*/, " — ") : "Ideia sugerida pela IA."),
-        // Preserva campos crus pro briefing completo em /app/create/new
-        hook: it.hook ?? "",
-        angle: it.angle ?? "",
-        style: it.style ?? "",
-      }));
-    }
-    if (!firstNiche)
-      return IDEA_DECK.map((i) => ({ ...i, hook: "", angle: "", style: "" }));
-    const upper = firstNiche.toUpperCase();
-    return IDEA_DECK.map((i, idx) => ({
-      ...i,
-      theme: idx === 0 ? upper : i.theme,
-      hook: "",
-      angle: "",
-      style: "",
-    }));
-  }, [firstNiche, remoteIdeas]);
-  void ideasLoading; // reservado para spinner futuro
 
   const totalCarousels = carousels.length;
 
@@ -409,154 +315,13 @@ export default function DashboardPage() {
             />
           </motion.section>
 
-          {/* ──────────────────────────────────────────────────────────────────
-               3. IDEIAS SUGERIDAS (MOVIDAS PRA ANTES DOS CARROSSEIS)
-             ────────────────────────────────────────────────────────────────── */}
-          <motion.section
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.1 }}
-            transition={{ duration: 0.5 }}
-            style={{ marginBottom: 56 }}
-          >
-            <SectionHead
-              kicker="● Nº 02 · PARA HOJE"
-              title={<>Ideias <em>sugeridas</em>.</>}
-              sub="Baseadas no seu nicho · atualizadas diariamente · arraste pro lado pra ver mais"
-              action={
-                <button
-                  type="button"
-                  onClick={() => void loadIdeas(true)}
-                  disabled={ideasLoading}
-                  className="sv-btn sv-btn-outline"
-                  style={{
-                    opacity: ideasLoading ? 0.5 : 1,
-                    cursor: ideasLoading ? "wait" : "pointer",
-                  }}
-                >
-                  {ideasLoading ? "Gerando…" : "↻ Gerar mais ideias"}
-                </button>
-              }
-            />
-
-            {/* Row horizontal scrollavel: 3 visiveis no desktop, arrasta pra ver
-                o resto. Mobile naturalmente scrolla 1 por vez. Snap pra
-                centralizar nos cards. */}
-            <div
-              className="sv-ideas-strip"
-              style={{
-                display: "flex",
-                overflowX: "auto",
-                overflowY: "hidden",
-                gap: 16,
-                paddingBottom: 10,
-                scrollSnapType: "x mandatory",
-                scrollbarWidth: "thin",
-                WebkitOverflowScrolling: "touch",
-              }}
-            >
-              {ideas.map((idea, i) => (
-                <motion.button
-                  key={idea.n}
-                  type="button"
-                  initial={{ opacity: 0, y: 14 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, amount: 0.1 }}
-                  transition={{ duration: 0.45, delay: i * 0.05 }}
-                  onClick={() => {
-                    // Grava briefing completo na sessionStorage e navega.
-                    // create/new le e pre-preenche form com hook + angle + style.
-                    try {
-                      sessionStorage.setItem(
-                        "sv_active_idea",
-                        JSON.stringify({
-                          title: idea.title,
-                          hook: idea.hook,
-                          angle: idea.angle,
-                          style: idea.style,
-                          theme: idea.theme,
-                          body: idea.body,
-                        })
-                      );
-                    } catch {
-                      /* ignore */
-                    }
-                    window.location.href = `/app/create/new?idea=${encodeURIComponent(idea.title)}`;
-                  }}
-                  className="sv-card text-left"
-                  style={{
-                    flex: "0 0 calc((100% - 32px) / 3)",
-                    minWidth: 260,
-                    scrollSnapAlign: "start",
-                    padding: 20,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 12,
-                    cursor: "pointer",
-                    background: "var(--sv-white)",
-                    border: "1.5px solid var(--sv-ink)",
-                  }}
-                >
-                  <span className="sv-kicker">
-                    ● Nº {idea.n} · {idea.theme.slice(0, 26)}
-                  </span>
-                  <h3
-                    style={{
-                      fontFamily: "var(--sv-display)",
-                      fontStyle: "italic",
-                      fontSize: 19,
-                      lineHeight: 1.2,
-                      color: "var(--sv-ink)",
-                      margin: 0,
-                    }}
-                  >
-                    {idea.title}
-                  </h3>
-                  <p
-                    style={{
-                      fontFamily: "var(--sv-sans)",
-                      fontSize: 13,
-                      lineHeight: 1.5,
-                      color: "var(--sv-muted)",
-                      margin: 0,
-                      display: "-webkit-box",
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {idea.body}
-                  </p>
-                  <hr className="sv-divider" style={{ margin: "4px 0" }} />
-                  <span
-                    className="sv-kicker"
-                    style={{
-                      color: "var(--sv-ink)",
-                      letterSpacing: "0.16em",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      marginTop: "auto",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        background: "var(--sv-green)",
-                        border: "1px solid var(--sv-ink)",
-                        display: "inline-block",
-                      }}
-                    />
-                    USAR IDEIA →
-                  </span>
-                </motion.button>
-              ))}
-            </div>
-          </motion.section>
+          {/* Seção "Ideias sugeridas" removida em 2026-04-28 (decisão
+              Gabriel — simplificação pré-lançamento). Geração via
+              /api/suggestions também desligada. Pra reativar:
+              git revert deste commit. */}
 
           {/* ──────────────────────────────────────────────────────────────────
-               4. SEUS CARROSSÉIS (abaixo das ideias agora)
+               3. SEUS CARROSSÉIS
              ────────────────────────────────────────────────────────────────── */}
           <motion.section
             initial={{ opacity: 0, y: 16 }}

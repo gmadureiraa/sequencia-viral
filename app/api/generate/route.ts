@@ -1553,6 +1553,11 @@ Regras:
     }
 
     const tWriter = Date.now();
+    // Telemetria de retry — antes a falha do attempt 1 era invisível.
+    // Audit P3 (Antigravity): "retry silencioso degrada qualidade sem avisar".
+    // meta.retried=true sinaliza pro front (e logs) que foi attempt 2 (Flash).
+    let wasRetried = false;
+    let actualModelUsed: string = modelId;
     let attempt = await runWriterAttempt(false);
     if (!attempt.ok && attempt.retryable) {
       console.warn("[generate] attempt 1 falhou, tentando strict retry:", {
@@ -1562,6 +1567,8 @@ Regras:
         reason: attempt.reason,
         details: attempt.details,
       });
+      wasRetried = true;
+      actualModelUsed = "gemini-2.5-flash";
       attempt = await runWriterAttempt(true);
     }
 
@@ -1890,6 +1897,11 @@ Regras:
       meta: {
         effectiveMode,
         sourceChars: sourceContent.length,
+        // Audit P3: visibility do retry silencioso. Se retried=true e model
+        // != Pro, o front pode mostrar nota "Gerado em modo simplificado pra
+        // garantir entrega" ou esconder painel de qualidade.
+        retried: wasRetried,
+        model: actualModelUsed,
         facts: facts.skipped
           ? null
           : {

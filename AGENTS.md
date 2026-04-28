@@ -19,4 +19,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Plano `business` cap
 
-- `business` é o tier topo (DB key, mostrado como "Pro"). Cap mensal de **300 carrosséis** declarado em `lib/pricing.ts` (`PLANS.business.carouselsPerMonth = 300`). O guard explícito está em `app/api/generate/route.ts` antes do increment atomic — qualquer mudança de cap precisa atualizar `PLANS` + webhook stripe (`usageLimit` setado em `customer.subscription.created/updated`).
+- `business` é o tier topo (DB key, mostrado como "Pro"). Cap mensal de **100 carrosséis** declarado em `lib/pricing.ts` (`PLANS.business.carouselsPerMonth = 100`). Antes era 300 — reduzido em 28/04/2026 após audit de custos mostrar margem negativa (300 × ~R$ 0,85 custo = R$ 255 vs R$ 97,90 receita). Users existentes mantêm cap antigo via grandfathering (`usage_limit` não é mexido em mudanças de cap, só em subscription.updated do Stripe). O guard explícito está em `app/api/generate/route.ts` antes do increment atomic — qualquer mudança de cap precisa atualizar `PLANS` + webhook stripe.

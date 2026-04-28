@@ -126,7 +126,7 @@ const jsonLd = {
       price: "97.90",
       priceCurrency: "BRL",
       billingIncrement: "P1M",
-      description: "300 carrosséis/mês, imagens IA + stock, cache inteligente, suporte prioritário (preço de lançamento, anchor R$ 199,90)",
+      description: "100 carrosséis/mês, imagens IA + stock, cache inteligente, suporte prioritário (preço de lançamento, anchor R$ 199,90)",
     },
   ],
   featureList: [

@@ -59,13 +59,15 @@ export const PLANS = {
     priceAnchor: 19990, // R$ 199,90 preco riscado (anchor visual)
     // Product ID do Stripe. DB key 'business' mapeia pro produto "Pro".
     stripeProductId: "prod_UNrgO9pSZYSveR",
-    // Cap real do plano: 300/mês. Custo bruto Imagen ~$0.32 × 300 = $96/mês,
-    // batendo no preço de R$ 97,90/mês (anchor R$ 199,90 = US$ ~36 dependendo
-    // do câmbio) — margem só fecha em escala. Cap explícito evita o caso
-    // edge onde um user roda batch automatizado e queima o budget.
-    carouselsPerMonth: 300,
+    // Cap reduzido 300 → 100 em 2026-04-28: audit completo mostrou
+    // que 300 × ~R$ 0,85/carrossel = R$ 255 de custo bruto vs R$ 97,90
+    // de receita = MARGEM NEGATIVA. Cap 100 = ~R$ 85 custo, fecha
+    // margem ~13% (apertada mas não queima dinheiro). Users do plano
+    // existentes mantêm 300 via grandfathering — Stripe webhook preserva
+    // usage_limit setado quando subscription foi criada.
+    carouselsPerMonth: 100,
     features: [
-      "300 carrosséis/mês",
+      "100 carrosséis/mês",
       "Carrosséis de até 12 slides",
       "Todas as origens",
       "Sem marca d'água",

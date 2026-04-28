@@ -37,7 +37,7 @@ const CREATOR_FEATURES = PLANS.pro.features.slice(0, 7);
 // Nao puxamos de PLANS.business.features — aquele e mais detalhado e repetia
 // coisas do Creator.
 const PRO_FEATURES = [
-  "300 carrosséis/mês",
+  "100 carrosséis/mês",
   "Tudo que o Creator tem",
   "Acesso antecipado a novos templates",
   "Agendamento + publicação automática (em breve)",
@@ -129,7 +129,7 @@ const FAQ = [
   },
   {
     q: "Qual a diferença entre Creator e Pro?",
-    a: "Creator é pra quem publica 2-3× por semana (10 carrosséis/mês). Pro é pra quem publica todo dia ou gerencia mais de uma marca (300 carrosséis/mês + suporte prioritário). Ambos geram carrosséis de até 12 slides.",
+    a: "Creator é pra quem publica 2-3× por semana (10 carrosséis/mês). Pro é pra quem publica todo dia ou gerencia mais de uma marca (100 carrosséis/mês + suporte prioritário). Ambos geram carrosséis de até 12 slides.",
   },
 ];
 

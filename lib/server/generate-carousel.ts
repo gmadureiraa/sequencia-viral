@@ -361,6 +361,59 @@ export async function runGeneration(
     advanced.numSlides <= 12
       ? Math.round(advanced.numSlides)
       : null;
+
+  // Detecta contagem explícita de slides/tópicos no brief do user.
+  // Bug 28/04: user pediu "cada página = 1 dos 6 tópicos do vídeo" e a
+  // IA gerou 16 slides. Aqui parseamos sinais explícitos e travamos a
+  // contagem antes do writer, dependente de `advNumSlides` não estar
+  // setado (Modo Avançado vence).
+  function detectSlideCountFromBrief(brief: string): {
+    count: number;
+    semantics: "exact-slides" | "topics-plus-shell";
+  } | null {
+    if (!brief) return null;
+    const text = brief
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    // "8 slides", "12 paginas"
+    const slidesMatch = text.match(
+      /\b(\d{1,2})\s*(slides?|paginas?|cards?)\b/
+    );
+    if (slidesMatch) {
+      const n = parseInt(slidesMatch[1], 10);
+      if (n >= 3 && n <= 20) {
+        return { count: n, semantics: "exact-slides" };
+      }
+    }
+
+    // "6 topicos", "5 partes", "4 secoes", "3 etapas", "7 passos" —
+    // semântica = capa + N + CTA (slides totais = N + 2)
+    const topicsMatch = text.match(
+      /\b(\d{1,2})\s*(topicos?|topicos|partes?|seco?es?|etapas?|passos?|fases?|pontos?|itens?)\b/
+    );
+    if (topicsMatch) {
+      const n = parseInt(topicsMatch[1], 10);
+      if (n >= 2 && n <= 18) {
+        return { count: n, semantics: "topics-plus-shell" };
+      }
+    }
+    return null;
+  }
+
+  const detectedCount =
+    advNumSlides == null ? detectSlideCountFromBrief(topic) : null;
+  const explicitSlideCount = detectedCount
+    ? detectedCount.semantics === "topics-plus-shell"
+      ? detectedCount.count + 2 // capa + N tópicos + CTA
+      : detectedCount.count
+    : null;
+  if (explicitSlideCount) {
+    console.log(
+      `[generate-carousel] slide count explícito detectado: ${detectedCount?.count} ${detectedCount?.semantics} → ${explicitSlideCount} slides`
+    );
+  }
   const advPreferredStyle =
     advanced?.preferredStyle === "data" ||
     advanced?.preferredStyle === "story" ||
@@ -394,8 +447,34 @@ export async function runGeneration(
     advExtraContext ||
     advNumSlides ||
     advPreferredStyle ||
-    advContentFramework
+    advContentFramework ||
+    explicitSlideCount
   );
+
+  // Contagem final que vai pro prompt — prioridade:
+  // 1. advNumSlides (Modo Avançado, user explícito via UI)
+  // 2. explicitSlideCount (detectado no brief: "8 slides", "6 tópicos")
+  // 3. null → modelo escolhe entre 6-10
+  const enforcedSlideCount = advNumSlides ?? explicitSlideCount;
+  const slideCountInstruction = enforcedSlideCount
+    ? `EXATAMENTE ${enforcedSlideCount}`
+    : "6-10";
+  const slideCountStrictBlock = enforcedSlideCount
+    ? `
+
+🔒 REGRA INVIOLÁVEL #2 — CONTAGEM DE SLIDES
+NUMERO DE SLIDES = EXATAMENTE ${enforcedSlideCount}. Nem mais, nem menos.
+${
+  detectedCount?.semantics === "topics-plus-shell"
+    ? `O usuário pediu ${detectedCount.count} tópicos. Estrutura obrigatória:
+- Slide 1: capa (cover)
+- Slides 2 a ${enforcedSlideCount - 1}: cada um cobre exatamente UM dos ${detectedCount.count} tópicos da fonte/brief — não invente tópicos extras, não funda dois em um.
+- Slide ${enforcedSlideCount}: CTA final.`
+    : `Capa + miolo + CTA cabem dentro de ${enforcedSlideCount}. Não estoure.`
+}
+Se você gerar diferente, o output será REJEITADO.
+`
+    : "";
 
   const langCode = (language || "pt-br").toLowerCase();
   const isPtBr = langCode === "pt-br" || langCode === "pt";
@@ -421,7 +500,7 @@ export async function runGeneration(
   const advancedBlock = advancedActive
     ? `
 # MODO AVANÇADO — DIRECIONAMENTOS EXPLÍCITOS DO USUÁRIO (prioridade alta)
-${advHookDirection ? `- Gancho deve: ${advHookDirection}\n` : ""}${advCustomCta ? `- CTA final EXATO: "${advCustomCta}"\n` : ""}${advNumSlides ? `- Número de slides: EXATAMENTE ${advNumSlides}.\n` : ""}${advPreferredStyle ? `- Estilo forçado: APENAS "${advPreferredStyle}"\n` : ""}${advContentFramework ? `- Framework: ${frameworkSpec[advContentFramework]}\n` : ""}${advExtraContext ? `- Contexto adicional:\n"""\n${advExtraContext}\n"""\n` : ""}
+${advHookDirection ? `- Gancho deve: ${advHookDirection}\n` : ""}${advCustomCta ? `- CTA final EXATO: "${advCustomCta}"\n` : ""}${enforcedSlideCount ? `- Número de slides: EXATAMENTE ${enforcedSlideCount}.\n` : ""}${advPreferredStyle ? `- Estilo forçado: APENAS "${advPreferredStyle}"\n` : ""}${advContentFramework ? `- Framework: ${frameworkSpec[advContentFramework]}\n` : ""}${advExtraContext ? `- Contexto adicional:\n"""\n${advExtraContext}\n"""\n` : ""}
 `
     : "";
 
@@ -436,7 +515,7 @@ Exceção única: nomes próprios (pessoas, marcas, ferramentas), termos técnic
 
 Use "você" (não "tu" ou "tú"). Tom natural brasileiro, não Portugal.
 
-Você é um FORMATADOR de texto em slides. PRESERVE O WORDING, PRESERVE A ORDEM, PRESERVE DADOS E NOMES, PRESERVE O CTA. Zero reescrita. Divide em 6-10 slides. Retorne variations com 1 item. ${languageInstruction} ${advancedBlock}
+Você é um FORMATADOR de texto em slides. PRESERVE O WORDING, PRESERVE A ORDEM, PRESERVE DADOS E NOMES, PRESERVE O CTA. Zero reescrita. Divide em ${slideCountInstruction} slides. Retorne variations com 1 item. ${languageInstruction} ${advancedBlock}${slideCountStrictBlock}
 
 # OUTPUT
 \`\`\`json
@@ -474,7 +553,7 @@ ${languageInstruction}
 TONE: ${tone || "professional"}
 NICHE: ${niche || "general"}
 ${nicheGuide}
-${advancedBlock}
+${advancedBlock}${slideCountStrictBlock}
 ${
   brandContext
     ? `
@@ -494,7 +573,7 @@ Feedback vence instrução genérica.
   }
 
 # YOUR MISSION
-Create 1 carousel (6-10 slides) built on NARRATIVE TENSION.
+Create 1 carousel (${slideCountInstruction} slides) built on NARRATIVE TENSION.
 
 # REFERÊNCIA EDITORIAL PREMIUM (BrandsDecoded)
 - **CAPA**: "Afirmação Contraintuitiva + Pergunta de Aprofundamento" 12-25 palavras CAIXA ALTA.
@@ -577,7 +656,7 @@ Return valid JSON with 3 variations (data, story, provocative).
     }
   ]
 }
-6-10 slides por variação.`;
+${slideCountInstruction} slides por variação.`;
 
   // ── 5. Source slice + facts block ──
   const SOURCE_SLICE = sourceType === "video" ? 18000 : 10000;
@@ -779,6 +858,34 @@ Source = GROUND TRUTH. Cite NOMES PRÓPRIOS, NÚMEROS/DATAS, FRASES DE IMPACTO l
       (v) => v.style === advPreferredStyle
     );
     if (filtered.length > 0) finalVariations = filtered.slice(0, 1);
+  }
+
+  // Hard truncate: se o user pediu N slides explícito (via Modo Avançado
+  // OU detecção no brief tipo "6 tópicos"), e o modelo desobedeceu, corta
+  // pra contagem certa. Mantém capa (slide 0) e CTA (último slide), corta
+  // o miolo. Bug 28/04: user pediu 8 slides, modelo deu 16; agora trunca
+  // pra 8 mantendo a capa + 6 do meio + CTA.
+  if (enforcedSlideCount && enforcedSlideCount >= 3) {
+    for (const variation of finalVariations) {
+      if (!variation.slides || variation.slides.length === enforcedSlideCount) {
+        continue;
+      }
+      const slides = variation.slides;
+      if (slides.length > enforcedSlideCount) {
+        const cover = slides[0];
+        const cta = slides[slides.length - 1];
+        const middleNeeded = enforcedSlideCount - 2;
+        const middleAvailable = slides.slice(1, -1);
+        // Pega os primeiros N-2 do miolo (ordem narrativa preservada).
+        const middle = middleAvailable.slice(0, middleNeeded);
+        variation.slides = [cover, ...middle, cta];
+        console.log(
+          `[generate-carousel] truncate: ${slides.length} → ${variation.slides.length} slides (enforced=${enforcedSlideCount})`
+        );
+      }
+      // Se vier menos que enforced, deixa rolar — não dá pra inventar
+      // slides com qualidade pós-fato. Toast no front pode avisar.
+    }
   }
   // Pós-processamento de imagens do usuário.
   // Se o modelo retornou imageRef (1-based) nos slides, usa esse mapeamento semântico.

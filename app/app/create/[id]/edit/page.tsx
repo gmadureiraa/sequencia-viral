@@ -716,10 +716,34 @@ export default function EditPage(props: {
     setDragIndex(index);
   }
   function handleDragOver(e: React.DragEvent, index: number) {
+    // Aceita 2 tipos de drag:
+    // 1. Slide arrastado de outro slide (reorder) — dragIndex !== null
+    // 2. Arquivo arrastado do filesystem (upload) — dataTransfer.types tem "Files"
     e.preventDefault();
     if (dragOverIndex !== index) setDragOverIndex(index);
   }
-  function handleDrop(targetIndex: number) {
+  function handleDrop(e: React.DragEvent, targetIndex: number) {
+    // Caso 1 — arquivo do filesystem (drag-and-drop upload).
+    // Pegamos o primeiro arquivo de imagem e fazemos upload pro slide alvo.
+    // Reset do estado de drag interno é feito mesmo se for upload (evita
+    // ficar com highlight residual).
+    const fileList = e.dataTransfer?.files;
+    if (fileList && fileList.length > 0) {
+      e.preventDefault();
+      setDragIndex(null);
+      setDragOverIndex(null);
+      const file = Array.from(fileList).find((f) =>
+        f.type.startsWith("image/")
+      );
+      if (!file) {
+        toast.error("Solta uma imagem (PNG/JPG/WEBP/GIF).");
+        return;
+      }
+      void handleUploadImage(file, targetIndex);
+      return;
+    }
+
+    // Caso 2 — reorder slides (drag interno).
     if (dragIndex === null || dragIndex === targetIndex) {
       setDragIndex(null);
       setDragOverIndex(null);
@@ -731,7 +755,6 @@ export default function EditPage(props: {
       next.splice(targetIndex, 0, moved);
       return next;
     });
-    // Ajusta activeIndex pra continuar apontando pro mesmo slide.
     setActiveIndex((prevActive) => {
       if (prevActive === dragIndex) return targetIndex;
       if (dragIndex < prevActive && targetIndex >= prevActive) return prevActive - 1;
@@ -1196,11 +1219,70 @@ export default function EditPage(props: {
     </div>
   );
 
+  // Detecta drag de arquivo sobre o canvas pra mostrar hint visual.
+  const [canvasDropping, setCanvasDropping] = useState(false);
+
   const CanvasCol = (
     <div
-      className="flex flex-col items-center gap-4"
+      className="flex flex-col items-center gap-4 relative"
       style={{ padding: "18px 14px", background: "var(--sv-soft)", minHeight: 480, minWidth: 0 }}
+      onDragOver={(e) => {
+        // Aceita drop só de arquivos (não slides). Slides reorder usam handleDrop
+        // dos thumbnails — esse drop zone aqui é exclusivo pra upload.
+        if (e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+          if (!canvasDropping) setCanvasDropping(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        // Só limpa se saiu do container inteiro (não de filho interno).
+        const related = e.relatedTarget as Node | null;
+        if (!related || !e.currentTarget.contains(related)) {
+          setCanvasDropping(false);
+        }
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+        e.preventDefault();
+        setCanvasDropping(false);
+        const file = Array.from(e.dataTransfer.files).find((f) =>
+          f.type.startsWith("image/")
+        );
+        if (!file) {
+          toast.error("Solta uma imagem (PNG/JPG/WEBP/GIF).");
+          return;
+        }
+        void handleUploadImage(file, activeIndex);
+      }}
     >
+      {/* Overlay visual quando user arrasta arquivo sobre o canvas. */}
+      {canvasDropping && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none"
+          style={{
+            background: "rgba(124, 240, 103, 0.22)",
+            border: "3px dashed var(--sv-green)",
+          }}
+        >
+          <div
+            style={{
+              padding: "16px 24px",
+              background: "var(--sv-ink)",
+              color: "var(--sv-paper)",
+              fontFamily: "var(--sv-mono)",
+              fontSize: 12,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              fontWeight: 700,
+              border: "1.5px solid var(--sv-ink)",
+              boxShadow: "4px 4px 0 0 var(--sv-green)",
+            }}
+          >
+            ↓ Solta pra usar nesse slide
+          </div>
+        </div>
+      )}
+
       {active && (
         <div
           style={{
@@ -1363,7 +1445,7 @@ export default function EditPage(props: {
                 onClick={() => setActiveIndex(i)}
                 onDragStart={() => handleDragStart(i)}
                 onDragOver={(e) => handleDragOver(e, i)}
-                onDrop={() => handleDrop(i)}
+                onDrop={(e) => handleDrop(e, i)}
                 onDragEnd={handleDragEnd}
                 style={{
                   flexShrink: 0,

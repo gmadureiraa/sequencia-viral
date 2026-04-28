@@ -187,9 +187,11 @@ export default function NewCarouselPage() {
   // Template visual escolhido antes de gerar — determina a lógica de imagem:
   // - twitter: busca stock (Serper)
   // - manifesto/futurista/autoral: gera imagem cinematográfica (Imagen)
+  // Default "twitter" — único template público pra usuário comum desde 28/04.
+  // Admin pode trocar pros betas (manifesto/ambitious/blank/bohdan) no picker.
   const [designTemplate, setDesignTemplate] = useState<
     "manifesto" | "twitter" | "ambitious" | "blank" | "bohdan"
-  >("manifesto");
+  >("twitter");
 
   // Modo avançado — dá mais controle ao usuário sobre a geração.
   // Fica escondido atrás de um toggle pra não assustar usuário novo.
@@ -822,11 +824,14 @@ export default function NewCarouselPage() {
                   betaOnlyAdmin?: boolean;
                 }> = [
                   {
+                    // Decisão Gabriel 28/04: Manifesto/Futurista volta pra beta
+                    // até estabilizar tipografia + image gen.
                     id: "manifesto",
                     name: "Futurista",
                     mood: "Editorial cinemático · caps dramático",
                     imageType: "IA cinematográfico",
                     accent: "#0A0A0A",
+                    betaOnlyAdmin: true,
                   },
                   {
                     id: "twitter",

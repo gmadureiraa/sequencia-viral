@@ -84,11 +84,12 @@ const TEMPLATE_NAME_OVERRIDE: Partial<Record<TemplateId, string>> = {
  * selecionáveis pra usuários comuns. Admin (gf.madureiraa@gmail.com etc)
  * pode usar normalmente, sem badge — pra testar antes de soltar geral.
  *
- * Pedido Gabriel 24/04: Ambição precisa diminuir fonte bastante e
- * Editorial ainda tá em ajuste de variantes. Bohdan recém-criado
- * (25/04) — admin testa, geral espera estabilizar.
+ * Decisão Gabriel 28/04: APENAS Twitter público por enquanto. Os outros 4
+ * templates (Manifesto/Futurista, Ambição, Editorial Blank, Bohdan)
+ * voltam pro modo beta-only-admin pra estabilizar antes de liberar geral.
  */
 const COMING_SOON_BASE: Partial<Record<TemplateId, true>> = {
+  manifesto: true,
   ambitious: true,
   blank: true,
   bohdan: true,

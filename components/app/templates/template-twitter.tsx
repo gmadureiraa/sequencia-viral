@@ -261,8 +261,11 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
                     height: "100%",
                     borderRadius: 16,
                     overflow: "hidden",
-                    background: "#F4F4F5",
-                    border: `1px solid ${borderColor}`,
+                    // Audit Gabriel 2026-04-28: removido background cinza
+                    // (#F4F4F5) + border que criavam contorno visível em volta
+                    // da imagem. Agora a imagem ocupa 100% do container e
+                    // letterbox (se houver) é da cor do card do tweet.
+                    background: "transparent",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -276,7 +279,11 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
                     style={{
                       width: "100%",
                       height: "100%",
-                      objectFit: "contain",
+                      // objectFit: "cover" preenche 100% do container (corta
+                      // bordas se necessário pra manter aspect ratio). User
+                      // pediu imagem "inteira na página" — cover usa toda área
+                      // sem letterbox cinza.
+                      objectFit: "cover",
                       objectPosition: "center",
                       display: "block",
                     }}
@@ -454,8 +461,8 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    background: "#f4f4f5",
-                    border: `1px solid ${borderColor}`,
+                    // Removido background cinza + border (audit 2026-04-28).
+                    background: "transparent",
                   }}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -466,7 +473,8 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
                     style={{
                       width: "100%",
                       height: "100%",
-                      objectFit: "contain",
+                      // cover preenche 100% (sem letterbox cinza)
+                      objectFit: "cover",
                       objectPosition: "center",
                       display: "block",
                       borderRadius: 16,

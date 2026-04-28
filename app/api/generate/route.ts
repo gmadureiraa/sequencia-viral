@@ -1253,12 +1253,18 @@ Se ignorar, o carrossel fica shallow e generico — não é o que o criador quer
     // strict e elimina o ponto de falha do parse que afeta Pro com
     // prompts de 49K chars. Tradeoff: qualidade editorial um pouco menor
     // — aceitável dado que IG é ingestão de conteúdo já pronto.
+    // Twitter template: conteúdo é screenshot de tweet (texto puro, sem
+    // estética cinematográfica). Flash dá conta com qualidade equivalente
+    // e corta ~25-40s do tempo total (Pro 40s → Flash 15s). Decisão
+    // 2026-04-28 após user reportar 90s na geração.
     const modelId =
       effectiveMode === "layout-only"
         ? "gemini-2.5-flash"
         : sourceType === "instagram"
           ? "gemini-2.5-flash"
-          : "gemini-2.5-pro";
+          : designTemplateNormalized === "twitter"
+            ? "gemini-2.5-flash"
+            : "gemini-2.5-pro";
     // Thinking budget calibrado (writer): 8000 dá raciocínio pra estrutura
     // 3-atos + escolher dados específicos. Antes era 12000 mas gastava ~10s
     // extras sem ganho visível de qualidade (thoughtsTokens P50 ~2200, bem

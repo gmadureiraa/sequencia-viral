@@ -13,7 +13,14 @@ export default function AppError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[app/error]", error);
+    // Log estruturado pra debug em prod — message + stack + digest aparecem
+    // no console do browser pra user mandar print quando reportar bug.
+    console.error("[app/error]", {
+      message: error?.message,
+      digest: error?.digest,
+      stack: error?.stack,
+      name: error?.name,
+    });
     posthog.captureException(error, { digest: error.digest });
   }, [error]);
 
@@ -30,7 +37,21 @@ export default function AppError({
           A gente já foi avisado. Tenta de novo — se persistir, mande um print
           no chat e a gente resolve.
         </p>
-        {error?.digest ? (
+        {error?.message ? (
+          <details className="mb-4 text-left">
+            <summary className="cursor-pointer text-xs font-mono text-[var(--muted)] mb-2">
+              Detalhes técnicos (clica pra expandir)
+            </summary>
+            <p className="text-xs font-mono text-[var(--muted)] mb-1 break-words">
+              <strong>msg:</strong> {error.message}
+            </p>
+            {error.digest ? (
+              <p className="text-xs font-mono text-[var(--muted)] break-all">
+                <strong>ref:</strong> {error.digest}
+              </p>
+            ) : null}
+          </details>
+        ) : error?.digest ? (
           <p className="mb-6 text-xs font-mono text-[var(--muted)]">
             ref: {error.digest}
           </p>

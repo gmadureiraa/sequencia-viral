@@ -89,7 +89,11 @@ async function validateImageUrlForDisplay(url: string): Promise<boolean> {
   if (url.startsWith("data:")) return true;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2500);
+    // 28/04: timeout 2500ms → 1500ms. HEAD que não responde em 1.5s
+    // tipicamente nunca responde (rede ruim, host morto). Diminui o
+    // critical path em ~1s por slide. Pessimismo aceitável: rejeitamos
+    // a URL e o pipeline cai pra próxima candidata Serper.
+    const timeout = setTimeout(() => controller.abort(), 1500);
     const res = await fetch(url, {
       method: "HEAD",
       signal: controller.signal,
@@ -105,7 +109,7 @@ async function validateImageUrlForDisplay(url: string): Promise<boolean> {
     if (res.status === 405) {
       try {
         const ctrl2 = new AbortController();
-        const to2 = setTimeout(() => ctrl2.abort(), 2500);
+        const to2 = setTimeout(() => ctrl2.abort(), 1500);
         const res2 = await fetch(url, {
           method: "GET",
           headers: { Range: "bytes=0-0" },
@@ -1225,8 +1229,11 @@ export async function POST(request: Request) {
           // desiredCount mas mandamos num:Math.max(8,desiredCount) pra
           // ter margem de fallback. Se o user quer 1 imagem, precisamos
           // ter 6-8 candidatas pra filtrar as broken.
+          // 28/04: pool de candidatas reduzido de 12 → 6 pra desiredCount=1.
+          // Validar 12 HEADs era ~700-1500ms; agora ~400-800ms. Trade-off:
+          // mais raros 'all broken' (Serper top-6 quase sempre tem 1+ válida).
           const rawImages = (data.images || [])
-            .slice(0, Math.max(desiredCount * 6, 12))
+            .slice(0, Math.max(desiredCount * 3, 6))
             .map(
               (img: {
                 imageUrl?: string;

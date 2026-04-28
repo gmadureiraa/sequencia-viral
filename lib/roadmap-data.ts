@@ -17,11 +17,12 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
     n: "01",
     title: "MVP — Gerador Manual",
     body:
-      "Hoje. Cole um link ou tema, escolha o brand kit e gere um carrossel pronto para postar.",
+      "Hoje. Cole um link de carrossel do Instagram (a IA replica quase 1:1), um vídeo do YouTube, um artigo, ou só descreva sua ideia. Sai pronto pra postar.",
     bullets: [
-      "Input por URL, texto ou tópico",
-      "Editor visual com templates",
-      "Export PNG / PDF / Instagram-ready",
+      "Input por URL (IG/YouTube/blog), texto ou tópico",
+      "Template Thread (X) público · outros em beta interno",
+      "Editor com troca de imagem/vídeo por slide",
+      "Export PNG / PDF / .zip Instagram-ready",
     ],
     status: "now",
     tag: "MVP — rodando hoje",
@@ -65,12 +66,12 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
     n: "04",
     title: "Brand Kits & Voz da Marca",
     body:
-      "A voz da marca a gente já segue hoje — a IA escreve no seu tom desde o onboarding. O próximo passo: templates visuais também personalizados, com seu brand kit (cores, fontes, formas) vivo em cada slide.",
+      "A voz da marca a gente já segue hoje — a IA escreve no seu tom desde o onboarding. O próximo passo: liberar templates visuais extras (Futurista, Editorial, Ambição, Bohdan) e personalizá-los com seu brand kit (cores, fontes).",
     bullets: [
       "Voz da marca já aprendida no onboarding ✓",
-      "Em breve: templates visuais adaptados ao brand kit",
+      "Templates extras (4 em beta) — liberação 1 por vez",
+      "Brand kit vivo em cada slide (cores, fontes)",
       "Múltiplos brand kits por workspace (agência)",
-      "Treinamento com posts de referência seus",
     ],
     status: "next",
     tag: "Próximo sprint",

@@ -242,7 +242,7 @@ export default function PlansPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: i * 0.08 }}
               className={isInk ? "sv-card-ink relative" : "sv-card relative"}
-              style={{ padding: 28, minHeight: 560, display: "flex", flexDirection: "column" }}
+              style={{ padding: 28, minHeight: "auto", display: "flex", flexDirection: "column" }}
             >
               {isInk && (
                 <span

@@ -1094,7 +1094,7 @@ select:focus-visible {
   border-radius: 0;
   padding: 10px 12px;
   font-family: var(--sv-sans);
-  font-size: 14px;
+  font-size: 16px; /* mínimo 16px — evita zoom no iOS ao focar */
   color: var(--sv-ink);
   outline: none;
   transition: box-shadow 0.15s ease;

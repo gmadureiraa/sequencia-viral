@@ -484,8 +484,7 @@ export default function PreviewPage(props: {
       </p>
 
       <div
-        className="mt-6 grid gap-10 items-start"
-        style={{ gridTemplateColumns: "1.1fr 1fr" }}
+        className="mt-6 grid gap-10 items-start grid-cols-1 lg:grid-cols-[1.1fr_1fr]"
       >
         {/* LEFT: iPhone mockup */}
         <div className="flex flex-col items-center gap-4">

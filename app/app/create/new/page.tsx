@@ -739,100 +739,15 @@ export default function NewCarouselPage() {
       {/* Single column centralizada — sem painel lateral */}
       <div className="mt-5" style={{ minWidth: 0 }}>
         <div className="flex flex-col gap-4" style={{ minWidth: 0 }}>
-          {/* ── TOGGLE WRITER / LAYOUT-ONLY (decisão principal) ── */}
-          <div>
-            <div
-              className="mb-2"
-              style={{
-                fontFamily: "var(--sv-mono)",
-                fontSize: 10.5,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: "var(--sv-muted)",
-              }}
-            >
-              O que a IA deve fazer com o seu texto?
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2" role="radiogroup">
-              {(
-                [
-                  {
-                    id: "writer" as const,
-                    title: "Escrever pra mim",
-                    sub: "Uso seu briefing como inspiração, aplico hooks, escada, CTA.",
-                  },
-                  {
-                    id: "layout-only" as const,
-                    title: "Só aplicar meu texto",
-                    sub: "Já escrevi. Você só quebra em slides — preserva wording, ordem, CTA.",
-                  },
-                ] as const
-              ).map((opt) => {
-                const selected = mode === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    onClick={() => setMode(opt.id)}
-                    className="text-left transition-all"
-                    style={{
-                      padding: "12px 14px",
-                      border: "1.5px solid var(--sv-ink)",
-                      background: selected
-                        ? "var(--sv-ink)"
-                        : "var(--sv-white)",
-                      color: selected ? "var(--sv-paper)" : "var(--sv-ink)",
-                      boxShadow: selected
-                        ? "3px 3px 0 0 var(--sv-green)"
-                        : "3px 3px 0 0 var(--sv-ink)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        aria-hidden
-                        style={{
-                          display: "inline-block",
-                          width: 10,
-                          height: 10,
-                          borderRadius: "50%",
-                          border: `1.5px solid ${selected ? "var(--sv-green)" : "var(--sv-ink)"}`,
-                          background: selected
-                            ? "var(--sv-green)"
-                            : "transparent",
-                        }}
-                      />
-                      <div
-                        style={{
-                          fontFamily: "var(--sv-sans)",
-                          fontSize: 13.5,
-                          fontWeight: 700,
-                        }}
-                      >
-                        {opt.title}
-                      </div>
-                    </div>
-                    <div
-                      className="mt-1"
-                      style={{
-                        fontFamily: "var(--sv-sans)",
-                        fontSize: 11.5,
-                        lineHeight: 1.4,
-                        opacity: selected ? 0.85 : 0.7,
-                      }}
-                    >
-                      {opt.sub}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Toggle Writer/Layout-only foi movido pro Modo Avançado em
+              2026-04-28 (simplificação). 95% dos usuários querem o
+              comportamento default ("writer") — IA escreve usando o
+              briefing como inspiração. Power-users que já escreveram o
+              texto pronto e só querem distribuir em slides ativam
+              "Layout-only" dentro do Modo Avançado. */}
 
-          {/* ── SELETOR DE TEMPLATE VISUAL ── */}
-          <div>
+          {/* ── SELETOR DE TEMPLATE VISUAL — admin only enquanto só Twitter for público ── */}
+          {isAdminEmail(user?.email) && <div>
             <div
               className="mb-2"
               style={{
@@ -1029,7 +944,7 @@ export default function NewCarouselPage() {
             style={{
               minHeight: 150,
               fontFamily: "var(--sv-sans)",
-              fontSize: 15,
+              fontSize: 16,
               lineHeight: 1.45,
               letterSpacing: "-0.005em",
               padding: 16,
@@ -1148,7 +1063,7 @@ export default function NewCarouselPage() {
                         placeholder="Ex: foca em founder B2B que já queimou dinheiro com ads"
                         style={{
                           padding: 10,
-                          fontSize: 13,
+                          fontSize: 16,
                           fontFamily: "var(--sv-sans)",
                           border: "1.5px solid var(--sv-ink)",
                           background: "var(--sv-white)",
@@ -1178,7 +1093,7 @@ export default function NewCarouselPage() {
                         placeholder="Ex: convida pro meu grupo no WhatsApp / baixe o template"
                         style={{
                           padding: 10,
-                          fontSize: 13,
+                          fontSize: 16,
                           fontFamily: "var(--sv-sans)",
                           border: "1.5px solid var(--sv-ink)",
                           background: "var(--sv-white)",
@@ -1213,7 +1128,7 @@ export default function NewCarouselPage() {
                         placeholder="Auto"
                         style={{
                           padding: 10,
-                          fontSize: 13,
+                          fontSize: 16,
                           fontFamily: "var(--sv-sans)",
                           border: "1.5px solid var(--sv-ink)",
                           background: "var(--sv-white)",
@@ -1328,7 +1243,7 @@ export default function NewCarouselPage() {
                         placeholder="Cola aqui dados, quotes, links, cases que você quer que a IA considere..."
                         style={{
                           padding: 10,
-                          fontSize: 13,
+                          fontSize: 16,
                           fontFamily: "var(--sv-sans)",
                           border: "1.5px solid var(--sv-ink)",
                           background: "var(--sv-white)",
@@ -1644,7 +1559,7 @@ export default function NewCarouselPage() {
                         marginTop: 8,
                         width: "100%",
                         padding: 10,
-                        fontSize: 13,
+                        fontSize: 16,
                         fontFamily: "var(--sv-sans)",
                         border: "1.5px solid var(--sv-ink)",
                         background: "var(--sv-white)",

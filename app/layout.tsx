@@ -43,6 +43,7 @@ export const viewport: Viewport = {
   maximumScale: 5,
   themeColor: "#F7F5EF",
   colorScheme: "light",
+  viewportFit: "cover", // safe-area insets pra iPhone com notch/Dynamic Island
 };
 
 export const metadata: Metadata = {

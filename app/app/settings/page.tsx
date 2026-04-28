@@ -1913,7 +1913,7 @@ function SettingsPageContent() {
                   }}
                   placeholder="Adicionar pilar (Enter pra confirmar)"
                   className="sv-input flex-1"
-                  style={{ padding: "8px 10px", fontSize: 13 }}
+                  style={{ padding: "8px 10px", fontSize: 16 }}
                 />
               </div>
 
@@ -1937,7 +1937,7 @@ function SettingsPageContent() {
                   placeholder="Ex: Founders de B2B early-stage que gastam muito tempo criando conteúdo no LinkedIn e querem escalar sem perder a voz."
                   className="sv-input w-full"
                   rows={3}
-                  style={{ padding: "10px 12px", fontSize: 13, resize: "vertical" }}
+                  style={{ padding: "10px 12px", fontSize: 16, resize: "vertical" }}
                 />
               </div>
 
@@ -2015,7 +2015,7 @@ function SettingsPageContent() {
                       placeholder="https://www.instagram.com/p/..."
                       disabled={voiceLoading}
                       className="sv-input w-full"
-                      style={{ padding: "10px 12px", fontSize: 13 }}
+                      style={{ padding: "10px 12px", fontSize: 16 }}
                     />
                   ))}
                 </div>
@@ -2156,7 +2156,7 @@ function SettingsPageContent() {
                   rows={7}
                   style={{
                     padding: "12px 14px",
-                    fontSize: 13,
+                    fontSize: 16,
                     resize: "vertical",
                     fontFamily: "var(--sv-sans)",
                   }}
@@ -2226,7 +2226,7 @@ function SettingsPageContent() {
                     }}
                     placeholder="Adicionar tabu (Enter pra confirmar)"
                     className="sv-input flex-1"
-                    style={{ padding: "8px 10px", fontSize: 13 }}
+                    style={{ padding: "8px 10px", fontSize: 16 }}
                   />
                 </div>
               </div>
@@ -2261,7 +2261,7 @@ function SettingsPageContent() {
                   rows={5}
                   style={{
                     padding: "10px 12px",
-                    fontSize: 13,
+                    fontSize: 16,
                     resize: "vertical",
                     fontFamily: "var(--sv-sans)",
                   }}

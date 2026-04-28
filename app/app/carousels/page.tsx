@@ -406,7 +406,7 @@ export default function CarouselsPage() {
                 className="sv-input w-full pl-9"
                 style={{
                   fontFamily: "var(--sv-mono)",
-                  fontSize: 11,
+                  fontSize: 16,
                   letterSpacing: "0.14em",
                   textTransform: "uppercase",
                 }}
@@ -904,7 +904,7 @@ function CarouselCard({
                 placeholder="nova tag"
                 className="sv-input"
                 style={{
-                  fontSize: 11,
+                  fontSize: 16,
                   padding: "4px 8px",
                   minWidth: 120,
                 }}

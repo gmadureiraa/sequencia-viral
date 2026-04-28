@@ -810,7 +810,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
             estavam duplicando o CTA do próprio sidebar. Mobile header
             continua acima pro drawer. */}
 
-        <main className="flex-1 min-w-0 overflow-x-hidden p-6 lg:p-10 xl:p-14">
+        <main className="flex-1 min-w-0 overflow-x-hidden p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] lg:p-10 xl:p-14">
           {children}
         </main>
       </div>

@@ -1297,7 +1297,7 @@ function StepAbout({
             onChange={(e) => setName(e.target.value)}
             placeholder="Seu nome"
             className="sv-input"
-            style={{ padding: "12px 14px", fontSize: 14 }}
+            style={{ padding: "12px 14px", fontSize: 16 }}
             autoFocus
           />
         </Field>
@@ -1323,7 +1323,7 @@ function StepAbout({
               onChange={(e) => setWhatsapp(e.target.value)}
               placeholder="(11) 9 9999-9999"
               className="sv-input flex-1"
-              style={{ padding: "12px 14px", fontSize: 14 }}
+              style={{ padding: "12px 14px", fontSize: 16 }}
             />
           </div>
         </Field>
@@ -1420,7 +1420,7 @@ function StepConnect({
               onChange={(e) => setHandle(e.target.value.replace(/^@/, ""))}
               placeholder="seuhandle"
               className="sv-input flex-1"
-              style={{ padding: "10px 12px", fontSize: 14 }}
+              style={{ padding: "10px 12px", fontSize: 16 }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && clean) onConnect();
               }}

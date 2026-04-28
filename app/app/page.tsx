@@ -287,7 +287,7 @@ export default function DashboardPage() {
           transition={{ duration: 0.5 }}
           className="sv-card-accent"
           style={{
-            padding: "48px 40px",
+            padding: "clamp(24px, 5vw, 48px) clamp(20px, 5vw, 40px)",
             display: "flex",
             flexDirection: "column",
             alignItems: "flex-start",

@@ -262,8 +262,7 @@ export default function TemplatesPage(props: {
 
       {/* Grid 2x2 com previews REAIS */}
       <div
-        className="mt-6 grid gap-6"
-        style={{ gridTemplateColumns: "repeat(2, 1fr)" }}
+        className="mt-6 grid gap-6 grid-cols-1 sm:grid-cols-2"
       >
         {TEMPLATE_ORDER.map((tplId) => {
           const meta = TEMPLATES_META.find((m) => m.id === tplId)!;

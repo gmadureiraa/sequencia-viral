@@ -512,6 +512,25 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
     const designTemplateNormalized = normalizeDesignTemplate(body.designTemplate);
     const templateLockBlock = buildTemplateLockBlock(designTemplateNormalized);
 
+    // Slim brand context para Twitter: voice_samples e sample_captions
+    // adicionam 5-10k chars no prompt e Flash com prompt grande fica
+    // 3-5s mais lento. Twitter é template simples (heading curto + body
+    // curto), voice forte do user já vem via tone/pillars/dnaSummary.
+    // Decisão 28/04 pós-audit: latência 80s de geração era 60% prompt
+    // grande + 40% thinking budget. Esta mudança mira o primeiro fator.
+    const isTwitterTemplate = designTemplateNormalized === "twitter";
+    if (isTwitterTemplate && brandContext) {
+      brandContext = brandContext
+        // Remove o bloco "Voice samples..." até a próxima linha em branco
+        // ou próximo "- " bullet.
+        .replace(
+          /\n- Voice samples[\s\S]*?(?=\n- [A-Z]|\nUSER BRAND|$)/g,
+          "\n"
+        )
+        // Remove "Trechos reais:" + bullets que seguem.
+        .replace(/\nTrechos reais:[\s\S]*?(?=\n[A-Z]|\n- [A-Z]|$)/g, "\n");
+    }
+
     // Sanitiza campos do modo avançado — proteção contra prompt injection e tamanhos absurdos.
     const advCustomCta =
       typeof advanced?.customCta === "string"
@@ -1275,13 +1294,27 @@ Se ignorar, o carrossel fica shallow e generico — não é o que o criador quer
     // ~1000 chars), não precisa de thinking pesado. 6000 já sobra.
     // Isso reduz latência total: 60s → ~48s no P95 pra gerar a partir
     // de Instagram, evitando timeout do Vercel.
+    // Twitter rodando Flash não precisa de thinking pesado — o template
+    // é simples (heading + body curto + avatar). 4000 dá ~30-40% de
+    // velocidade extra vs 8000 sem regressão de qualidade observada.
+    // Decisão 28/04 pós-audit: user reportou geração 80+s, principal
+    // gargalo era thinking + brandContext inflado.
     const thinkingBudget =
       effectiveMode === "layout-only"
         ? 2000
         : sourceType === "instagram"
           ? 6000
-          : 8000;
-    const maxOutputTokens = effectiveMode === "layout-only" ? 10000 : 10000;
+          : designTemplateNormalized === "twitter"
+            ? 4000
+            : 8000;
+    // Twitter: 6000 cabe com folga (3 variations × 8 slides × ~250 chars).
+    // Outros templates: 10000 mantém pro Pro.
+    const maxOutputTokens =
+      effectiveMode === "layout-only"
+        ? 10000
+        : designTemplateNormalized === "twitter"
+          ? 6000
+          : 10000;
     // GROUNDING DESATIVADO como default após descoberta (24/04) que Pro +
     // grounding + system "output JSON" retorna JSON DENTRO de ```json fences
     // com frequência, quebrando o parse. Grounding é mutuamente exclusivo

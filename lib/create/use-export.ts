@@ -74,62 +74,97 @@ async function prefetchImagesAsBlobs(
   onProgress?: (msg: string) => void
 ): Promise<string[]> {
   if (typeof window === "undefined") return [];
-  const urlsToFetch = new Set<string>();
-  // Coleta URLs únicas que precisam de proxy (não same-origin, não CORS-friendly).
+
+  // Mapa: src ORIGINAL no DOM (pode ser /api/img-proxy?url=... OU URL
+  // cross-origin direta) → URL externa real (decodificada). Necessário
+  // porque o template já reescreve hosts não-CORS pra /api/img-proxy
+  // quando exportMode=true (em components/app/templates/utils.ts:38-62),
+  // e nosso match no DOM precisa do src ORIGINAL como chave.
+  const externalUrlBySrc = new Map<string, string>();
+
+  // Coleta URLs únicas que precisam de prefetch via proxy autenticado.
+  // Bug 28/04 (causa raiz do "4/16 slides exportados"): o ramo
+  // `src.startsWith("/")` pulava /api/img-proxy?url=... — exatamente o
+  // formato que o template já tinha reescrito. Resultado: prefetcher não
+  // rodava pras URLs que precisavam, e html-to-image internamente fetchava
+  // /api/img-proxy SEM Bearer → 401 → text/plain virava data URL → onerror
+  // → toPng rejeita o slide inteiro.
   for (let i = 0; i < count; i++) {
     const el = refs.current[i];
     if (!el) continue;
     el.querySelectorAll("img").forEach((img) => {
       const src = img.getAttribute("src");
       if (!src) return;
-      if (
-        src.startsWith("blob:") ||
-        src.startsWith("data:") ||
-        src.startsWith("/")
-      ) {
+      if (src.startsWith("blob:") || src.startsWith("data:")) return;
+
+      let externalUrl: string | null = null;
+
+      // Caso A: src já é /api/img-proxy?url=<encoded>
+      if (src.startsWith("/api/img-proxy")) {
+        try {
+          const proxyParsed = new URL(src, window.location.origin);
+          externalUrl = proxyParsed.searchParams.get("url");
+        } catch {
+          return;
+        }
+      } else if (src.startsWith("/")) {
+        // Outras URLs same-origin (não proxy) — passam direto pro toPng.
         return;
+      } else {
+        // Caso B: src é URL absoluta cross-origin. Verifica se host é
+        // CORS-friendly (Supabase, Twitter CDN, etc) — se sim, deixa direto.
+        try {
+          const u = new URL(src);
+          if (u.origin === window.location.origin) return;
+          if (isPublicCorsHostExport(u.hostname)) return;
+          externalUrl = src;
+        } catch {
+          return;
+        }
       }
-      try {
-        const u = new URL(src);
-        if (u.origin === window.location.origin) return;
-        if (isPublicCorsHostExport(u.hostname)) return;
-        urlsToFetch.add(src);
-      } catch {
-        // src inválido, ignora — toPng vai usar imagePlaceholder
-      }
+
+      if (!externalUrl) return;
+      externalUrlBySrc.set(src, externalUrl);
     });
   }
 
-  if (urlsToFetch.size === 0) return [];
-  onProgress?.(`Pré-carregando ${urlsToFetch.size} imagem(ns)...`);
+  if (externalUrlBySrc.size === 0) return [];
+  onProgress?.(`Pré-carregando ${externalUrlBySrc.size} imagem(ns)...`);
 
   const headers = getAuthHeaders?.() ?? {};
   const blobMap = new Map<string, string>();
   const createdBlobs: string[] = [];
 
+  // Fetch único por src ORIGINAL — múltiplos slides com mesma URL
+  // compartilham a chave do Map e fazem só 1 fetch.
   await Promise.all(
-    Array.from(urlsToFetch).map(async (url) => {
-      try {
-        const proxyUrl = `/api/img-proxy?url=${encodeURIComponent(url)}`;
-        const res = await fetch(proxyUrl, {
-          headers,
-          signal: AbortSignal.timeout(10_000),
-        });
-        if (!res.ok) {
-          console.warn(`[export] prefetch HTTP ${res.status}: ${url}`);
-          return;
+    Array.from(externalUrlBySrc.entries()).map(
+      async ([originalSrc, externalUrl]) => {
+        try {
+          const proxyUrl = `/api/img-proxy?url=${encodeURIComponent(externalUrl)}`;
+          const res = await fetch(proxyUrl, {
+            headers,
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (!res.ok) {
+            console.warn(
+              `[export] prefetch HTTP ${res.status}: ${externalUrl}`
+            );
+            return;
+          }
+          const blob = await res.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          blobMap.set(originalSrc, blobUrl);
+          createdBlobs.push(blobUrl);
+        } catch (err) {
+          console.warn("[export] prefetch failed:", externalUrl, err);
         }
-        const blob = await res.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        blobMap.set(url, blobUrl);
-        createdBlobs.push(blobUrl);
-      } catch (err) {
-        console.warn("[export] prefetch failed:", url, err);
       }
-    })
+    )
   );
 
-  // Substitui src no DOM (e re-aguarda load do blob: URL).
+  // Substitui src no DOM (chave = src original do `<img>`, não a URL
+  // externa decodificada).
   for (let i = 0; i < count; i++) {
     const el = refs.current[i];
     if (!el) continue;
@@ -284,6 +319,18 @@ export function useExport(
           // Chave pra evitar 'nenhum slide capturado': quando imagem CORS
           // falha, usa placeholder em vez de taintar canvas.
           imagePlaceholder: PLACEHOLDER_1X1,
+          // Failsafe contra rejeição em cascata: se UMA imagem dispara
+          // onerror dentro do html-to-image (ex: prefetch falhou + proxy
+          // 401 + data URL text/plain), o handler resolve em vez de
+          // rejeitar a Promise inteira do `embedImages`. Slide é capturado
+          // sem a imagem que falhou (placeholder 1x1 toma o lugar) — bem
+          // melhor que slide ausente do .zip.
+          onImageErrorHandler: (...args: unknown[]) => {
+            console.warn(
+              `[export] image error handled in slide ${index + 1}:`,
+              args[0]
+            );
+          },
           skipFonts: false,
         });
       } catch (err) {

@@ -512,24 +512,11 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
     const designTemplateNormalized = normalizeDesignTemplate(body.designTemplate);
     const templateLockBlock = buildTemplateLockBlock(designTemplateNormalized);
 
-    // Slim brand context para Twitter: voice_samples e sample_captions
-    // adicionam 5-10k chars no prompt e Flash com prompt grande fica
-    // 3-5s mais lento. Twitter é template simples (heading curto + body
-    // curto), voice forte do user já vem via tone/pillars/dnaSummary.
-    // Decisão 28/04 pós-audit: latência 80s de geração era 60% prompt
-    // grande + 40% thinking budget. Esta mudança mira o primeiro fator.
-    const isTwitterTemplate = designTemplateNormalized === "twitter";
-    if (isTwitterTemplate && brandContext) {
-      brandContext = brandContext
-        // Remove o bloco "Voice samples..." até a próxima linha em branco
-        // ou próximo "- " bullet.
-        .replace(
-          /\n- Voice samples[\s\S]*?(?=\n- [A-Z]|\nUSER BRAND|$)/g,
-          "\n"
-        )
-        // Remove "Trechos reais:" + bullets que seguem.
-        .replace(/\nTrechos reais:[\s\S]*?(?=\n[A-Z]|\n- [A-Z]|$)/g, "\n");
-    }
+    // (28/04) Tentativa de slim brandContext via regex foi RETIRADA —
+    // estava potencialmente corrompendo o prompt e causando "modelo
+    // devolveu resposta inválida". Voltar pra implementação cirúrgica
+    // dentro do build do brandContext quando der espaço pra refactor.
+    // Por ora, otimização vem só do thinkingBudget reduzido pra Twitter.
 
     // Sanitiza campos do modo avançado — proteção contra prompt injection e tamanhos absurdos.
     const advCustomCta =
@@ -1307,14 +1294,11 @@ Se ignorar, o carrossel fica shallow e generico — não é o que o criador quer
           : designTemplateNormalized === "twitter"
             ? 4000
             : 8000;
-    // Twitter: 6000 cabe com folga (3 variations × 8 slides × ~250 chars).
-    // Outros templates: 10000 mantém pro Pro.
-    const maxOutputTokens =
-      effectiveMode === "layout-only"
-        ? 10000
-        : designTemplateNormalized === "twitter"
-          ? 6000
-          : 10000;
+    // (28/04) maxOutputTokens VOLTOU pra 10000 em todos os casos — corte
+    // pra 6000 no Twitter estava causando MAX_TOKENS truncate e o user
+    // recebia "modelo devolveu resposta inválida". Otimização de
+    // velocidade vem do thinkingBudget reduzido (acima), não daqui.
+    const maxOutputTokens = effectiveMode === "layout-only" ? 10000 : 10000;
     // GROUNDING DESATIVADO como default após descoberta (24/04) que Pro +
     // grounding + system "output JSON" retorna JSON DENTRO de ```json fences
     // com frequência, quebrando o parse. Grounding é mutuamente exclusivo

@@ -293,9 +293,14 @@ export default function EditPage(props: {
 
   // Ref do textarea do corpo pra aplicar negrito no range selecionado.
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  // Guarda o último range de seleção antes do textarea perder foco (o click
-  // no botão B dispara blur antes do click, o que zerava selectionStart/End).
+  // Mesma coisa pro input do título — antes só body tinha B/Cmd+B, agora
+  // título também (audit Gabriel 2026-04-28: "negrito no texto/título").
+  const headingInputRef = useRef<HTMLInputElement | null>(null);
+  // Guarda o último range de seleção antes do textarea/input perder foco
+  // (o click no botão B dispara blur antes do click, o que zerava
+  // selectionStart/End).
   const lastBodySelectionRef = useRef<{ start: number; end: number } | null>(null);
+  const lastHeadingSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
   // Query customizada pra busca/geração de imagem (quando preenchida,
   // sobrescreve o imageQuery padrão do slide).
@@ -650,61 +655,65 @@ export default function EditPage(props: {
   }
 
   /**
-   * Envolve a seleção atual do textarea body com `**...**`. Se não houver
-   * seleção, insere `****` e posiciona o cursor entre os asteriscos.
-   * Também reverte se a seleção já está wrappada.
+   * Envolve a seleção atual do textarea/input com `**...**`. Funciona pra
+   * body OU heading (audit 2026-04-28). Se não houver seleção, insere `****`
+   * e posiciona o cursor entre os asteriscos. Reverte se já está wrappada.
    */
-  function applyBoldToBody() {
-    const ta = bodyTextareaRef.current;
-    if (!ta || !active) return;
-    // Se o textarea não está focado (ex: usuário clicou no botão B, o que
-    // dispara blur antes do click), recupera a última seleção salva em
-    // `onSelect`/`onBlur`. Sem isso, selectionStart/End ficam no final do
-    // texto e acabamos inserindo `****` no fim — bug relatado.
-    const isFocused = document.activeElement === ta;
-    const saved = lastBodySelectionRef.current;
-    const start = isFocused ? ta.selectionStart : saved?.start ?? ta.selectionStart;
-    const end = isFocused ? ta.selectionEnd : saved?.end ?? ta.selectionEnd;
-    const value = active.body ?? "";
+  function applyBold(field: "body" | "heading") {
+    const el =
+      field === "body" ? bodyTextareaRef.current : headingInputRef.current;
+    if (!el || !active) return;
+    const savedRef =
+      field === "body" ? lastBodySelectionRef : lastHeadingSelectionRef;
+    const isFocused = document.activeElement === el;
+    const saved = savedRef.current;
+    const start = isFocused
+      ? el.selectionStart ?? 0
+      : saved?.start ?? el.selectionStart ?? 0;
+    const end = isFocused
+      ? el.selectionEnd ?? 0
+      : saved?.end ?? el.selectionEnd ?? 0;
+    const value = (field === "body" ? active.body : active.heading) ?? "";
     const selected = value.slice(start, end);
     const before = value.slice(0, start);
     const after = value.slice(end);
 
-    // Se a seleção já está envolta por **, remove.
+    function commit(nextValue: string, nextStart: number, nextEnd: number) {
+      updateSlide(
+        activeIndex,
+        field === "body" ? { body: nextValue } : { heading: nextValue }
+      );
+      requestAnimationFrame(() => {
+        el!.focus();
+        el!.setSelectionRange(nextStart, nextEnd);
+      });
+    }
+
+    // Já wrappado → remove.
     if (
       selected.startsWith("**") &&
       selected.endsWith("**") &&
       selected.length >= 4
     ) {
       const inner = selected.slice(2, -2);
-      const next = before + inner + after;
-      updateSlide(activeIndex, { body: next });
-      requestAnimationFrame(() => {
-        ta.focus();
-        ta.setSelectionRange(start, start + inner.length);
-      });
+      commit(before + inner + after, start, start + inner.length);
       return;
     }
 
-    // Sem seleção: insere "****" e coloca cursor no meio.
+    // Sem seleção → insere `****` com cursor no meio.
     if (start === end) {
-      const next = before + "****" + after;
-      updateSlide(activeIndex, { body: next });
-      requestAnimationFrame(() => {
-        ta.focus();
-        ta.setSelectionRange(start + 2, start + 2);
-      });
+      commit(before + "****" + after, start + 2, start + 2);
       return;
     }
 
-    // Com seleção: envolve.
+    // Com seleção → envolve.
     const wrapped = `**${selected}**`;
-    const next = before + wrapped + after;
-    updateSlide(activeIndex, { body: next });
-    requestAnimationFrame(() => {
-      ta.focus();
-      ta.setSelectionRange(start, start + wrapped.length);
-    });
+    commit(before + wrapped + after, start, start + wrapped.length);
+  }
+
+  // Wrapper retrocompat — alguns lugares antigos chamam applyBoldToBody.
+  function applyBoldToBody() {
+    applyBold("body");
   }
 
   /** Toggle binário de uma camada específica do slide ativo. */
@@ -1354,12 +1363,59 @@ export default function EditPage(props: {
               fontWeight: 700,
             }}
           >
-            Título do slide
+            <span className="flex items-center justify-between w-full">
+              <span>Título do slide</span>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => applyBold("heading")}
+                title="Negrito (⌘B) — selecione um trecho e clique"
+                aria-label="Aplicar negrito no título"
+                style={{
+                  width: 26,
+                  height: 22,
+                  fontFamily: "var(--sv-sans)",
+                  fontWeight: 900,
+                  fontSize: 12,
+                  color: "var(--sv-ink)",
+                  background: "var(--sv-white)",
+                  border: "1.5px solid var(--sv-ink)",
+                  cursor: "pointer",
+                  lineHeight: 1,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                B
+              </button>
+            </span>
           </label>
           <input
+            ref={headingInputRef}
             type="text"
             value={active?.heading ?? ""}
             onChange={(e) => updateSlide(activeIndex, { heading: e.target.value })}
+            onSelect={(e) => {
+              const t = e.currentTarget;
+              lastHeadingSelectionRef.current = {
+                start: t.selectionStart ?? 0,
+                end: t.selectionEnd ?? 0,
+              };
+            }}
+            onBlur={(e) => {
+              const t = e.currentTarget;
+              lastHeadingSelectionRef.current = {
+                start: t.selectionStart ?? 0,
+                end: t.selectionEnd ?? 0,
+              };
+            }}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+                e.preventDefault();
+                applyBold("heading");
+              }
+            }}
             className="sv-input"
             style={{ width: "100%", fontFamily: "var(--sv-display)", fontSize: 15, padding: "8px 10px" }}
           />

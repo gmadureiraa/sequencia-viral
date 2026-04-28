@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { TemplateRenderer, type TemplateId } from "@/components/app/templates";
 import { useAuth } from "@/lib/auth-context";
+import { isAdminEmail } from "@/lib/admin-emails";
 import { useDraft } from "@/lib/create/use-draft";
 import { useExport } from "@/lib/create/use-export";
 import { useCaption } from "@/lib/create/use-caption";
@@ -169,8 +170,16 @@ export default function PreviewPage(props: {
   const slideStyle =
     (snapshot?.slideStyle ?? draft?.style) === "dark" ? "dark" : "white";
 
+  // Watermark: plano Free (ou ausente) recebe marca d'água discreta no export.
+  // Planos pagos (pro, business) e admin exportam limpo.
+  const showWatermark = (() => {
+    if (isAdminEmail(profile?.email ?? user?.email)) return false;
+    const plan = profile?.plan ?? "free";
+    return plan === "free" || plan === "";
+  })();
+
   const { exportRefs, exportPng, exportPdf, exportZip, isExporting, progress } =
-    useExport(slides.length);
+    useExport(slides.length, showWatermark);
 
   const {
     generate: generateCaption,

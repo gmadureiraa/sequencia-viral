@@ -8,6 +8,10 @@ import { toast } from "sonner";
  * Hook de export (PNG e PDF) — extraído da página legada. A página que usa
  * precisa montar os refs em `exportRefs.current[i]` apontando pro nó com
  * scale=1 (1080×1350) antes de chamar `exportPng()` / `exportPdf()`.
+ *
+ * @param showWatermark - true = usuário Free → injeta marca d'água discreta no
+ *   último slide antes de capturar via toPng. false (padrão) = plano pago ou
+ *   admin → export limpo.
  */
 
 async function waitForImagesInElement(el: HTMLElement): Promise<void> {
@@ -58,7 +62,7 @@ async function waitUntilRefsReady(
   return false;
 }
 
-export function useExport(totalSlides: number) {
+export function useExport(totalSlides: number, showWatermark = false) {
   const exportRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState("");
@@ -69,10 +73,60 @@ export function useExport(totalSlides: number) {
   const PLACEHOLDER_1X1 =
     "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 
+  /**
+   * Injeta elemento DOM de watermark no container do slide (apenas Free).
+   * Retorna função cleanup que remove o elemento após captura.
+   * Só aplica no último slide pra ser discreta — não polui todos os frames.
+   */
+  const injectWatermark = useCallback(
+    (el: HTMLElement, isLastSlide: boolean): (() => void) => {
+      if (!showWatermark || !isLastSlide) return () => {};
+      const wm = document.createElement("div");
+      wm.setAttribute("aria-hidden", "true");
+      // Posição absoluta no canto inferior esquerdo do canvas 1080×1350
+      Object.assign(wm.style, {
+        position: "absolute",
+        bottom: "18px",
+        left: "20px",
+        fontFamily: "monospace",
+        fontSize: "13px",
+        lineHeight: "1",
+        color: "rgba(0,0,0,0.45)",
+        letterSpacing: "0.04em",
+        pointerEvents: "none",
+        userSelect: "none",
+        whiteSpace: "nowrap",
+        zIndex: "9999",
+        mixBlendMode: "multiply",
+      });
+      wm.textContent = "sequenciaviral.com";
+      // Container precisa ter position relative/absolute pra o absolute funcionar
+      const prevPosition = el.style.position;
+      if (!prevPosition || prevPosition === "static") {
+        el.style.position = "relative";
+      }
+      el.appendChild(wm);
+      return () => {
+        try {
+          el.removeChild(wm);
+        } catch {
+          /* elemento já removido */
+        }
+        if (!prevPosition || prevPosition === "static") {
+          el.style.position = prevPosition;
+        }
+      };
+    },
+    [showWatermark]
+  );
+
   const captureSlideAsPng = useCallback(
     async (index: number): Promise<string> => {
       const el = exportRefs.current[index];
       if (!el) throw new Error(`Export slide ref ${index} not found`);
+      // Injeta watermark no último slide (plano Free); cleanup remove após captura
+      const isLastSlide = index === totalSlides - 1;
+      const cleanupWatermark = injectWatermark(el, isLastSlide);
       try {
         return await toPng(el, {
           width: 1080,
@@ -87,9 +141,12 @@ export function useExport(totalSlides: number) {
       } catch (err) {
         console.error(`[export] toPng slide ${index + 1} failed:`, err);
         throw err;
+      } finally {
+        // Garante remoção da watermark DOM mesmo se toPng falhar
+        cleanupWatermark();
       }
     },
-    []
+    [totalSlides, injectWatermark]
   );
 
   const waitRender = useCallback(async () => {

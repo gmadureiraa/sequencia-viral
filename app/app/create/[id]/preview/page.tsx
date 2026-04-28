@@ -581,11 +581,14 @@ export default function PreviewPage(props: {
                       accentOverride={accentOverride}
                       displayFontOverride={displayFontOverride}
                       textScale={textScaleOverride}
-                      // BUG FIX: preview do iPhone precisa ler variant/bgColor/layers
-                      // do slide (caso contrario fica igual ao default, diferente do editor).
-                      variant={active.variant}
+                      // BUG FIX 28/04: defaults DEVEM ser idênticos ao editor —
+                      // antes preview passava `active.variant` e `active.layers`
+                      // crus, enquanto editor passava `?? "headline"` e
+                      // `?? DEFAULT_LAYERS`. Quando slide vinha sem essas props,
+                      // editor usava fallback e preview renderizava diferente.
+                      variant={active.variant ?? "headline"}
                       bgColor={active.bgColor}
-                      layers={active.layers}
+                      layers={active.layers ?? { title: true, body: true, bg: true }}
                     />
                   </div>
                 )}

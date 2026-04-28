@@ -57,9 +57,10 @@ function fillVariants<T extends { variant?: SlideVariant }>(slides: T[]): T[] {
 // Ambitious (motivacional @anajords), Blank (editorial @blankschoolbr) e
 // Bohdan (design-forward @jeremybohdan). Autoral + Futurista antigo (dark
 // tech) escondidos mas ainda renderizáveis se o user tem draft salvo.
+// Ordem 28/04 — Twitter primeiro (único público pra user comum).
 const TEMPLATE_ORDER: TemplateId[] = [
-  "manifesto",
   "twitter",
+  "manifesto",
   "ambitious",
   "blank",
   "bohdan",

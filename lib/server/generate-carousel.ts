@@ -524,7 +524,28 @@ CTA = melhor linha do carrossel. (a) FECHA loop do slide 1, (b) ação específi
 BANIDAS: "muitas pessoas", "resultados incríveis", "game-changer", "nesse sentido", "atualmente", "e por isso que", "a maioria", "muito tempo", "grandes resultados", "descubra como", "o segredo", "guia definitivo".
 REQUIRED: todo claim tem número, nome próprio, ou exemplo concreto.
 
-# IMAGE QUERY — cinematográfica, específica
+# IMAGE QUERY — só pra slides que MERECEM imagem
+**REGRA NOVA 28/04:** nem todo slide precisa de imagem. Só ~50% dos slides
+costumam fazer sentido com imagem. Resto fica forte em texto puro.
+
+QUANDO INCLUIR imageQuery (deixa string preenchida):
+- Slide 1 (cover) — SEMPRE. Capa precisa de imagem forte.
+- Slide menciona pessoa específica (criador, executivo, autor)
+- Slide menciona produto/marca específico (iPhone, Bitcoin, Tesla)
+- Slide menciona lugar/cena concreta (escritório, palco, cidade)
+- Slide tem dado/número visual (gráfico, tela, mockup)
+- Slide é testimonial/quote — imagem da pessoa citada
+
+QUANDO NÃO INCLUIR (deixa imageQuery: "" string vazia):
+- Slide 100% texto/conceito abstrato (transição, recap, definição)
+- Slide com lista pura de bullets
+- CTA (último slide) — geralmente texto + ação
+- Slide que repete visual já mostrado em outro
+
+Slide 1 (cover) = OBRIGATÓRIO ter imageQuery. Outros slides = você decide
+baseado no conteúdo. Em geral, mire em ~50% dos slides com imagem.
+
+REGRAS DE QUALIDADE quando preencher:
 1. ESPECIFICIDADE TOTAL pro slide: leia heading E body antes. Imagem = cena desse slide.
 2. 4-8 keywords em inglês.
 3. SUBJECT + AÇÃO/ESTADO + AMBIENTE.

@@ -298,11 +298,12 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
                     height: "100%",
                     borderRadius: 16,
                     overflow: "hidden",
-                    // Audit Gabriel 2026-04-28: removido background cinza
-                    // (#F4F4F5) + border que criavam contorno visível em volta
-                    // da imagem. Agora a imagem ocupa 100% do container e
-                    // letterbox (se houver) é da cor do card do tweet.
-                    background: "transparent",
+                    // Audit 28/04: voltado pra `contain` (era `cover`).
+                    // `cover` cortava imagem em telas de scale diferente
+                    // (editor scale=0.5, preview scale=0.26, export scale=1).
+                    // `contain` respeita aspect ratio + letterbox usa bg
+                    // do card (sem o cinza #F4F4F5 do código original).
+                    background: bg,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -314,11 +315,9 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
                     style={{
                       width: "100%",
                       height: "100%",
-                      // objectFit: "cover" preenche 100% do container (corta
-                      // bordas se necessário pra manter aspect ratio). User
-                      // pediu imagem "inteira na página" — cover usa toda área
-                      // sem letterbox cinza.
-                      objectFit: "cover",
+                      // contain: imagem inteira sempre, sem corte. Aspect
+                      // ratio preservado entre editor/preview/export.
+                      objectFit: "contain",
                       objectPosition: "center",
                       display: "block",
                     }}
@@ -492,12 +491,15 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
                     borderRadius: 16,
                     overflow: "hidden",
                     marginTop: 8,
-                    minHeight: isPhoto ? 520 : 0,
+                    // minHeight 360 garante container minimamente alto pra
+                    // imagem caber sem colapso (audit 28/04: isPhoto sempre
+                    // false faz minHeight 0 e o container colapsa em alguns
+                    // scales). 360 = ~26% da altura canvas 1350.
+                    minHeight: 360,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    // Removido background cinza + border (audit 2026-04-28).
-                    background: "transparent",
+                    background: bg,
                   }}
                 >
                   <MediaTag
@@ -506,8 +508,8 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
                     style={{
                       width: "100%",
                       height: "100%",
-                      // cover preenche 100% (sem letterbox cinza)
-                      objectFit: "cover",
+                      // contain: respeita aspect ratio em qualquer scale
+                      objectFit: "contain",
                       objectPosition: "center",
                       display: "block",
                       borderRadius: 16,

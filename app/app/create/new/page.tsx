@@ -175,8 +175,30 @@ export default function NewCarouselPage() {
     if (q && !idea) setIdea(q);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+  // Tom e idioma agora vêm do profile (definidos no onboarding/settings).
+  // Removidos do form em 2026-04-28 — user não precisa mexer toda vez.
   const [tone, setTone] = useState<Tone>("editorial");
   const [lang, setLang] = useState<Lang>("pt-br");
+
+  // Hidrata tone+lang do profile quando carrega. Se profile não tem,
+  // mantém defaults ("editorial", "pt-br").
+  useEffect(() => {
+    if (!profile) return;
+    const profileTone = profile.tone;
+    const profileLang = profile.language;
+    if (
+      profileTone &&
+      ["editorial", "casual", "data", "story", "provocative"].includes(profileTone)
+    ) {
+      setTone(profileTone as Tone);
+    }
+    if (
+      profileLang &&
+      ["pt-br", "en", "es"].includes(profileLang)
+    ) {
+      setLang(profileLang as Lang);
+    }
+  }, [profile]);
   const [submitting, setSubmitting] = useState(false);
   const [showLimitPopup, setShowLimitPopup] = useState(false);
 
@@ -865,6 +887,14 @@ export default function NewCarouselPage() {
                     betaOnlyAdmin: true,
                   },
                 ];
+                // Ordem do picker: Twitter primeiro (único público pra
+                // user comum + pedido Gabriel 28/04). Demais ficam depois
+                // só visíveis sem badge pra admin.
+                templates.sort((a, b) => {
+                  if (a.id === "twitter") return -1;
+                  if (b.id === "twitter") return 1;
+                  return 0;
+                });
                 return templates.map((tpl) => {
                 const selected = designTemplate === tpl.id;
                 const comingSoon = Boolean(tpl.betaOnlyAdmin && !isAdmin);
@@ -1004,236 +1034,26 @@ export default function NewCarouselPage() {
             }}
           />
 
-          {/* Upload de imagens — primary, sempre visível. Imagens enviadas são
-              usadas PRIMEIRO em ordem nos slides; restante cai pra busca/geração. */}
-          <div
-            style={{
-              padding: 16,
-              border: "1.5px solid var(--sv-ink)",
-              background: "var(--sv-paper)",
-              boxShadow: "3px 3px 0 0 var(--sv-ink)",
-            }}
-          >
-            <div
-              className="mb-2 uppercase"
-              style={{
-                fontFamily: "var(--sv-mono)",
-                fontSize: 10.5,
-                letterSpacing: "0.14em",
-                color: "var(--sv-ink)",
-                fontWeight: 700,
-              }}
-            >
-              ✦ Suas imagens (opcional)
-            </div>
-            <div
-              className="mb-3"
-              style={{
-                fontFamily: "var(--sv-sans)",
-                fontSize: 12.5,
-                lineHeight: 1.5,
-                color: "var(--sv-muted)",
-              }}
-            >
-              Suba até 8 imagens. A gente usa as suas PRIMEIRO (slide 1, 2,
-              3…) e só gera/busca o resto se sobrar slide.
-            </div>
-            {advUploadedUrls.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {advUploadedUrls.map((url, i) => (
-                  <div
-                    key={url}
-                    style={{
-                      position: "relative",
-                      width: 80,
-                      height: 80,
-                      border: "1.5px solid var(--sv-ink)",
-                      background: `url(${url}) center/cover`,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setAdvUploadedUrls((prev) =>
-                          prev.filter((_, idx) => idx !== i)
-                        )
-                      }
-                      style={{
-                        position: "absolute",
-                        top: -8,
-                        right: -8,
-                        width: 22,
-                        height: 22,
-                        borderRadius: "50%",
-                        border: "1.5px solid var(--sv-ink)",
-                        background: "var(--sv-pink)",
-                        fontSize: 11,
-                        lineHeight: 1,
-                        cursor: "pointer",
-                        color: "var(--sv-ink)",
-                        fontWeight: 700,
-                      }}
-                      title="Remover"
-                    >
-                      ×
-                    </button>
-                    <div
-                      style={{
-                        position: "absolute",
-                        bottom: 2,
-                        left: 2,
-                        padding: "1px 5px",
-                        fontFamily: "var(--sv-mono)",
-                        fontSize: 9,
-                        background: "var(--sv-ink)",
-                        color: "var(--sv-white)",
-                        fontWeight: 700,
-                      }}
-                    >
-                      SLIDE {i + 1}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              ref={advFileInputRef}
-              onChange={(e) => handleAdvancedUpload(e.target.files)}
-              style={{ display: "none" }}
-            />
-            <button
-              type="button"
-              onClick={() => advFileInputRef.current?.click()}
-              disabled={advUploading || advUploadedUrls.length >= 8}
-              className="sv-btn sv-btn-outline"
-              style={{
-                padding: "8px 14px",
-                fontSize: 11,
-                opacity:
-                  advUploading || advUploadedUrls.length >= 8 ? 0.5 : 1,
-              }}
-            >
-              {advUploading
-                ? "Subindo…"
-                : advUploadedUrls.length === 0
-                  ? "+ Subir imagens"
-                  : `+ Mais imagens (${advUploadedUrls.length}/8)`}
-            </button>
-          </div>
+          {/* Upload de imagens removido do form em 2026-04-28 (pedido
+              Gabriel): "a pessoa não pode subir imagens no começo mesmo,
+              só depois". User agora sobe imagens DENTRO do editor por
+              slide (drag-and-drop ou botão Upload), o que é mais
+              cirúrgico. State advUploadedUrls + handleAdvancedUpload
+              continuam no componente mas advanced.uploadedImageUrls fica
+              sempre undefined nesse fluxo. */}
 
-          <div>
-            <div
-              className="mb-2"
-              style={{
-                fontFamily: "var(--sv-mono)",
-                fontSize: 10.5,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: "var(--sv-muted)",
-              }}
-            >
-              Atalhos · clique pra preencher o prompt
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {SHORTCUTS.map((s) => (
-                <button
-                  key={s.label}
-                  type="button"
-                  className="text-left transition-all"
-                  style={{
-                    padding: "10px 12px",
-                    border: "1.5px solid var(--sv-ink)",
-                    background: "var(--sv-white)",
-                    boxShadow: "0 0 0 0 var(--sv-ink)",
-                  }}
-                  onClick={() => setIdea(s.seed)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translate(-1px,-1px)";
-                    e.currentTarget.style.boxShadow =
-                      "3px 3px 0 0 var(--sv-ink)";
-                    e.currentTarget.style.background = "var(--sv-green)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translate(0,0)";
-                    e.currentTarget.style.boxShadow = "0 0 0 0 var(--sv-ink)";
-                    e.currentTarget.style.background = "var(--sv-white)";
-                  }}
-                >
-                  <div
-                    style={{
-                      fontFamily: "var(--sv-mono)",
-                      fontSize: 8.5,
-                      letterSpacing: "0.18em",
-                      textTransform: "uppercase",
-                      color: "var(--sv-muted)",
-                    }}
-                  >
-                    {s.kicker}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--sv-sans)",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "var(--sv-ink)",
-                      marginTop: 2,
-                    }}
-                  >
-                    {s.label}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Bloco "Atalhos · clique pra preencher o prompt" removido em
+              2026-04-28 (pedido Gabriel) — usuário avançado já sabe
+              escrever briefing direto, atalhos genéricos atrapalhavam mais
+              que ajudavam. SHORTCUTS const mantida no arquivo pra eventual
+              reuso futuro mas sem render. */}
 
-          <div>
-            <div
-              className="mb-2.5"
-              style={{
-                fontFamily: "var(--sv-mono)",
-                fontSize: 10.5,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: "var(--sv-muted)",
-              }}
-            >
-              Tom e idioma
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <OptCycler
-                label="Tom"
-                value={tone}
-                options={TONE_OPTS.map((o) => o.id)}
-                onChange={(v) => setTone(v)}
-                formatter={(v) =>
-                  TONE_OPTS.find((o) => o.id === v)?.label ?? String(v)
-                }
-              />
-              <OptCycler
-                label="Idioma"
-                value={lang}
-                options={LANG_OPTS.map((o) => o.id)}
-                onChange={(v) => setLang(v)}
-                formatter={(v) =>
-                  LANG_OPTS.find((o) => o.id === v)?.label ?? String(v)
-                }
-              />
-            </div>
-            <p
-              className="mt-2"
-              style={{
-                fontFamily: "var(--sv-mono)",
-                fontSize: 9.5,
-                color: "var(--sv-muted)",
-                letterSpacing: "0.08em",
-              }}
-            >
-              A IA decide a quantidade de slides e o CTA ideal pra cada ângulo.
-            </p>
-          </div>
+          {/* Bloco "Tom e idioma" removido em 2026-04-28 (pedido Gabriel).
+              Tom + idioma vêm direto do `profile` do user (definidos no
+              onboarding/settings), não precisam aparecer aqui. State
+              `tone` e `lang` continuam no componente porque são lidos por
+              callsite do generateCarousel — agora hidratados de
+              profile.tone e profile.language quando disponíveis. */}
 
           {/* ───── MODO AVANÇADO (collapsible) ───── */}
           <div>

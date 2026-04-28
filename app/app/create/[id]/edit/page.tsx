@@ -386,7 +386,12 @@ export default function EditPage(props: {
   // de loading/error). Antes (commit e427119) eu tinha colocado dentro
   // do JSX do CanvasCol — react explodia com error #310 ("Rendered
   // more hooks than during the previous render") quando o draft carregava.
-  const [canvasDropping, setCanvasDropping] = useState(false);
+  // Estado: null = sem drag, "image" ou "video" = arrastando esse tipo.
+  // Detecta tipo via dataTransfer.items[i].type no dragover (Chrome/Firefox/
+  // Safari expõem MIME mesmo antes do drop). Permite hint visual diferente.
+  const [canvasDropping, setCanvasDropping] = useState<
+    null | "image" | "video"
+  >(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Usamos um input de upload separado por slide (via indexRef) — armazenamos
@@ -470,13 +475,17 @@ export default function EditPage(props: {
   //   - Capa (slide 0) → sempre generate (forçado pelo decider pro max drama)
   // Roda continuamente ate TODOS os slides terem imageUrl. Com retry ilimitado
   // (backoff exponencial) em falhas — garantia de 100% fiel no export.
+  // Ref guarda `${draftId}::${templateId}` — quando user troca template,
+  // a chave muda e o autofill re-roda pra recalibrar imagens com o
+  // image-decider novo (cada template tem style guide diferente).
   const autoFillStartedRef = useRef<string | null>(null);
   const [imagesPending, setImagesPending] = useState<number>(0);
   useEffect(() => {
     if (!draft?.id) return;
     if (!slides.length) return;
-    if (autoFillStartedRef.current === draft.id) return;
-    autoFillStartedRef.current = draft.id;
+    const key = `${draft.id}::${templateId}`;
+    if (autoFillStartedRef.current === key) return;
+    autoFillStartedRef.current = key;
 
     async function fillMissing() {
       const concurrency = 2;
@@ -566,7 +575,9 @@ export default function EditPage(props: {
     }
     void fillMissing();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft?.id, slides.length]);
+    // templateId incluído nas deps — auto-fill re-roda ao trocar template
+    // (cada template tem image-decider diferente, faz sentido recalibrar).
+  }, [draft?.id, slides.length, templateId]);
 
   // Re-calcula imagesPending toda vez que slides muda. Source de verdade pro
   // botão Preview — se algum slide ainda nao tem imagem, bloqueia export.
@@ -1261,22 +1272,29 @@ export default function EditPage(props: {
       onDragOver={(e) => {
         // Aceita drop só de arquivos (não slides). Slides reorder usam handleDrop
         // dos thumbnails — esse drop zone aqui é exclusivo pra upload.
-        if (e.dataTransfer.types.includes("Files")) {
-          e.preventDefault();
-          if (!canvasDropping) setCanvasDropping(true);
-        }
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        // Detecta tipo do arquivo arrastado (dataTransfer.items expõe MIME
+        // antes do drop em Chrome/Firefox/Safari). Permite hint visual
+        // diferente pra imagem vs vídeo.
+        const items = Array.from(e.dataTransfer.items ?? []);
+        const fileItem = items.find((it) => it.kind === "file");
+        const kind: "image" | "video" = fileItem?.type.startsWith("video/")
+          ? "video"
+          : "image";
+        if (canvasDropping !== kind) setCanvasDropping(kind);
       }}
       onDragLeave={(e) => {
         // Só limpa se saiu do container inteiro (não de filho interno).
         const related = e.relatedTarget as Node | null;
         if (!related || !e.currentTarget.contains(related)) {
-          setCanvasDropping(false);
+          setCanvasDropping(null);
         }
       }}
       onDrop={(e) => {
         if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
         e.preventDefault();
-        setCanvasDropping(false);
+        setCanvasDropping(null);
         const file = Array.from(e.dataTransfer.files).find(
           (f) => f.type.startsWith("image/") || f.type.startsWith("video/")
         );
@@ -1287,13 +1305,19 @@ export default function EditPage(props: {
         void handleUploadImage(file, activeIndex);
       }}
     >
-      {/* Overlay visual quando user arrasta arquivo sobre o canvas. */}
+      {/* Overlay visual quando user arrasta arquivo sobre o canvas. Cor +
+          texto mudam conforme tipo: imagem (verde) vs vídeo (rosa). */}
       {canvasDropping && (
         <div
           className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none"
           style={{
-            background: "rgba(124, 240, 103, 0.22)",
-            border: "3px dashed var(--sv-green)",
+            background:
+              canvasDropping === "video"
+                ? "rgba(210, 98, 178, 0.22)"
+                : "rgba(124, 240, 103, 0.22)",
+            border: `3px dashed ${
+              canvasDropping === "video" ? "var(--sv-pink)" : "var(--sv-green)"
+            }`,
           }}
         >
           <div
@@ -1307,10 +1331,25 @@ export default function EditPage(props: {
               textTransform: "uppercase",
               fontWeight: 700,
               border: "1.5px solid var(--sv-ink)",
-              boxShadow: "4px 4px 0 0 var(--sv-green)",
+              boxShadow: `4px 4px 0 0 ${
+                canvasDropping === "video" ? "var(--sv-pink)" : "var(--sv-green)"
+              }`,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
             }}
           >
-            ↓ Solta pra usar nesse slide
+            {canvasDropping === "video" ? (
+              <>
+                <span style={{ fontSize: 16, lineHeight: 1 }}>▶</span>
+                Solta o vídeo · vai exportar como MP4
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: 16, lineHeight: 1 }}>↓</span>
+                Solta a imagem nesse slide
+              </>
+            )}
           </div>
         </div>
       )}

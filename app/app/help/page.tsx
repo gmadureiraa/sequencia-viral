@@ -37,7 +37,7 @@ const CARDS: GuideCard[] = [
     icon: <PlusCircle size={18} strokeWidth={2} />,
     title: "Criar seu primeiro carrossel",
     body:
-      "No menu, clique em Criar. Cola um link (YouTube, artigo, post do Instagram), um texto solto, ou escreve a ideia direto. Escolhe o template visual (Futurista ou Twitter) e clica gerar. A IA devolve um carrossel completo em ~15-25s.",
+      "No menu, clique em Criar. Cola um link (YouTube, artigo, post do Instagram), um texto solto, ou escreve a ideia direto. A IA devolve um carrossel pronto no estilo Thread (X) — heading + body + imagens — em ~25-35s.",
     actionLabel: "Criar agora",
     actionHref: "/app/create/new",
     accent: "green",
@@ -45,17 +45,17 @@ const CARDS: GuideCard[] = [
   {
     step: "02",
     icon: <Lightbulb size={18} strokeWidth={2} />,
-    title: "Ideias sugeridas pra desbloquear",
+    title: "Cole um link e a IA replica o estilo",
     body:
-      "Sem ideia do que postar? No Criar, o painel de sugestões mostra 6 conceitos baseados no seu nicho, voz e posts recentes. Clica numa e vai direto pro briefing preenchido. Pra puxar 6 novas, clica Regerar.",
+      "Cola URL de carrossel do Instagram no briefing e a IA copia quase 1:1 o estilo (estrutura, tom, hooks). Funciona também com YouTube (puxa transcrição) e artigos. É o atalho mais forte pra fidelidade alta sem escrever briefing comprido.",
     accent: "paper",
   },
   {
     step: "03",
     icon: <Brain size={18} strokeWidth={2} />,
-    title: "Writer vs Layout-only",
+    title: "Writer vs Layout-only (Modo avançado)",
     body:
-      "Dois modos. Writer: IA usa seu briefing como inspiração e escreve do zero (hooks, escada, CTA). Layout-only: você já escreveu o texto, ela só quebra em slides sem reescrever. Escolhe no topo do Criar antes de gerar.",
+      "Dentro do Modo avançado, escolhe entre Writer (IA usa seu briefing como inspiração e escreve do zero, com hooks e escada) ou Layout-only (você já escreveu o texto, ela só quebra em slides sem reescrever). Default: Writer.",
     accent: "paper",
   },
   {
@@ -83,7 +83,7 @@ const CARDS: GuideCard[] = [
     icon: <Layers size={18} strokeWidth={2} />,
     title: "Modo avançado (briefing cirúrgico)",
     body:
-      "No Criar, ativa Modo avançado e destrava: direcionamento do gancho, CTA customizado, número exato de slides (6-12), travar estilo (data / story / provocative), contexto extra, upload de fotos suas. Tudo opcional — deixa desligado pra geração rápida.",
+      "No Criar, ativa Modo avançado e destrava: direcionamento do gancho, CTA customizado, contexto extra (dados/quotes/cases), e o toggle Writer vs Layout-only. A IA decide a quantidade de slides — se você pedir 'em 8 slides' ou 'em 6 tópicos' direto no briefing, ela respeita.",
     accent: "paper",
   },
   {
@@ -97,9 +97,9 @@ const CARDS: GuideCard[] = [
   {
     step: "08",
     icon: <Sparkles size={18} strokeWidth={2} />,
-    title: "Escolher template visual",
+    title: "Template visual: Thread (X)",
     body:
-      "Dois templates disponíveis. Futurista: editorial cinematográfico, tipografia dramática, imagens IA tema-específicas — ideal pra conteúdo editorial denso. Twitter: screenshot de tweet, visual minimalista, ideal pra linha conversacional/thread.",
+      "Por enquanto, 1 template público: Thread (X) — screenshot de tweet, visual minimalista, ideal pra linha conversacional/thread. Outros templates (Futurista, Editorial, Ambição, Bohdan) estão em beta interno e voltam em breve.",
     accent: "paper",
   },
   {

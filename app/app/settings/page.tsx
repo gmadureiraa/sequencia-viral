@@ -2375,16 +2375,16 @@ function SettingsPageContent() {
                   {plan === "free" && (
                     <>
                       <li>◆ 5 carrosséis/mês</li>
-                      <li>◆ 1 template (Manifesto)</li>
+                      <li>◆ Template Thread (X) padrão</li>
                       <li>◆ Export PNG com marca d&apos;água</li>
                     </>
                   )}
                   {plan === "pro" && (
                     <>
                       <li>✦ Carrosséis ilimitados</li>
-                      <li>✦ Todos os 4 templates</li>
-                      <li>✦ Branding customizado</li>
+                      <li>✦ Branding customizado · voz da IA</li>
                       <li>✦ Export PDF + .zip, sem marca d&apos;água</li>
+                      <li>✦ Templates extras conforme liberados</li>
                     </>
                   )}
                   {plan === "business" && (

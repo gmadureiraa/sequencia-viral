@@ -28,7 +28,7 @@ const FREE_FEATURES = [
   "Até 12 slides por carrossel",
   "Todas as origens (YouTube, blog, Instagram, ideia)",
   "Editor completo e export PNG",
-  "Templates Futurista + Twitter",
+  "Template Thread (X) padrão",
 ];
 
 const CREATOR_FEATURES = PLANS.pro.features.slice(0, 7);

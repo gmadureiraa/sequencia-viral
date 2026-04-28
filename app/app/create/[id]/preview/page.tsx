@@ -11,6 +11,7 @@ import { useDraft } from "@/lib/create/use-draft";
 import { useExport } from "@/lib/create/use-export";
 import { resolveVariant, resolveLayers } from "@/lib/create/render-defaults";
 import { useCaption } from "@/lib/create/use-caption";
+import { authHeaders } from "@/lib/api-auth-headers";
 import { supabase } from "@/lib/supabase";
 import { upsertUserCarousel } from "@/lib/carousel-storage";
 import CarouselFeedbackPanel from "@/components/app/carousel-feedback";
@@ -183,8 +184,16 @@ export default function PreviewPage(props: {
   // com URL de vídeo (.mp4/.webm/.mov) são exportados como MP4 original
   // no ZIP, em vez de captura PNG (que só pegaria o frame congelado).
   const slideMediaUrls = slides.map((s) => s.imageUrl ?? "");
+  // 28/04: passa getAuthHeaders pro hook conseguir pré-buscar imagens
+  // de hosts não-CORS via /api/img-proxy (que exige Bearer). Sem isso,
+  // toPng falhava em slides com imagens de Serper/news/blogs (canvas
+  // tainted) e o .zip vinha incompleto — bug do "4/16 slides".
   const { exportRefs, exportPng, exportPdf, exportZip, isExporting, progress } =
-    useExport(slides.length, { showWatermark, slideMediaUrls });
+    useExport(slides.length, {
+      showWatermark,
+      slideMediaUrls,
+      getAuthHeaders: () => authHeaders(session),
+    });
 
   const {
     generate: generateCaption,

@@ -18,10 +18,135 @@ import { isVideoUrl } from "@/components/app/templates/utils";
  *   índice). Usado pra detectar slides com vídeo: nesses, o ZIP inclui o
  *   MP4 ORIGINAL em vez de PNG (que só capturaria o frame congelado).
  *   PDF/PNG individuais sempre exportam frame como PNG.
+ * @param opts.getAuthHeaders - função que devolve os headers de auth do
+ *   client (Bearer da sessão Supabase). Usado pra pré-buscar imagens de
+ *   hosts não-CORS via /api/img-proxy e converter pra blob URL antes da
+ *   captura toPng. Sem isso, slides com imagens de hosts random (Serper,
+ *   notícias, blogs) ficam com canvas tainted e a captura falha — bug
+ *   reportado em 28/04 quando user pediu .zip de carrossel de 16 slides
+ *   e só veio 4 (os tweets text-only).
  */
 export interface UseExportOpts {
   showWatermark?: boolean;
   slideMediaUrls?: string[];
+  getAuthHeaders?: () => HeadersInit;
+}
+
+/** Hosts que servem CORS público — não precisam ir pelo proxy. Espelha
+ *  PUBLIC_CORS_HOSTS de components/app/templates/utils.ts pra evitar
+ *  importação cross-package (utils.ts não exporta esse helper). */
+const EXPORT_PUBLIC_CORS_HOSTS = [
+  "supabase.co",
+  "supabase.in",
+  "cdninstagram.com",
+  "fbcdn.net",
+  "pbs.twimg.com",
+  "twimg.com",
+  "licdn.com",
+  "googleusercontent.com",
+  "ytimg.com",
+  "unsplash.com",
+  "images.unsplash.com",
+];
+
+function isPublicCorsHostExport(host: string): boolean {
+  const h = host.toLowerCase();
+  return EXPORT_PUBLIC_CORS_HOSTS.some(
+    (suffix) => h === suffix || h.endsWith(`.${suffix}`)
+  );
+}
+
+/**
+ * Pré-busca imagens de hosts não-CORS via /api/img-proxy (com Bearer)
+ * e converte pra blob URL same-origin. Substitui src dos `<img>` dentro
+ * dos refs. Devolve lista de blob URLs criadas pra revoke depois.
+ *
+ * Isso é a chave pra .zip de 16 slides exportar 16 (e não 4) — quando
+ * Serper devolve imagens de news/blog/stock sites sem CORS, `<img
+ * crossOrigin="anonymous">` cai em fail load OU canvas-tainted, e a
+ * `toPng` joga exception. Trocando pra blob: URL same-origin, o canvas
+ * captura limpo.
+ */
+async function prefetchImagesAsBlobs(
+  refs: { current: (HTMLDivElement | null)[] },
+  count: number,
+  getAuthHeaders?: () => HeadersInit,
+  onProgress?: (msg: string) => void
+): Promise<string[]> {
+  if (typeof window === "undefined") return [];
+  const urlsToFetch = new Set<string>();
+  // Coleta URLs únicas que precisam de proxy (não same-origin, não CORS-friendly).
+  for (let i = 0; i < count; i++) {
+    const el = refs.current[i];
+    if (!el) continue;
+    el.querySelectorAll("img").forEach((img) => {
+      const src = img.getAttribute("src");
+      if (!src) return;
+      if (
+        src.startsWith("blob:") ||
+        src.startsWith("data:") ||
+        src.startsWith("/")
+      ) {
+        return;
+      }
+      try {
+        const u = new URL(src);
+        if (u.origin === window.location.origin) return;
+        if (isPublicCorsHostExport(u.hostname)) return;
+        urlsToFetch.add(src);
+      } catch {
+        // src inválido, ignora — toPng vai usar imagePlaceholder
+      }
+    });
+  }
+
+  if (urlsToFetch.size === 0) return [];
+  onProgress?.(`Pré-carregando ${urlsToFetch.size} imagem(ns)...`);
+
+  const headers = getAuthHeaders?.() ?? {};
+  const blobMap = new Map<string, string>();
+  const createdBlobs: string[] = [];
+
+  await Promise.all(
+    Array.from(urlsToFetch).map(async (url) => {
+      try {
+        const proxyUrl = `/api/img-proxy?url=${encodeURIComponent(url)}`;
+        const res = await fetch(proxyUrl, {
+          headers,
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!res.ok) {
+          console.warn(`[export] prefetch HTTP ${res.status}: ${url}`);
+          return;
+        }
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        blobMap.set(url, blobUrl);
+        createdBlobs.push(blobUrl);
+      } catch (err) {
+        console.warn("[export] prefetch failed:", url, err);
+      }
+    })
+  );
+
+  // Substitui src no DOM (e re-aguarda load do blob: URL).
+  for (let i = 0; i < count; i++) {
+    const el = refs.current[i];
+    if (!el) continue;
+    el.querySelectorAll("img").forEach((img) => {
+      const src = img.getAttribute("src");
+      if (!src) return;
+      const blobUrl = blobMap.get(src);
+      if (blobUrl) {
+        img.setAttribute("src", blobUrl);
+        // Remove crossOrigin pra blob URL — atributo não tem efeito em
+        // same-origin e em alguns webkit força reload desnecessário.
+        img.removeAttribute("crossorigin");
+      }
+    });
+  }
+
+  return createdBlobs;
 }
 
 async function waitForImagesInElement(el: HTMLElement): Promise<void> {
@@ -84,6 +209,7 @@ export function useExport(
       : optsOrShowWatermark;
   const showWatermark = !!opts.showWatermark;
   const slideMediaUrls = opts.slideMediaUrls ?? [];
+  const getAuthHeaders = opts.getAuthHeaders;
 
   const exportRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [isExporting, setIsExporting] = useState(false);
@@ -171,6 +297,23 @@ export function useExport(
     [totalSlides, injectWatermark]
   );
 
+  // Lista de blob URLs criadas durante prefetch — guardamos pra revoke
+  // depois que TODAS as capturas terminarem. Revoke prematuro durante a
+  // captura (ex: dentro do loop) pode invalidar a img antes do toPng do
+  // próximo slide ler ela em batch.
+  const blobUrlsRef = useRef<string[]>([]);
+
+  const cleanupBlobs = useCallback(() => {
+    for (const u of blobUrlsRef.current) {
+      try {
+        URL.revokeObjectURL(u);
+      } catch {
+        /* ignore */
+      }
+    }
+    blobUrlsRef.current = [];
+  }, []);
+
   const waitRender = useCallback(async () => {
     await new Promise<void>((r) =>
       requestAnimationFrame(() => requestAnimationFrame(() => r()))
@@ -196,11 +339,26 @@ export function useExport(
         if (node) await waitForImagesInElement(node);
       })
     );
+    // Pré-busca imagens de hosts não-CORS via /api/img-proxy autenticado
+    // e troca src pra blob URL same-origin. Sem isso, toPng falha em
+    // slides com imagens de Serper/news/blog (canvas tainted).
+    blobUrlsRef.current = await prefetchImagesAsBlobs(
+      exportRefs,
+      totalSlides,
+      getAuthHeaders,
+      setProgress
+    );
+    // Aguarda os <img> com src trocado pra blob: dispararem load.
+    await Promise.all(
+      exportRefs.current.slice(0, totalSlides).map(async (node) => {
+        if (node) await waitForImagesInElement(node);
+      })
+    );
     // Settle 500ms (antes 50ms) — container off-screen com opacity:0 demora
     // pra pintar em webkit. Sem esse delay, toPng captura state pre-layout e
     // 4/8 slides falham aleatoriamente.
     await new Promise((r) => setTimeout(r, 500));
-  }, [totalSlides]);
+  }, [totalSlides, getAuthHeaders]);
 
   const exportPng = useCallback(async () => {
     setIsExporting(true);
@@ -241,10 +399,11 @@ export function useExport(
         `Falha no export. ${err instanceof Error ? err.message : ""}`.trim()
       );
     } finally {
+      cleanupBlobs();
       setProgress("");
       setIsExporting(false);
     }
-  }, [totalSlides, waitRender, captureSlideAsPng]);
+  }, [totalSlides, waitRender, captureSlideAsPng, cleanupBlobs]);
 
   const exportPdf = useCallback(
     async (filename = "sequencia-viral-carrossel") => {
@@ -295,11 +454,12 @@ export function useExport(
         console.error("Export PDF error:", err);
         toast.error(`Falha PDF. ${msg}`.trim());
       } finally {
+        cleanupBlobs();
         setProgress("");
         setIsExporting(false);
       }
     },
-    [totalSlides, waitRender, captureSlideAsPng]
+    [totalSlides, waitRender, captureSlideAsPng, cleanupBlobs]
   );
 
   // Export .zip real: capta todos slides, empacota via JSZip e downloa 1 arquivo.
@@ -392,11 +552,12 @@ export function useExport(
         console.error("Export ZIP error:", err);
         toast.error(`Falha .zip. ${msg}`.trim());
       } finally {
+        cleanupBlobs();
         setProgress("");
         setIsExporting(false);
       }
     },
-    [totalSlides, waitRender, captureSlideAsPng, slideMediaUrls]
+    [totalSlides, waitRender, captureSlideAsPng, slideMediaUrls, cleanupBlobs]
   );
 
   return {

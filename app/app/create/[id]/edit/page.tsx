@@ -375,6 +375,12 @@ export default function EditPage(props: {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   // Menu "+ Adicionar" (camada extra) — só UI estub.
   const [addLayerOpen, setAddLayerOpen] = useState(false);
+  // Detecta drag de arquivo sobre o canvas pra mostrar hint visual.
+  // CRÍTICO: precisa estar AQUI no top level (antes dos early returns
+  // de loading/error). Antes (commit e427119) eu tinha colocado dentro
+  // do JSX do CanvasCol — react explodia com error #310 ("Rendered
+  // more hooks than during the previous render") quando o draft carregava.
+  const [canvasDropping, setCanvasDropping] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Usamos um input de upload separado por slide (via indexRef) — armazenamos
@@ -1235,8 +1241,8 @@ export default function EditPage(props: {
     </div>
   );
 
-  // Detecta drag de arquivo sobre o canvas pra mostrar hint visual.
-  const [canvasDropping, setCanvasDropping] = useState(false);
+  // canvasDropping declarado no topo do componente (acima de hidratação).
+  // Aqui é só o JSX do canvas — não declarar hooks após early returns.
 
   const CanvasCol = (
     <div

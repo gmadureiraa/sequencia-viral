@@ -20,7 +20,29 @@ const ALLOWED_VIDEO_MIME = new Set([
   "video/mp4",
   "video/webm",
   "video/quicktime",
+  // Mac às vezes envia M4V como "video/x-m4v" e MP4 como "video/mp4"
+  // dependendo do origem (download vs export iMovie). Aceitar ambos.
+  "video/x-m4v",
 ]);
+
+/**
+ * Mapeia MIME type → extensão de arquivo. `mime.split('/')[1]` falhava em
+ * `video/quicktime` (virava `.quicktime`, browser não tocava). Tabela
+ * explícita garante extensão padrão (.mp4/.mov/.webm/.m4v).
+ */
+function extFromMime(mime: string): string {
+  switch (mime) {
+    case "image/png": return "png";
+    case "image/jpeg": return "jpg";
+    case "image/webp": return "webp";
+    case "image/gif": return "gif";
+    case "video/mp4": return "mp4";
+    case "video/webm": return "webm";
+    case "video/quicktime": return "mov";
+    case "video/x-m4v": return "m4v";
+    default: return "bin";
+  }
+}
 
 const MAGIC_BYTES: Record<string, number[][]> = {
   "image/png": [[0x89, 0x50, 0x4e, 0x47]],
@@ -34,8 +56,13 @@ const MAGIC_BYTES: Record<string, number[][]> = {
 };
 
 function validateMagicBytes(bytes: Uint8Array, claimedMime: string): boolean {
-  // MP4/QuickTime: ftyp box (offset 4-7). Aceita qualquer brand depois.
-  if (claimedMime === "video/mp4" || claimedMime === "video/quicktime") {
+  // ISO Base Media File Format (MP4, MOV, M4V): ftyp box no offset 4-7.
+  // Aceita qualquer brand depois (mp42, qt, M4V, isom, etc).
+  if (
+    claimedMime === "video/mp4" ||
+    claimedMime === "video/quicktime" ||
+    claimedMime === "video/x-m4v"
+  ) {
     return (
       bytes.length >= 8 &&
       bytes[4] === 0x66 && // f
@@ -128,7 +155,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const ext = mime.split("/")[1] || "png";
+    const ext = extFromMime(mime);
     const safeCarousel = carouselId.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 36) || "draft";
     const safeSlide = slideIndex.replace(/[^0-9]/g, "").slice(0, 3) || "0";
     const path = `${user.id}/${safeCarousel}/${safeSlide}-${Date.now()}.${ext}`;
@@ -136,8 +163,17 @@ export async function POST(request: Request) {
     const bytes = new Uint8Array(await file.arrayBuffer());
 
     if (!validateMagicBytes(bytes, mime)) {
+      console.warn(
+        `[upload] magic bytes mismatch — mime=${mime} first8=${Array.from(
+          bytes.slice(0, 8)
+        )
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join(" ")}`
+      );
       return Response.json(
-        { error: "Arquivo corrompido ou extensão incompatível com o conteúdo real." },
+        {
+          error: `Arquivo corrompido ou MIME incompatível (${mime}). Tenta de novo com outro arquivo.`,
+        },
         { status: 415 }
       );
     }

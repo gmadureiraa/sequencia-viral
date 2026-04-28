@@ -495,10 +495,25 @@ export default function EditPage(props: {
       // com backoff. Se depois de N passes ainda falhar, marca imageFailed=true
       // pra UX do editor mostrar card "Gerar de novo" claramente.
       while (passIndex < maxRetries) {
-        // Snapshot dos indices que ainda precisam
+        // Snapshot dos indices que precisam de imagem.
+        // 28/04: respeita decisão do Gemini de "slide sem imagem" —
+        // imageQuery === "" string vazia significa intencional (não é
+        // missing). Isso pula auto-fill em ~50% dos slides típicos
+        // (texto puro/abstrato/CTA), reduzindo tempo total de geração.
         const missing: number[] = [];
         for (let i = 0; i < slides.length; i++) {
-          if (!slides[i]?.imageUrl) missing.push(i);
+          const s = slides[i];
+          if (!s) continue;
+          if (s.imageUrl) continue; // já tem imagem
+          // imageQuery vazio EXPLÍCITO = modelo decidiu que slide não
+          // tem imagem. Não é "missing".
+          if (
+            typeof s.imageQuery === "string" &&
+            s.imageQuery.trim() === ""
+          ) {
+            continue;
+          }
+          missing.push(i);
         }
         setImagesPending(missing.length);
         if (missing.length === 0) break;
@@ -844,12 +859,17 @@ export default function EditPage(props: {
 
   async function handleUploadImage(file: File, targetIndex: number) {
     if (!file) return;
-    const url = await imagesHook.uploadImage(targetIndex, file, id);
-    if (url) {
-      updateSlide(targetIndex, { imageUrl: url, imageFailed: false });
-      toast.success("Imagem carregada.");
-    } else if (imagesHook.error) {
-      toast.error(imagesHook.error);
+    const isVideo = file.type.startsWith("video/");
+    const result = await imagesHook.uploadImage(targetIndex, file, id);
+    if (result.ok) {
+      updateSlide(targetIndex, {
+        imageUrl: result.url,
+        imageFailed: false,
+      });
+      toast.success(isVideo ? "Vídeo carregado." : "Imagem carregada.");
+    } else {
+      // Toast com erro REAL retornado pelo hook (não state assíncrono).
+      toast.error(result.error || "Falha no upload.");
     }
   }
 

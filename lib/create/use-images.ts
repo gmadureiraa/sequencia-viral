@@ -108,15 +108,19 @@ export function useImages(session: Session | null) {
       index: number,
       file: File,
       carouselId: string | null
-    ): Promise<string | null> => {
-      // 28/04: aceita imagem OU vídeo. /api/upload valida magic bytes
-      // server-side e bucket carousel-images aceita ambos os tipos.
+    ): Promise<
+      { ok: true; url: string } | { ok: false; error: string }
+    > => {
+      // 28/04: aceita imagem OU vídeo. Retorna {ok,url|error} pra evitar
+      // race do React state (setError → leitura imediata pegava state
+      // anterior, toast aparecia errado ou silencioso).
       if (
         !file.type.startsWith("image/") &&
         !file.type.startsWith("video/")
       ) {
-        setError("Arquivo precisa ser imagem ou vídeo (MP4/WEBM/MOV).");
-        return null;
+        const msg = "Arquivo precisa ser imagem ou vídeo (MP4/WEBM/MOV).";
+        setError(msg);
+        return { ok: false, error: msg };
       }
       setLoadingIndex(index);
       setError(null);
@@ -134,11 +138,16 @@ export function useImages(session: Session | null) {
           body: form,
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Upload falhou");
-        return data.url as string;
+        if (!res.ok) {
+          const msg = data.error || `Upload falhou (HTTP ${res.status})`;
+          setError(msg);
+          return { ok: false, error: msg };
+        }
+        return { ok: true, url: data.url as string };
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Erro no upload");
-        return null;
+        const msg = e instanceof Error ? e.message : "Erro no upload";
+        setError(msg);
+        return { ok: false, error: msg };
       } finally {
         setLoadingIndex(null);
       }

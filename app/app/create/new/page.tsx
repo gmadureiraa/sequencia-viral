@@ -586,6 +586,23 @@ export default function NewCarouselPage() {
             return slide;
           }
 
+          // 28/04: SE o Gemini retornou imageQuery EXPLICITAMENTE vazio
+          // (string ""), respeitamos a decisão dele de "esse slide não
+          // precisa de imagem". Isso tira ~50% dos fetches/Imagens em
+          // carrosseis típicos (cover sempre tem, demais o modelo decide
+          // pelo conteúdo: nome próprio/produto/dado → tem; texto puro
+          // abstrato → não tem). Antes caía no fallback `|| heading` e
+          // toda página acabava ganhando imagem forçada.
+          if (
+            typeof slide.imageQuery === "string" &&
+            slide.imageQuery.trim() === ""
+          ) {
+            setImagesProgress((prev) =>
+              prev ? { ...prev, done: prev.done + 1 } : null
+            );
+            return slide;
+          }
+
           const query = (slide.imageQuery || slide.heading || "").slice(0, 300);
           if (!query.trim()) {
             setImagesProgress((prev) =>

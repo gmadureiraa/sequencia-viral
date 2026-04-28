@@ -2,7 +2,44 @@
 
 import { forwardRef } from "react";
 import type { SlideProps } from "./types";
-import { resolveImgSrc, renderRichText, CANVAS_W, CANVAS_H } from "./utils";
+import { resolveImgSrc, renderRichText, CANVAS_W, CANVAS_H, isVideoUrl } from "./utils";
+
+/**
+ * Renderiza img OU video baseado na extensão da URL. Vídeos rodam
+ * autoplay+loop+muted pra preview no editor (sem som, sem controles).
+ * No export, html-to-image captura o frame atual; o MP4 original é
+ * salvo separadamente no ZIP via lógica de export.
+ */
+function MediaTag(props: {
+  src: string;
+  alt: string;
+  style: React.CSSProperties;
+}) {
+  const isVideo = isVideoUrl(props.src);
+  if (isVideo) {
+    return (
+      <video
+        src={props.src}
+        autoPlay
+        loop
+        muted
+        playsInline
+        crossOrigin="anonymous"
+        style={props.style}
+        aria-label={props.alt}
+      />
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={props.src}
+      crossOrigin="anonymous"
+      alt={props.alt}
+      style={props.style}
+    />
+  );
+}
 
 /**
  * Template 04 — Twitter v2 (tweet screenshot)
@@ -271,10 +308,8 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
                     justifyContent: "center",
                   }}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={bodyImgSrc}
-                    crossOrigin="anonymous"
+                  <MediaTag
+                    src={bodyImgSrc!}
                     alt={heading}
                     style={{
                       width: "100%",
@@ -465,10 +500,8 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
                     background: "transparent",
                   }}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={bodyImgSrc}
-                    crossOrigin="anonymous"
+                  <MediaTag
+                    src={bodyImgSrc!}
                     alt={heading}
                     style={{
                       width: "100%",

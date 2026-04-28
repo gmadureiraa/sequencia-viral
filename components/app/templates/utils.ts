@@ -81,6 +81,22 @@ export function renderRichText(
   });
 }
 
+/**
+ * Detecta se uma URL aponta pra vídeo (mp4/webm/mov). Usado pelos
+ * templates pra escolher entre <img> e <video>. Heurística por extensão
+ * — funciona pras URLs do Supabase Storage e do Apify CDN.
+ */
+export function isVideoUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const lower = url.toLowerCase().split("?")[0];
+  return (
+    lower.endsWith(".mp4") ||
+    lower.endsWith(".mov") ||
+    lower.endsWith(".webm") ||
+    lower.endsWith(".m4v")
+  );
+}
+
 /** Dimensões reais do canvas Instagram 4:5 usado por todos os templates. */
 export const CANVAS_W = 1080;
 export const CANVAS_H = 1350;

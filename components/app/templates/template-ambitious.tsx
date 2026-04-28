@@ -4,6 +4,7 @@ import { forwardRef } from "react";
 import type { SlideProps } from "./types";
 import { resolveImgSrc, renderRichText, CANVAS_W, CANVAS_H } from "./utils";
 
+import { MediaTag } from "./media-tag";
 /**
  * Template 05 — Ambição (motivacional)
  *
@@ -122,11 +123,8 @@ const TemplateAmbitious = forwardRef<HTMLDivElement, SlideProps>(
           }}
         >
           {showBg && hasImage && (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={bodyImgSrc}
-                crossOrigin="anonymous"
+            <>              <MediaTag
+                src={bodyImgSrc!}
                 alt={heading}
                 style={{
                   position: "absolute",

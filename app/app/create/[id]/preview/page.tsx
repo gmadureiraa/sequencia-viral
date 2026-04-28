@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { isAdminEmail } from "@/lib/admin-emails";
 import { useDraft } from "@/lib/create/use-draft";
 import { useExport } from "@/lib/create/use-export";
+import { resolveVariant, resolveLayers } from "@/lib/create/render-defaults";
 import { useCaption } from "@/lib/create/use-caption";
 import { supabase } from "@/lib/supabase";
 import { upsertUserCarousel } from "@/lib/carousel-storage";
@@ -178,8 +179,12 @@ export default function PreviewPage(props: {
     return plan === "free" || plan === "";
   })();
 
+  // 28/04: passa slideMediaUrls pro hook saber quais têm vídeo. Slides
+  // com URL de vídeo (.mp4/.webm/.mov) são exportados como MP4 original
+  // no ZIP, em vez de captura PNG (que só pegaria o frame congelado).
+  const slideMediaUrls = slides.map((s) => s.imageUrl ?? "");
   const { exportRefs, exportPng, exportPdf, exportZip, isExporting, progress } =
-    useExport(slides.length, showWatermark);
+    useExport(slides.length, { showWatermark, slideMediaUrls });
 
   const {
     generate: generateCaption,
@@ -586,9 +591,9 @@ export default function PreviewPage(props: {
                       // crus, enquanto editor passava `?? "headline"` e
                       // `?? DEFAULT_LAYERS`. Quando slide vinha sem essas props,
                       // editor usava fallback e preview renderizava diferente.
-                      variant={active.variant ?? "headline"}
+                      variant={resolveVariant(active.variant)}
                       bgColor={active.bgColor}
-                      layers={active.layers ?? { title: true, body: true, bg: true }}
+                      layers={resolveLayers(active.layers)}
                     />
                   </div>
                 )}
@@ -1162,13 +1167,14 @@ export default function PreviewPage(props: {
               accentOverride={accentOverride}
               displayFontOverride={displayFontOverride}
               textScale={textScaleOverride}
-              // BUG FIX 2026-04-22: variant, bgColor e layers NAO estavam sendo
-              // passados no export — todos slides caiam no default 'headline'
-              // legacy. Por isso o .zip/.png baixado ficava TOTALMENTE diferente
-              // do que o user viu no editor. Agora export reflete 1:1 o editor.
-              variant={s.variant}
+              // BUG FIX 2026-04-22 + 2026-04-28: variant, bgColor e layers
+              // precisam dos MESMOS defaults do editor (?? "headline" e
+              // ?? DEFAULT_LAYERS). Sem fallback, slide sem essas props
+              // exportava como "default render" enquanto editor já tinha
+              // aplicado os defaults visualmente — divergência silenciosa.
+              variant={resolveVariant(s.variant)}
               bgColor={s.bgColor}
-              layers={s.layers}
+              layers={resolveLayers(s.layers)}
             />
           </div>
         ))}

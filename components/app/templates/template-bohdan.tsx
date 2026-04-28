@@ -4,6 +4,7 @@ import { forwardRef } from "react";
 import type { SlideProps } from "./types";
 import { resolveImgSrc, renderRichText, CANVAS_W, CANVAS_H } from "./utils";
 
+import { MediaTag } from "./media-tag";
 /**
  * Template 07 — Bohdan Editorial
  *
@@ -348,13 +349,10 @@ function CoverLayout({
   return (
     <>
       {imageSrc ? (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageSrc}
-            crossOrigin="anonymous"
-            alt={heading}
-            style={{
+        <>          <MediaTag
+                src={imageSrc!}
+                alt={heading}
+                style={{
               position: "absolute",
               inset: 0,
               width: "100%",
@@ -363,7 +361,7 @@ function CoverLayout({
               filter: "grayscale(1) contrast(1.08)",
               zIndex: 0,
             }}
-          />
+              />
           <div
             style={{
               position: "absolute",
@@ -451,13 +449,10 @@ function PhotoBottomCaptionLayout({
   return (
     <>
       {imageSrc ? (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageSrc}
-            crossOrigin="anonymous"
-            alt={heading}
-            style={{
+        <>          <MediaTag
+                src={imageSrc!}
+                alt={heading}
+                style={{
               position: "absolute",
               inset: 0,
               width: "100%",
@@ -466,7 +461,7 @@ function PhotoBottomCaptionLayout({
               filter: "grayscale(1) contrast(1.08)",
               zIndex: 0,
             }}
-          />
+              />
           <div
             style={{
               position: "absolute",
@@ -556,13 +551,10 @@ function PhotoOverlayLayout({
   return (
     <>
       {imageSrc ? (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageSrc}
-            crossOrigin="anonymous"
-            alt={heading}
-            style={{
+        <>          <MediaTag
+                src={imageSrc!}
+                alt={heading}
+                style={{
               position: "absolute",
               inset: 0,
               width: "100%",
@@ -571,7 +563,7 @@ function PhotoOverlayLayout({
               filter: "grayscale(1) contrast(1.08)",
               zIndex: 0,
             }}
-          />
+              />
           <div
             style={{
               position: "absolute",
@@ -893,20 +885,17 @@ function CardCollageLayout({
             alignSelf: "center",
             height: "75%",
           }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageSrc}
-            crossOrigin="anonymous"
-            alt={heading}
-            style={{
+        >          <MediaTag
+                src={imageSrc!}
+                alt={heading}
+                style={{
               width: "100%",
               height: "100%",
               objectFit: "cover",
               display: "block",
               filter: "grayscale(1) contrast(1.08)",
             }}
-          />
+              />
         </div>
       ) : (
         <div

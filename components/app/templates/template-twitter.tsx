@@ -2,44 +2,8 @@
 
 import { forwardRef } from "react";
 import type { SlideProps } from "./types";
-import { resolveImgSrc, renderRichText, CANVAS_W, CANVAS_H, isVideoUrl } from "./utils";
-
-/**
- * Renderiza img OU video baseado na extensão da URL. Vídeos rodam
- * autoplay+loop+muted pra preview no editor (sem som, sem controles).
- * No export, html-to-image captura o frame atual; o MP4 original é
- * salvo separadamente no ZIP via lógica de export.
- */
-function MediaTag(props: {
-  src: string;
-  alt: string;
-  style: React.CSSProperties;
-}) {
-  const isVideo = isVideoUrl(props.src);
-  if (isVideo) {
-    return (
-      <video
-        src={props.src}
-        autoPlay
-        loop
-        muted
-        playsInline
-        crossOrigin="anonymous"
-        style={props.style}
-        aria-label={props.alt}
-      />
-    );
-  }
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={props.src}
-      crossOrigin="anonymous"
-      alt={props.alt}
-      style={props.style}
-    />
-  );
-}
+import { resolveImgSrc, renderRichText, CANVAS_W, CANVAS_H } from "./utils";
+import { MediaTag } from "./media-tag";
 
 /**
  * Template 04 — Twitter v2 (tweet screenshot)
@@ -88,14 +52,14 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
     const borderColor = isDarkBg ? "#262626" : "#e5e7eb";
 
     // Template Twitter: UM UNICO layout pra todos os slides. Nao tem
-    // variante. Diferenca unica entre slides e: tem imagem ou nao tem.
-    // Nada de CTA especial, action bar ou tweet screenshot de capa —
-    // thread real no X tb nao muda layout por slide.
-    const isCover = false;
-    const isPhoto = false;
-    const isSplit = false;
-    const isQuote = false;
-    const isCta = false;
+    // variante — diferenca unica é ter imagem ou nao. Nada de CTA
+    // especial, action bar ou tweet screenshot de capa: thread real
+    // no X tb nao muda layout por slide.
+    //
+    // Cleanup 28/04: removidas 270 linhas de branches isSplit/isQuote/
+    // isCover/isPhoto/isCta — todas hardcoded false e nunca executavam.
+    // Código morto sobrava do refactor antigo. Render agora é único e
+    // auditável.
 
     const defaultFontFamily =
       '"SVInter", "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif';
@@ -248,278 +212,80 @@ const TemplateTwitter = forwardRef<HTMLDivElement, SlideProps>(
           </div>
 
           {/* Main content — variantes adaptam tweet screenshot */}
-          {isSplit ? (
-            <div
-              style={{
-                flex: "1 1 0",
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 24,
-                overflow: "hidden",
-                minHeight: 0,
-                alignItems: "center",
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                {showTitle && (
-                  <h2
-                    style={{
-                      fontSize: FS_HEADING * 0.85,
-                      fontWeight: 500,
-                      lineHeight: 1.25,
-                      margin: 0,
-                      letterSpacing: "-0.01em",
-                      color: fg,
-                    }}
-                  >
-                    {renderRichText(heading)}
-                  </h2>
-                )}
-                {showBody && (
-                  <p
-                    style={{
-                      fontSize: FS_BODY * 0.85,
-                      lineHeight: 1.4,
-                      color: fg,
-                      margin: 0,
-                      whiteSpace: "pre-line",
-                      fontWeight: 400,
-                      letterSpacing: "-0.01em",
-                    }}
-                  >
-                    {renderRichText(body)}
-                  </p>
-                )}
-              </div>
-              {showBg && imageUrl && (
-                <div
+          <div
+            style={{
+              flex: "1 1 0",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-start",
+              gap: 28,
+              overflow: "hidden",
+              minHeight: 0,
+            }}
+          >
+            {showTitle && (
+              <h2
+                style={{
+                  fontSize: FS_HEADING,
+                  fontWeight: 400,
+                  lineHeight: 1.3,
+                  margin: 0,
+                  letterSpacing: "-0.01em",
+                  color: fg,
+                }}
+              >
+                {renderRichText(heading)}
+              </h2>
+            )}
+            {showBody && (
+              <p
+                style={{
+                  fontSize: FS_BODY,
+                  lineHeight: 1.4,
+                  color: fg,
+                  margin: 0,
+                  whiteSpace: "pre-line",
+                  fontWeight: 400,
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {renderRichText(body)}
+              </p>
+            )}
+
+            {showBg && imageUrl && (
+              <div
+                style={{
+                  width: "100%",
+                  flex: "1 1 auto",
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  marginTop: 8,
+                  // minHeight 360 garante container minimamente alto pra
+                  // imagem caber sem colapso. 360 = ~26% da altura canvas 1350.
+                  minHeight: 360,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: bg,
+                }}
+              >
+                <MediaTag
+                  src={bodyImgSrc!}
+                  alt={heading}
                   style={{
                     width: "100%",
                     height: "100%",
+                    // contain: respeita aspect ratio em qualquer scale
+                    objectFit: "contain",
+                    objectPosition: "center",
+                    display: "block",
                     borderRadius: 16,
-                    overflow: "hidden",
-                    // Audit 28/04: voltado pra `contain` (era `cover`).
-                    // `cover` cortava imagem em telas de scale diferente
-                    // (editor scale=0.5, preview scale=0.26, export scale=1).
-                    // `contain` respeita aspect ratio + letterbox usa bg
-                    // do card (sem o cinza #F4F4F5 do código original).
-                    background: bg,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
                   }}
-                >
-                  <MediaTag
-                    src={bodyImgSrc!}
-                    alt={heading}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      // contain: imagem inteira sempre, sem corte. Aspect
-                      // ratio preservado entre editor/preview/export.
-                      objectFit: "contain",
-                      objectPosition: "center",
-                      display: "block",
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          ) : isQuote ? (
-            <div
-              style={{
-                flex: "1 1 0",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "center",
-                alignItems: "center",
-                textAlign: "center",
-                gap: 24,
-                padding: "0 20px",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 160,
-                  color: verifiedBlue,
-                  lineHeight: 0.8,
-                  fontFamily: `"Instrument Serif", Georgia, serif`,
-                  fontStyle: "italic",
-                }}
-              >
-                &ldquo;
+                />
               </div>
-              {showTitle && (
-                <h2
-                  style={{
-                    fontSize: FS_HEADING * 1.2,
-                    fontWeight: 400,
-                    lineHeight: 1.2,
-                    margin: 0,
-                    letterSpacing: "-0.02em",
-                    color: fg,
-                    fontStyle: "italic",
-                  }}
-                >
-                  {renderRichText(heading)}
-                </h2>
-              )}
-              {showBody && (
-                <p
-                  style={{
-                    fontSize: FS_BODY * 0.9,
-                    lineHeight: 1.4,
-                    color: muted,
-                    margin: 0,
-                    maxWidth: 720,
-                    whiteSpace: "pre-line",
-                  }}
-                >
-                  {renderRichText(body)}
-                </p>
-              )}
-            </div>
-          ) : isCover ? (
-            <div
-              style={{
-                flex: "1 1 0",
-                position: "relative",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "flex-end",
-                gap: 20,
-                overflow: "hidden",
-                minHeight: 0,
-                borderRadius: 16,
-                border: `1px solid ${borderColor}`,
-                padding: 40,
-                background: imageUrl && showBg ? "#000" : `${verifiedBlue}`,
-              }}
-            >
-              {imageUrl && showBg && (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={bodyImgSrc}
-                    crossOrigin="anonymous"
-                    alt={heading}
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "contain",
-                      objectPosition: "center",
-                      display: "block",
-                    }}
-                  />
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      background:
-                        "linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.75) 100%)",
-                      pointerEvents: "none",
-                    }}
-                  />
-                </>
-              )}
-              {showTitle && (
-                <h2
-                  style={{
-                    fontSize: FS_HEADING * 1.35,
-                    fontWeight: 700,
-                    lineHeight: 1.1,
-                    margin: 0,
-                    letterSpacing: "-0.02em",
-                    color: "#FFFFFF",
-                    position: "relative",
-                    zIndex: 1,
-                  }}
-                >
-                  {renderRichText(heading)}
-                </h2>
-              )}
-            </div>
-          ) : (
-            <div
-              style={{
-                flex: "1 1 0",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "flex-start",
-                gap: 28,
-                overflow: "hidden",
-                minHeight: 0,
-              }}
-            >
-              {showTitle && (
-                <h2
-                  style={{
-                    fontSize: FS_HEADING * (isPhoto ? 0.85 : 1),
-                    fontWeight: 400,
-                    lineHeight: 1.3,
-                    margin: 0,
-                    letterSpacing: "-0.01em",
-                    color: fg,
-                  }}
-                >
-                  {renderRichText(heading)}
-                </h2>
-              )}
-              {showBody && (
-                <p
-                  style={{
-                    fontSize: FS_BODY * (isPhoto ? 0.78 : 1),
-                    lineHeight: 1.4,
-                    color: fg,
-                    margin: 0,
-                    whiteSpace: "pre-line",
-                    fontWeight: 400,
-                    letterSpacing: "-0.01em",
-                  }}
-                >
-                  {renderRichText(body)}
-                </p>
-              )}
-
-              {showBg && imageUrl && (
-                <div
-                  style={{
-                    width: "100%",
-                    flex: "1 1 auto",
-                    borderRadius: 16,
-                    overflow: "hidden",
-                    marginTop: 8,
-                    // minHeight 360 garante container minimamente alto pra
-                    // imagem caber sem colapso (audit 28/04: isPhoto sempre
-                    // false faz minHeight 0 e o container colapsa em alguns
-                    // scales). 360 = ~26% da altura canvas 1350.
-                    minHeight: 360,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: bg,
-                  }}
-                >
-                  <MediaTag
-                    src={bodyImgSrc!}
-                    alt={heading}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      // contain: respeita aspect ratio em qualquer scale
-                      objectFit: "contain",
-                      objectPosition: "center",
-                      display: "block",
-                      borderRadius: 16,
-                    }}
-                  />
-                </div>
-              )}
-
-            </div>
-          )}
+            )}
+          </div>
           {/* Sem CTA hardcoded. Sem action bar no ultimo slide. Twitter
               template = um unico layout em todos os slides (com ou sem imagem).
               Se user quer CTA, escreve no body como texto normal. */}

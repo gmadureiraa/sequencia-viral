@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { useDraft, useAutoSaveDraft, useSaveDraft } from "@/lib/create/use-draft";
 import { useImages } from "@/lib/create/use-images";
+import { resolveVariant, resolveLayers } from "@/lib/create/render-defaults";
 // CarouselFeedbackPanel removido — agora so aparece em /app/create/[id]/preview.
 import { DiscountPopup } from "@/components/app/discount-popup";
 import { ImagePicker } from "@/components/app/image-picker";
@@ -747,11 +748,11 @@ export default function EditPage(props: {
       e.preventDefault();
       setDragIndex(null);
       setDragOverIndex(null);
-      const file = Array.from(fileList).find((f) =>
-        f.type.startsWith("image/")
+      const file = Array.from(fileList).find(
+        (f) => f.type.startsWith("image/") || f.type.startsWith("video/")
       );
       if (!file) {
-        toast.error("Solta uma imagem (PNG/JPG/WEBP/GIF).");
+        toast.error("Solta uma imagem (PNG/JPG/WEBP/GIF) ou vídeo (MP4/WEBM/MOV).");
         return;
       }
       void handleUploadImage(file, targetIndex);
@@ -1276,11 +1277,11 @@ export default function EditPage(props: {
         if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
         e.preventDefault();
         setCanvasDropping(false);
-        const file = Array.from(e.dataTransfer.files).find((f) =>
-          f.type.startsWith("image/")
+        const file = Array.from(e.dataTransfer.files).find(
+          (f) => f.type.startsWith("image/") || f.type.startsWith("video/")
         );
         if (!file) {
-          toast.error("Solta uma imagem (PNG/JPG/WEBP/GIF).");
+          toast.error("Solta uma imagem (PNG/JPG/WEBP/GIF) ou vídeo (MP4/WEBM/MOV).");
           return;
         }
         void handleUploadImage(file, activeIndex);
@@ -1338,9 +1339,9 @@ export default function EditPage(props: {
               fontTouched ? familyFromFontId(fontId) : undefined
             }
             textScale={scaleTouched ? textScale : undefined}
-            variant={active.variant ?? "headline"}
+            variant={resolveVariant(active.variant)}
             bgColor={active.bgColor}
-            layers={active.layers ?? DEFAULT_LAYERS}
+            layers={resolveLayers(active.layers)}
           />
         </div>
       )}
@@ -1561,9 +1562,9 @@ export default function EditPage(props: {
                     fontTouched ? familyFromFontId(fontId) : undefined
                   }
                   textScale={scaleTouched ? textScale : undefined}
-                  variant={s.variant ?? "headline"}
+                  variant={resolveVariant(s.variant)}
                   bgColor={s.bgColor}
-                  layers={s.layers ?? DEFAULT_LAYERS}
+                  layers={resolveLayers(s.layers)}
                 />
                 <span
                   style={{
@@ -1902,7 +1903,9 @@ export default function EditPage(props: {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        // 28/04: aceita vídeo também (mp4/webm/mov até 50MB).
+        // /api/upload tem magic bytes pra validar tipo real.
+        accept="image/*,video/mp4,video/webm,video/quicktime"
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];

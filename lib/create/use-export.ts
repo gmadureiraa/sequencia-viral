@@ -3,16 +3,26 @@
 import { useCallback, useRef, useState } from "react";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
+import { isVideoUrl } from "@/components/app/templates/utils";
 
 /**
  * Hook de export (PNG e PDF) — extraído da página legada. A página que usa
  * precisa montar os refs em `exportRefs.current[i]` apontando pro nó com
  * scale=1 (1080×1350) antes de chamar `exportPng()` / `exportPdf()`.
  *
- * @param showWatermark - true = usuário Free → injeta marca d'água discreta no
- *   último slide antes de capturar via toPng. false (padrão) = plano pago ou
- *   admin → export limpo.
+ * @param totalSlides - quantos slides o carrossel tem
+ * @param opts.showWatermark - true = usuário Free → injeta marca d'água
+ *   discreta no último slide antes de capturar via toPng. false (padrão) =
+ *   plano pago ou admin → export limpo.
+ * @param opts.slideMediaUrls - URLs de imagem/vídeo de cada slide (pelo
+ *   índice). Usado pra detectar slides com vídeo: nesses, o ZIP inclui o
+ *   MP4 ORIGINAL em vez de PNG (que só capturaria o frame congelado).
+ *   PDF/PNG individuais sempre exportam frame como PNG.
  */
+export interface UseExportOpts {
+  showWatermark?: boolean;
+  slideMediaUrls?: string[];
+}
 
 async function waitForImagesInElement(el: HTMLElement): Promise<void> {
   const imgs = el.querySelectorAll("img");
@@ -62,7 +72,19 @@ async function waitUntilRefsReady(
   return false;
 }
 
-export function useExport(totalSlides: number, showWatermark = false) {
+export function useExport(
+  totalSlides: number,
+  optsOrShowWatermark: UseExportOpts | boolean = false
+) {
+  // Backwards-compat: assinatura antiga era useExport(total, showWatermark:bool).
+  // Agora: useExport(total, { showWatermark, slideMediaUrls }). Aceitamos as 2.
+  const opts: UseExportOpts =
+    typeof optsOrShowWatermark === "boolean"
+      ? { showWatermark: optsOrShowWatermark }
+      : optsOrShowWatermark;
+  const showWatermark = !!opts.showWatermark;
+  const slideMediaUrls = opts.slideMediaUrls ?? [];
+
   const exportRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState("");
@@ -294,7 +316,38 @@ export function useExport(totalSlides: number, showWatermark = false) {
         let added = 0;
         const failed: number[] = [];
         for (let i = 0; i < totalSlides; i++) {
-          setProgress(`Gerando slide ${i + 1}/${totalSlides}...`);
+          const url = slideMediaUrls[i] ?? "";
+          const isVideo = isVideoUrl(url);
+          setProgress(
+            `Gerando slide ${i + 1}/${totalSlides}${isVideo ? " (vídeo)" : ""}...`
+          );
+
+          // Slide com vídeo: baixa MP4 original e adiciona ao ZIP
+          // mantendo o formato. PNG do frame congelado seria perda de
+          // informação — user pediu explicitamente: "página que tem
+          // vídeo sempre salva como mp4".
+          if (isVideo) {
+            try {
+              const ext = url.toLowerCase().split("?")[0].split(".").pop() ?? "mp4";
+              const safeExt = ["mp4", "webm", "mov", "m4v"].includes(ext)
+                ? ext
+                : "mp4";
+              const res = await fetch(url, { mode: "cors" });
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const buf = await res.arrayBuffer();
+              zip.file(
+                `slide-${String(i + 1).padStart(2, "0")}.${safeExt}`,
+                buf
+              );
+              added++;
+            } catch (videoErr) {
+              console.error(`[ZIP] Falha slide ${i + 1} (vídeo):`, videoErr);
+              failed.push(i + 1);
+            }
+            continue;
+          }
+
+          // Slide com imagem: captura PNG do DOM render
           try {
             const dataUrl = await captureSlideAsPng(i);
             const base64 = dataUrl.split(",")[1] ?? "";
@@ -343,7 +396,7 @@ export function useExport(totalSlides: number, showWatermark = false) {
         setIsExporting(false);
       }
     },
-    [totalSlides, waitRender, captureSlideAsPng]
+    [totalSlides, waitRender, captureSlideAsPng, slideMediaUrls]
   );
 
   return {

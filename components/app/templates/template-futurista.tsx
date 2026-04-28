@@ -12,6 +12,7 @@ import {
   MONO_STACK,
 } from "./utils";
 
+import { MediaTag } from "./media-tag";
 /**
  * Template 02 — Futurista Navy
  *
@@ -117,11 +118,8 @@ const TemplateFuturista = forwardRef<HTMLDivElement, SlideProps>(
 
           {/* Cover: imagem de fundo ocupando todo o canvas */}
           {showBg && isCover && hasImage && (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={bodyImgSrc}
-                crossOrigin="anonymous"
+            <>              <MediaTag
+                src={bodyImgSrc!}
                 alt={heading}
                 style={{
                   position: "absolute",
@@ -410,19 +408,16 @@ const TemplateFuturista = forwardRef<HTMLDivElement, SlideProps>(
                     overflow: "hidden",
                     position: "relative",
                   }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={bodyImgSrc}
-                    crossOrigin="anonymous"
-                    alt={heading}
-                    style={{
+                >                  <MediaTag
+                src={bodyImgSrc!}
+                alt={heading}
+                style={{
                       width: "100%",
                       height: "100%",
                       objectFit: "cover",
                       display: "block",
                     }}
-                  />
+              />
                   <span
                     style={{
                       position: "absolute",

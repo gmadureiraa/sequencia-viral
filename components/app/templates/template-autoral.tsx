@@ -12,6 +12,7 @@ import {
   MONO_STACK,
 } from "./utils";
 
+import { MediaTag } from "./media-tag";
 /**
  * Template 03 — Autoral Zine
  *
@@ -122,11 +123,8 @@ const TemplateAutoral = forwardRef<HTMLDivElement, SlideProps>(
 
           {/* Cover: imagem preenchendo canvas inteiro */}
           {showBg && isCover && hasImage && (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={bodyImgSrc}
-                crossOrigin="anonymous"
+            <>              <MediaTag
+                src={bodyImgSrc!}
                 alt={heading}
                 style={{
                   position: "absolute",
@@ -463,19 +461,16 @@ const TemplateAutoral = forwardRef<HTMLDivElement, SlideProps>(
                     transform: `rotate(${imgRotate}deg)`,
                     overflow: "hidden",
                   }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={bodyImgSrc}
-                    crossOrigin="anonymous"
-                    alt={heading}
-                    style={{
+                >                  <MediaTag
+                src={bodyImgSrc!}
+                alt={heading}
+                style={{
                       width: "100%",
                       height: "100%",
                       objectFit: "cover",
                       display: "block",
                     }}
-                  />
+              />
                 </div>
               )}
 

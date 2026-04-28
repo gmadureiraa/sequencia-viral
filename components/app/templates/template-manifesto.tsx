@@ -10,6 +10,7 @@ import {
   MONO_STACK,
 } from "./utils";
 
+import { MediaTag } from "./media-tag";
 /**
  * Template 01 — Futurista (id interno `manifesto`)
  *
@@ -162,11 +163,8 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
         >
           {/* ═══════ COVER IMAGE FULL-BLEED (cover + full-photo-bottom) ═══════ */}
           {(isCoverLike || isFullPhotoBottom) && showBg && hasImage && (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={bodyImgSrc}
-                crossOrigin="anonymous"
+            <>              <MediaTag
+                src={bodyImgSrc!}
                 alt={heading}
                 style={{
                   position: "absolute",
@@ -354,19 +352,16 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                     overflow: "hidden",
                     position: "relative",
                   }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={bodyImgSrc}
-                    crossOrigin="anonymous"
-                    alt={heading}
-                    style={{
+                >                  <MediaTag
+                src={bodyImgSrc!}
+                alt={heading}
+                style={{
                       width: "100%",
                       height: "100%",
                       objectFit: "cover",
                       display: "block",
                     }}
-                  />
+              />
                 </div>
               )}
               {showBody && body && (
@@ -568,19 +563,16 @@ const TemplateManifesto = forwardRef<HTMLDivElement, SlideProps>(
                     overflow: "hidden",
                     position: "relative",
                   }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={bodyImgSrc}
-                    crossOrigin="anonymous"
-                    alt={heading}
-                    style={{
+                >                  <MediaTag
+                src={bodyImgSrc!}
+                alt={heading}
+                style={{
                       width: "100%",
                       height: "100%",
                       objectFit: "cover",
                       display: "block",
                     }}
-                  />
+              />
                 </div>
               )}
               {showBody && (

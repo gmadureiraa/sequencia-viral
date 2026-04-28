@@ -4,6 +4,7 @@ import { forwardRef } from "react";
 import type { SlideProps } from "./types";
 import { resolveImgSrc, renderRichText, CANVAS_W, CANVAS_H } from "./utils";
 
+import { MediaTag } from "./media-tag";
 /**
  * Template 06 — Editorial
  *
@@ -350,13 +351,10 @@ function CoverLayout({
   return (
     <>
       {imageSrc && (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageSrc}
-            crossOrigin="anonymous"
-            alt={heading}
-            style={{
+        <>          <MediaTag
+                src={imageSrc!}
+                alt={heading}
+                style={{
               position: "absolute",
               inset: 0,
               width: "100%",
@@ -364,7 +362,7 @@ function CoverLayout({
               objectFit: "cover",
               zIndex: 0,
             }}
-          />
+              />
           <div
             style={{
               position: "absolute",
@@ -449,13 +447,10 @@ function PhotoOverlayLayout({
   return (
     <>
       {imageSrc && (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageSrc}
-            crossOrigin="anonymous"
-            alt={heading}
-            style={{
+        <>          <MediaTag
+                src={imageSrc!}
+                alt={heading}
+                style={{
               position: "absolute",
               inset: 0,
               width: "100%",
@@ -463,7 +458,7 @@ function PhotoOverlayLayout({
               objectFit: "cover",
               zIndex: 0,
             }}
-          />
+              />
           <div
             style={{
               position: "absolute",
@@ -657,19 +652,16 @@ function PhotoRightLayout({
             overflow: "hidden",
             minHeight: 0,
           }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageSrc}
-            crossOrigin="anonymous"
-            alt={heading}
-            style={{
+        >          <MediaTag
+                src={imageSrc!}
+                alt={heading}
+                style={{
               width: "100%",
               height: "100%",
               objectFit: "cover",
               display: "block",
             }}
-          />
+              />
         </div>
       ) : (
         <div
@@ -734,19 +726,16 @@ function SplitVerticalLayout({
             overflow: "hidden",
             minHeight: 0,
           }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageSrc}
-            crossOrigin="anonymous"
-            alt={heading}
-            style={{
+        >          <MediaTag
+                src={imageSrc!}
+                alt={heading}
+                style={{
               width: "100%",
               height: "100%",
               objectFit: "cover",
               display: "block",
             }}
-          />
+              />
         </div>
       ) : (
         <div
@@ -799,19 +788,16 @@ function PhotoTopLayout({
               borderRadius: 20,
               boxShadow: "0 6px 22px rgba(15,15,20,0.18)",
             }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imageSrc}
-              crossOrigin="anonymous"
-              alt={heading}
-              style={{
+          >            <MediaTag
+                src={imageSrc!}
+                alt={heading}
+                style={{
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
                 display: "block",
               }}
-            />
+              />
           </div>
         </div>
       ) : null}

@@ -732,8 +732,8 @@ export default function NewCarouselPage() {
           maxWidth: 520,
         }}
       >
-        Escreve um tema, cola um link, joga um rascunho. Depois a IA monta
-        cinco ângulos diferentes pra você escolher o caminho.
+        Escreve um tema ou cola um link de carrossel do Instagram. A IA
+        gera o carrossel pronto na sua voz — você ajusta no editor.
       </p>
 
       {/* Single column centralizada — sem painel lateral */}
@@ -931,7 +931,7 @@ export default function NewCarouselPage() {
                 });
               })()}
             </div>
-          </div>
+          </div>}
 
           <textarea
             value={idea}
@@ -939,7 +939,7 @@ export default function NewCarouselPage() {
             placeholder={
               mode === "layout-only"
                 ? "Cole aqui seu texto pronto. A IA preserva o wording inteiro, só distribui em slides."
-                : "Escreva o tema, cole um link de YouTube ou carrossel do Instagram como referência.\n\nDica: pode ditar o título entre aspas (o título deve ser \"...\"), pedir pra seguir EXATAMENTE um link, ou dizer \"usa como inspiração mas foca em X\"."
+                : "Escreve o tema do carrossel, ou cola um link de carrossel do Instagram pra IA replicar o estilo (quase cópia 1:1).\n\nTambém aceita YouTube (transcrição) ou link de artigo."
             }
             style={{
               minHeight: 150,
@@ -1102,8 +1102,11 @@ export default function NewCarouselPage() {
                       />
                     </label>
 
-                    {/* Num slides */}
-                    <label className="flex flex-col gap-1.5" style={{ maxWidth: 220 }}>
+                    {/* Modo (writer vs layout-only) — movido pro Modo
+                        Avançado em 2026-04-28. 95% dos usuários querem
+                        "writer" (default). Quem cola texto pronto e só
+                        quer distribuir em slides ativa "Layout-only". */}
+                    <div className="flex flex-col gap-1.5">
                       <span
                         style={{
                           fontFamily: "var(--sv-mono)",
@@ -1113,29 +1116,70 @@ export default function NewCarouselPage() {
                           color: "var(--sv-muted)",
                         }}
                       >
-                        Slides (6-12)
+                        Como tratar seu texto
                       </span>
-                      <input
-                        type="number"
-                        min={6}
-                        max={12}
-                        value={advNumSlides}
-                        onChange={(e) =>
-                          setAdvNumSlides(
-                            e.target.value === "" ? "" : Number(e.target.value)
-                          )
-                        }
-                        placeholder="Auto"
-                        style={{
-                          padding: 10,
-                          fontSize: 16,
-                          fontFamily: "var(--sv-sans)",
-                          border: "1.5px solid var(--sv-ink)",
-                          background: "var(--sv-white)",
-                          outline: 0,
-                        }}
-                      />
-                    </label>
+                      <div className="grid gap-2 sm:grid-cols-2" role="radiogroup">
+                        {(
+                          [
+                            {
+                              id: "writer" as const,
+                              title: "Escrever pra mim",
+                              sub: "Uso seu briefing como inspiração.",
+                            },
+                            {
+                              id: "layout-only" as const,
+                              title: "Só aplicar meu texto",
+                              sub: "Já escrevi. Você só quebra em slides.",
+                            },
+                          ] as const
+                        ).map((opt) => {
+                          const selected = mode === opt.id;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              onClick={() => setMode(opt.id)}
+                              className="text-left transition-all"
+                              style={{
+                                padding: "10px 12px",
+                                border: "1.5px solid var(--sv-ink)",
+                                background: selected
+                                  ? "var(--sv-ink)"
+                                  : "var(--sv-white)",
+                                color: selected
+                                  ? "var(--sv-paper)"
+                                  : "var(--sv-ink)",
+                                boxShadow: "2px 2px 0 0 var(--sv-ink)",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontFamily: "var(--sv-sans)",
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {opt.title}
+                              </div>
+                              <div
+                                style={{
+                                  fontFamily: "var(--sv-sans)",
+                                  fontSize: 11,
+                                  lineHeight: 1.4,
+                                  opacity: selected ? 0.85 : 0.65,
+                                  marginTop: 2,
+                                }}
+                              >
+                                {opt.sub}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
 
                     {/* Interview toggle — IA pergunta 1-2 questões antes de gerar */}
                     <label
@@ -1177,50 +1221,13 @@ export default function NewCarouselPage() {
                       </div>
                     </label>
 
-                    {/* Concepts toggle — usa o fluxo antigo de 3 conceitos. */}
-                    <label
-                      className="flex cursor-pointer items-start gap-3"
-                      style={{
-                        padding: "10px 12px",
-                        border: "1.5px solid var(--sv-ink)",
-                        background: advUseConcepts
-                          ? "var(--sv-green)"
-                          : "var(--sv-white)",
-                        boxShadow: "2px 2px 0 0 var(--sv-ink)",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={advUseConcepts}
-                        onChange={(e) => setAdvUseConcepts(e.target.checked)}
-                        style={{ marginTop: 3 }}
-                      />
-                      <div>
-                        <div
-                          style={{
-                            fontFamily: "var(--sv-sans)",
-                            fontSize: 13,
-                            fontWeight: 700,
-                          }}
-                        >
-                          🎯 Ver 3 conceitos antes de gerar
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 11.5,
-                            color: advUseConcepts
-                              ? "var(--sv-ink)"
-                              : "var(--sv-muted)",
-                            lineHeight: 1.4,
-                            marginTop: 2,
-                          }}
-                        >
-                          Em vez de gerar direto, a IA devolve 3 ângulos
-                          diferentes do seu tema. Escolhe o melhor e aí gera o
-                          carrossel completo.
-                        </div>
-                      </div>
-                    </label>
+                    {/* Toggle "Ver 3 conceitos" removido em 2026-04-28
+                        (simplificação). Era fluxo legado /concepts que
+                        nem o usuário acessava como padrão — ficava só
+                        criando confusão sobre qual era o caminho real.
+                        State `advUseConcepts` mantido pra não quebrar o
+                        ramo `if (advOpen && advUseConcepts)` no submit
+                        — sempre falso agora. */}
 
                     {/* Extra context */}
                     <label className="flex flex-col gap-1.5">

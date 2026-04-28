@@ -109,8 +109,13 @@ export function useImages(session: Session | null) {
       file: File,
       carouselId: string | null
     ): Promise<string | null> => {
-      if (!file.type.startsWith("image/")) {
-        setError("Arquivo precisa ser uma imagem.");
+      // 28/04: aceita imagem OU vídeo. /api/upload valida magic bytes
+      // server-side e bucket carousel-images aceita ambos os tipos.
+      if (
+        !file.type.startsWith("image/") &&
+        !file.type.startsWith("video/")
+      ) {
+        setError("Arquivo precisa ser imagem ou vídeo (MP4/WEBM/MOV).");
         return null;
       }
       setLoadingIndex(index);

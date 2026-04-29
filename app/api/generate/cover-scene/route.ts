@@ -2,7 +2,7 @@ import {
   requireAuthenticatedUser,
   createServiceRoleSupabaseClient,
 } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { geminiWithRetry } from "@/lib/server/gemini-retry";
 import { GoogleGenAI } from "@google/genai";
 import { costForTokens, recordGeneration } from "@/lib/server/generation-log";
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
   const { user } = auth;
 
-  const limiter = checkRateLimit({
+  const limiter = await rateLimit({
     key: getRateLimitKey(request, "cover-scene", user.id),
     limit: 40,
     windowMs: 60 * 60 * 1000,

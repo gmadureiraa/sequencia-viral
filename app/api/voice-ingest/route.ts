@@ -5,7 +5,7 @@ import {
   createServiceRoleSupabaseClient,
   getAuthenticatedUser,
 } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { costForTokens, recordGeneration } from "@/lib/server/generation-log";
 import { extractInstagramContent } from "@/lib/instagram-extractor";
 import { geminiWithRetry } from "@/lib/server/gemini-retry";
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const limiter = checkRateLimit({
+    const limiter = await rateLimit({
       key: getRateLimitKey(request, "voice-ingest", user.id),
       limit: 10,
       windowMs: 60 * 60 * 1000,

@@ -2,7 +2,7 @@ export const maxDuration = 60;
 
 import { GoogleGenAI } from "@google/genai";
 import { getAuthenticatedUser } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import {
   costForTokens,
   recordGeneration,
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const limiter = checkRateLimit({
+    const limiter = await rateLimit({
       key: getRateLimitKey(request, "brand-analysis", user.id),
       limit: 20,
       windowMs: 60 * 60 * 1000,

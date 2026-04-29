@@ -1,5 +1,5 @@
 import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { isPaidPlanId } from "@/lib/pricing";
 
 export const maxDuration = 10;
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
   // Rate limit por IP — 30 validações/hora é mais que suficiente.
   const ipKey = getRateLimitKey(request, "coupons-validate");
-  const limiter = checkRateLimit({
+  const limiter = await rateLimit({
     key: ipKey,
     limit: 30,
     windowMs: 60 * 60 * 1000,

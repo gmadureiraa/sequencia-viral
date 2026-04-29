@@ -5,7 +5,7 @@
  */
 export const maxDuration = 60;
 import { getAuthenticatedUser } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { cacheImages } from "@/lib/server/scrape-cache";
 import { scrapeInstagram } from "@/lib/server/instagram-scrapers";
 
@@ -334,7 +334,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const limiter = checkRateLimit({
+    const limiter = await rateLimit({
       key: getRateLimitKey(request, "profile-scraper", user.id),
       limit: 40,
       windowMs: 60 * 60 * 1000,

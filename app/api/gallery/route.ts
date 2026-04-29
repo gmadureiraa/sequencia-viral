@@ -2,7 +2,7 @@ import {
   requireAuthenticatedUser,
   createServiceRoleSupabaseClient,
 } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { saveToUserGallery, touchUserImage } from "@/lib/server/user-images";
 
 export const maxDuration = 15;
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
   const { user } = auth;
 
-  const limiter = checkRateLimit({
+  const limiter = await rateLimit({
     key: getRateLimitKey(request, "gallery-list", user.id),
     limit: 120,
     windowMs: 60 * 60 * 1000,
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
   const { user } = auth;
 
-  const limiter = checkRateLimit({
+  const limiter = await rateLimit({
     key: getRateLimitKey(request, "gallery-insert", user.id),
     limit: 120,
     windowMs: 60 * 60 * 1000,

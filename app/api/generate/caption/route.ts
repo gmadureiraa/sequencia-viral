@@ -3,7 +3,7 @@ import {
   requireAuthenticatedUser,
   createServiceRoleSupabaseClient,
 } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { geminiWithRetry } from "@/lib/server/gemini-retry";
 import { getPostHogClient } from "@/lib/posthog-server";
 import {
@@ -162,7 +162,7 @@ export async function POST(request: Request) {
     }
     const { user } = auth;
 
-    const limiter = checkRateLimit({
+    const limiter = await rateLimit({
       key: getRateLimitKey(request, "generate-caption", user.id),
       limit: 40,
       windowMs: 60 * 60 * 1000,

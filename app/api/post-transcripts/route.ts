@@ -15,7 +15,7 @@
 export const maxDuration = 60;
 
 import { requireAuthenticatedUser } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { GoogleGenAI } from "@google/genai";
 import {
   costForTokens,
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
   const { user } = auth;
 
-  const limiter = checkRateLimit({
+  const limiter = await rateLimit({
     key: getRateLimitKey(request, "post-transcripts", user.id),
     limit: 10,
     windowMs: 60 * 60 * 1000,

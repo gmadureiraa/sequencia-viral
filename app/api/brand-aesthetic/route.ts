@@ -2,7 +2,7 @@ import {
   requireAuthenticatedUser,
   createServiceRoleSupabaseClient,
 } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { assertSafeAndResolve } from "@/lib/server/ssrf-guard";
 import {
   costForTokens,
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response;
     const { user } = auth;
 
-    const limiter = checkRateLimit({
+    const limiter = await rateLimit({
       key: getRateLimitKey(request, "brand-aesthetic", user.id),
       limit: 20,
       windowMs: 60 * 60 * 1000,

@@ -22,7 +22,7 @@ import {
   requireAdmin,
   createServiceRoleSupabaseClient,
 } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import {
   runGeneration,
   type GenerationArgs,
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     if (!admin.ok) return admin.response;
     const { user } = admin;
 
-    const limiter = checkRateLimit({
+    const limiter = await rateLimit({
       key: getRateLimitKey(request, "admin-generate-batch", user.id),
       limit: 200,
       windowMs: 60 * 60 * 1000,

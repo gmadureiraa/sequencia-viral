@@ -1,7 +1,7 @@
 import { extractContentFromUrl } from "@/lib/url-extractor";
 import { getYouTubeTranscript } from "@/lib/youtube-transcript";
 import { requireAuthenticatedUser } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 
 export const maxDuration = 30;
 
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response;
     const { user } = auth;
 
-    const limiter = checkRateLimit({
+    const limiter = await rateLimit({
       key: getRateLimitKey(request, "extract", user.id),
       limit: 60,
       windowMs: 60 * 60 * 1000,

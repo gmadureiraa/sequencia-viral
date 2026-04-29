@@ -2,7 +2,7 @@ import {
   requireAuthenticatedUser,
   createServiceRoleSupabaseClient,
 } from "@/lib/server/auth";
-import { checkRateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { geminiWithRetry } from "@/lib/server/gemini-retry";
 import { extractContentFromUrl } from "@/lib/url-extractor";
 import { getYouTubeTranscript } from "@/lib/youtube-transcript";
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response;
     const { user } = auth;
 
-    const limiter = checkRateLimit({
+    const limiter = await rateLimit({
       key: getRateLimitKey(request, "concepts", user.id),
       limit: 100,
       windowMs: 60 * 60 * 1000,

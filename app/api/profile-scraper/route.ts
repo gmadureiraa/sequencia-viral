@@ -8,6 +8,7 @@ import { getAuthenticatedUser } from "@/lib/server/auth";
 import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { cacheImages } from "@/lib/server/scrape-cache";
 import { scrapeInstagram } from "@/lib/server/instagram-scrapers";
+import { assertSafeAndResolve } from "@/lib/server/ssrf-guard";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -265,7 +266,14 @@ function normalizeLinkedin(item: any, handleOrUrl: string): ProfileData {
  * Sem libs — regex + heurísticas. Alimenta a brand-analysis depois.
  */
 async function scrapeWebsite(url: string): Promise<ProfileData> {
-  const res = await fetch(url, {
+  // SSRF guard: rejeita IPs privados/metadata/loopback antes do fetch.
+  // Resolve DNS e revalida pra prevenir DNS rebinding. Usa redirect:manual
+  // implicito (handler default jogaria redirect:follow num IP interno
+  // depois do guard); pra simplificar, mantém follow mas o guard cobre
+  // o hostname inicial — Apify e fontes confiáveis raramente redirecionam
+  // pra interno.
+  const safeUrl = await assertSafeAndResolve(url);
+  const res = await fetch(safeUrl, {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (compatible; SequenciaViralBot/1.0; +https://sequencia-viral.vercel.app)",

@@ -127,6 +127,7 @@ export interface GenerationResult {
 
 function parseBriefingOverrides(topic: string): {
   requiredTitle: string | null;
+  requiredCta: string | null;
   strictFidelity: boolean;
   referenceWithTwist: boolean;
   literalQuotes: string[];
@@ -145,6 +146,24 @@ function parseBriefingOverrides(topic: string): {
       break;
     }
   }
+
+  // Briefing pode pedir CTA explícita: "cta: 'X'", "no final escreva 'X'",
+  // "termina com 'X'", "call to action: ...". Quando detecta, vira ordem
+  // direta e VENCE a regra estilística "CTA semântico" do system prompt.
+  const ctaPatterns = [
+    /(?:c\.?t\.?a\.?|call\s+to\s+action|chamada\s+(?:final|para\s+a[çc][ãa]o))\s*(?:deve\s+ser|tem\s+que\s+ser|precisa\s+ser|exata|exato|literal)?\s*[:=]\s*["“”'‘’]{1,2}([^"“”'‘’]{3,240})["“”'‘’]{1,2}/i,
+    /(?:c\.?t\.?a\.?|call\s+to\s+action)\s+["“”'‘’]{1,2}([^"“”'‘’]{3,240})["“”'‘’]{1,2}/i,
+    /(?:no\s+final|[uú]ltimo\s+slide|slide\s+final|fechar?|encerre?|termina(?:r|e)?)\s+(?:com|colocar?|escreve(?:r|ndo)?|coloque)\s*:?\s*["“”'‘’]{1,2}([^"“”'‘’]{3,240})["“”'‘’]{1,2}/i,
+  ];
+  let requiredCta: string | null = null;
+  for (const p of ctaPatterns) {
+    const m = text.match(p);
+    if (m && m[1]) {
+      requiredCta = m[1].trim();
+      break;
+    }
+  }
+
   const strictFidelity =
     /siga\s+exat(a|amente)|reproduz(a|ir)\s+(o|esse|este)\s+conte[úu]do|copie\s+(o|esse|este)\s+conte[úu]do|use\s+o\s+mesmo\s+texto|exatamente\s+o\s+mesmo|palavra\s+por\s+palavra|verbatim/i.test(
       text
@@ -158,10 +177,18 @@ function parseBriefingOverrides(topic: string): {
     text.matchAll(/["“”'‘’]{1,2}([^"“”'‘’]{4,180})["“”'‘’]{1,2}/g)
   )
     .map((m) => m[1].trim())
-    .filter((q) => !!q && q !== requiredTitle);
+    .filter(
+      (q) => !!q && q !== requiredTitle && q !== requiredCta,
+    );
   const literalQuotes = Array.from(new Set(quoteMatches)).slice(0, 5);
 
-  return { requiredTitle, strictFidelity, referenceWithTwist, literalQuotes };
+  return {
+    requiredTitle,
+    requiredCta,
+    strictFidelity,
+    referenceWithTwist,
+    literalQuotes,
+  };
 }
 
 /**
@@ -476,6 +503,25 @@ Se você gerar diferente, o output será REJEITADO.
 `
     : "";
 
+  // CTA do user — vem do Modo Avançado (UI explícita) OU detectada no
+  // briefing (ex: "cta: 'comenta X que eu te mando Y'"). Modo Avançado
+  // tem precedência. Quando ativa, vira REGRA INVIOLÁVEL #3 e SOBRESCREVE
+  // a regra estilística "# LAST SLIDE — CTA SEMÂNTICO" do system prompt.
+  const userMandatedCta = (advCustomCta || overrides.requiredCta || "")
+    .trim()
+    .slice(0, 300);
+  const ctaStrictBlock = userMandatedCta
+    ? `
+
+🔒 REGRA INVIOLÁVEL #3 — CTA DO USUÁRIO
+O CTA do ÚLTIMO SLIDE deve ser EXATAMENTE: """${userMandatedCta}"""
+Pode ajustar formatação leve (caixa, pontuação, quebra de linha), MAS NUNCA o conteúdo, a ação ou as palavras-chave.
+Esta regra VENCE qualquer outra instrução deste prompt — incluindo "CTA semântico", lista de PROIBIDOS (mesmo "salva esse carrossel" / "me siga" / "comenta X" estão liberados se foi o que o user pediu), exemplos de CTA padrão, e qualquer regra estilística.
+Se a CTA do user for "salva esse carrossel", o último slide DEVE conter "salva esse carrossel" — não substitua por CTA "criativo".
+Se gerar CTA diferente, o output será REJEITADO.
+`
+    : "";
+
   const langCode = (language || "pt-br").toLowerCase();
   const isPtBr = langCode === "pt-br" || langCode === "pt";
   const languageInstruction = isPtBr
@@ -515,7 +561,7 @@ Exceção única: nomes próprios (pessoas, marcas, ferramentas), termos técnic
 
 Use "você" (não "tu" ou "tú"). Tom natural brasileiro, não Portugal.
 
-Você é um FORMATADOR de texto em slides. PRESERVE O WORDING, PRESERVE A ORDEM, PRESERVE DADOS E NOMES, PRESERVE O CTA. Zero reescrita. Divide em ${slideCountInstruction} slides. Retorne variations com 1 item. ${languageInstruction} ${advancedBlock}${slideCountStrictBlock}
+Você é um FORMATADOR de texto em slides. PRESERVE O WORDING, PRESERVE A ORDEM, PRESERVE DADOS E NOMES, PRESERVE O CTA. Zero reescrita. Divide em ${slideCountInstruction} slides. Retorne variations com 1 item. ${languageInstruction} ${advancedBlock}${slideCountStrictBlock}${ctaStrictBlock}
 
 # OUTPUT
 \`\`\`json
@@ -553,7 +599,7 @@ ${languageInstruction}
 TONE: ${tone || "professional"}
 NICHE: ${niche || "general"}
 ${nicheGuide}
-${advancedBlock}${slideCountStrictBlock}
+${advancedBlock}${slideCountStrictBlock}${ctaStrictBlock}
 ${
   brandContext
     ? `
@@ -596,8 +642,9 @@ Planeje escada antes. Slide N responde pergunta do N-1. Papéis: SETUP, CLAIM, E
 # MICRO-CLIFFHANGERS
 Cada body termina puxando próximo. PROIBIDO: "mas tem um detalhe que muda tudo", "esse não é nem o maior problema", "e aqui que a maioria para", "aguenta aí". Invente cliffhangers específicos.
 
-# LAST SLIDE — CTA SEMÂNTICO
+# LAST SLIDE — CTA SEMÂNTICO (default)
 CTA = melhor linha do carrossel. (a) FECHA loop do slide 1, (b) ação específica ao conteúdo, (c) opcional prova social. PROIBIDO: "salva esse carrossel", "me siga", "manda pra aquele amigo", "comente X abaixo", qualquer genérico.
+**EXCEÇÃO:** se REGRA INVIOLÁVEL #3 (CTA do usuário) está ativa acima, ela VENCE este default — use a CTA exata pedida, mesmo que caia em "PROIBIDO".
 
 # RADICAL SPECIFICITY
 BANIDAS: "muitas pessoas", "resultados incríveis", "game-changer", "nesse sentido", "atualmente", "e por isso que", "a maioria", "muito tempo", "grandes resultados", "descubra como", "o segredo", "guia definitivo".
@@ -665,6 +712,11 @@ ${slideCountInstruction} slides por variação.`;
   if (overrides.requiredTitle) {
     overrideLines.push(
       `• TÍTULO OBRIGATÓRIO (capa): "${overrides.requiredTitle}" — exato, sem parafraseio.`
+    );
+  }
+  if (userMandatedCta) {
+    overrideLines.push(
+      `• CTA OBRIGATÓRIA (último slide): "${userMandatedCta}" — exata, sem parafraseio. Vence regra "CTA semântico".`
     );
   }
   if (overrides.strictFidelity) {

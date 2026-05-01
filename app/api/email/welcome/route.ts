@@ -3,6 +3,7 @@ import {
   requireAuthenticatedUser,
 } from "@/lib/server/auth";
 import { sendWelcome } from "@/lib/email/dispatch";
+import { addContactToAudience } from "@/lib/integrations/resend/contacts";
 import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 
 export const maxDuration = 10;
@@ -53,10 +54,15 @@ export async function POST(request: Request) {
     return Response.json({ skipped: true, reason: "no_email" });
   }
 
-  const sentId = await sendWelcome({
-    email,
-    name: profile?.name || undefined,
-  });
+  // Dispara welcome transactional + adiciona contato na audience "Sequência
+  // Viral" do Resend em paralelo. A audience é o trigger da automation de
+  // lifecycle (D+0, D+1, D+3, D+5, D+9, D+14, D+30). Falha de qualquer um
+  // dos dois é silenciosa — `sendWelcome` retorna null, `addContactToAudience`
+  // também. Não bloqueia signup.
+  const [sentId] = await Promise.all([
+    sendWelcome({ email, name: profile?.name || undefined }),
+    addContactToAudience({ email, name: profile?.name || undefined }),
+  ]);
 
   if (sentId) {
     const prev =

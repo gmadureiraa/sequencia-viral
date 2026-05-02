@@ -30,14 +30,22 @@ export async function DELETE(request: Request) {
     .single();
 
   if (profile?.stripe_subscription_id) {
-    try {
-      const { stripe } = await import("@/lib/stripe");
-      await stripe.subscriptions.cancel(profile.stripe_subscription_id);
-    } catch (err) {
+    // Em dev sem STRIPE_SECRET_KEY, lib/stripe.ts inicializa o cliente com
+    // "sk_test_missing" e qualquer subscriptions.cancel explode. Pular.
+    if (!process.env.STRIPE_SECRET_KEY) {
       console.warn(
-        "[auth/delete] Falha ao cancelar subscription Stripe:",
-        err
+        "[auth/delete] STRIPE_SECRET_KEY ausente — skip cancelamento Stripe"
       );
+    } else {
+      try {
+        const { stripe } = await import("@/lib/stripe");
+        await stripe.subscriptions.cancel(profile.stripe_subscription_id);
+      } catch (err) {
+        console.warn(
+          "[auth/delete] Falha ao cancelar subscription Stripe:",
+          err
+        );
+      }
     }
   }
 

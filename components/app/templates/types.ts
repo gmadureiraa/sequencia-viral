@@ -12,7 +12,8 @@ export type TemplateId =
   | "twitter"
   | "ambitious"
   | "blank"
-  | "bohdan";
+  | "bohdan"
+  | "paper-mono";
 
 export type SlideVariantName =
   | "cover"

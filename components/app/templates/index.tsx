@@ -8,6 +8,7 @@ import TemplateTwitter from "./template-twitter";
 import TemplateAmbitious from "./template-ambitious";
 import TemplateBlank from "./template-blank";
 import TemplateBohdan from "./template-bohdan";
+import TemplatePaperMono from "./template-paper-mono";
 import type { SlideProps, TemplateId, TemplateMeta } from "./types";
 
 export type { SlideProps, TemplateId, TemplateMeta } from "./types";
@@ -35,6 +36,8 @@ export const TemplateRenderer = forwardRef<
       return <TemplateBlank ref={ref} {...rest} />;
     case "bohdan":
       return <TemplateBohdan ref={ref} {...rest} />;
+    case "paper-mono":
+      return <TemplatePaperMono ref={ref} {...rest} />;
     default:
       return <TemplateTwitter ref={ref} {...rest} />;
   }
@@ -84,6 +87,12 @@ export const TEMPLATES_META: TemplateMeta[] = [
     kicker: "Nº 07 · DESIGN-FORWARD",
     palette: ["#0E0E0E", "#C8FF3D", "#FAFAF7"],
   },
+  {
+    id: "paper-mono",
+    name: "Paper Mono",
+    kicker: "Nº 08 · CONFESSIONAL",
+    palette: ["#ECE9DD", "#0E0E10", "#1A1A1A"],
+  },
 ];
 
 export {
@@ -94,4 +103,5 @@ export {
   TemplateAmbitious,
   TemplateBlank,
   TemplateBohdan,
+  TemplatePaperMono,
 };

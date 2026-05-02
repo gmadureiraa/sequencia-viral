@@ -26,7 +26,8 @@ export type DesignTemplateId =
   | "autoral"
   | "ambitious"
   | "blank"
-  | "bohdan";
+  | "bohdan"
+  | "paper-mono";
 
 /** Template default quando nada é especificado. */
 export const DEFAULT_DESIGN_TEMPLATE: DesignTemplateId = "manifesto";
@@ -227,6 +228,25 @@ export const DESIGN_TEMPLATES: DesignTemplateMeta[] = [
     preferPalette: ["#F9F9F9", "#D6CDC2", "#8A6C4A", "#222222"],
     avoidPalette: ["#00F0A0", "#1D9BF0", "#7CF067", "#D262B2"],
   },
+  {
+    id: "paper-mono",
+    emoji: "▢",
+    name: "Paper Mono",
+    desc: "Confessional storytelling em paper-grain B&W (ref: @tobi.the.og). Cream paper-grain + sans bold lowercase pra títulos numerados + body em mono + fotos B&W com halftone dots. Pra histórias em fases com 1 dado concreto.",
+    color: "#0E0E10",
+    blockCount: 8,
+    figmaLabel: "Template Paper Mono",
+    imageSearchStyleHint:
+      "black and white documentary photography hands desk shadows minimal candid analog film high contrast monochrome -watermark -shutterstock -getty -istock",
+    imageGenRealismFragment:
+      "High contrast black and white documentary photograph — pure monochrome, deep shadows, soft mid-greys, gentle film grain. Looks like a real candid photo from a print magazine, not illustration, not 3D render, not sepia.",
+    styleGuidePrompt:
+      "High contrast black and white documentary photography in a confessional editorial aesthetic (ref: tobi.the.og IG): pure monochrome (no color tint, never sepia, never blue cast), deep blacks, soft mid-greys, gentle 35mm film grain. Subjects: empty chair in lit room, hand on keyboard, founder back-view at desk, single laptop late night, cracked window light, hands writing in notebook, single object on table — quiet intimate scenes that telegraph 'bastidor real'. Composition: centered or rule-of-thirds, generous negative space, room for typography overlay. Camera: medium format mono (Hasselblad 500CM equivalent), f/2.8, single hard light source. Mood: silent confession, documentary intimacy, magazine essay. STRICTLY MONOCHROME — never colored objects, never sepia tone, never blue tone. AVOID: full color photography, sepia, cool blue cast, 3D render, illustration, anime, stock corporate smiling, multiple subjects crowding frame.",
+    slideAestheticModifier:
+      "high contrast black and white documentary photography monochrome film grain confessional intimate quiet",
+    preferPalette: ["#ECE9DD", "#0E0E10", "#1A1A1A", "#FFFFFF"],
+    avoidPalette: ["#00F0A0", "#1D9BF0", "#D262B2", "#7CF067", "#EACB7C"],
+  },
 ] as const;
 
 export const EDITORIAL_ACCENT = "#FF5500";
@@ -290,6 +310,7 @@ const VALID_TEMPLATE_IDS: readonly DesignTemplateId[] = [
   "ambitious",
   "blank",
   "bohdan",
+  "paper-mono",
 ];
 
 /** Normaliza qualquer string em um DesignTemplateId válido (default: manifesto). */
@@ -317,6 +338,7 @@ export const CONTENT_MACHINE_RENDER_SPECS: Record<
   ambitious: { blocks: 8, rules: CONTENT_MACHINE_NARRATIVE_RULES },
   blank: { blocks: 10, rules: CONTENT_MACHINE_NARRATIVE_RULES },
   bohdan: { blocks: 10, rules: CONTENT_MACHINE_NARRATIVE_RULES },
+  "paper-mono": { blocks: 8, rules: CONTENT_MACHINE_NARRATIVE_RULES },
 };
 
 export function usesNativeSlidePreview(_template: DesignTemplateId): boolean {

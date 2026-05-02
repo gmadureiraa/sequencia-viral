@@ -25,7 +25,8 @@ export interface RefetchImageInput {
     | "twitter"
     | "ambitious"
     | "blank"
-    | "bohdan";
+    | "bohdan"
+    | "paper-mono";
   /** Se true, ativa pipeline 2-pass (cover-scene → Imagen) com composição cinematográfica. */
   isCover?: boolean;
   /**

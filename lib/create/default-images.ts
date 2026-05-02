@@ -128,6 +128,21 @@ const BOHDAN: string[] = [
   IMG("photo-1517363898874-737b62a7db91"), // creative lab B&W
 ];
 
+/**
+ * Paper Mono — fotos B&W documentais, intimistas, candid.
+ * Cadeira vazia, mão no teclado, founder de costas, bastidor real.
+ */
+const PAPER_MONO: string[] = [
+  IMG("photo-1455849318743-b2233052fcff"), // editorial portrait B&W
+  IMG("photo-1542038784456-1ea8e935640e"), // hands sketching
+  IMG("photo-1494389945381-d9b18b9a2cef"), // dramatic portrait B&W
+  IMG("photo-1516214104703-d870798883c5"), // hands typing dramatic
+  IMG("photo-1453928582365-b6ad33cbcf64"), // creative studio detail
+  IMG("photo-1481627834876-b7833e8f5570"), // editorial typography
+  IMG("photo-1499856871958-5b9627545d1a"), // newspaper close
+  IMG("photo-1517363898874-737b62a7db91"), // creative lab B&W
+];
+
 const POOLS: Record<TemplateId, string[]> = {
   manifesto: MANIFESTO,
   futurista: FUTURISTA,
@@ -136,6 +151,7 @@ const POOLS: Record<TemplateId, string[]> = {
   ambitious: AMBITIOUS,
   blank: BLANK,
   bohdan: BOHDAN,
+  "paper-mono": PAPER_MONO,
 };
 
 /**

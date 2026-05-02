@@ -12,6 +12,7 @@ import { useGenerate, type GenerationError } from "@/lib/create/use-generate";
 import { DiscountPopup } from "@/components/app/discount-popup";
 import { authHeaders, jsonWithAuth } from "@/lib/api-auth-headers";
 import { isAdminEmail } from "@/lib/admin-emails";
+import { normalizeDesignTemplate } from "@/lib/carousel-templates";
 
 /**
  * Tela 01 — Nova criação. User escreve brief → persiste rascunho + já gera
@@ -130,7 +131,17 @@ export default function NewCarouselPage() {
   const { user, profile, session } = useAuth();
   const { generateCarousel, loadingCarousel } = useGenerate(session);
 
-  const [idea, setIdea] = useState(() => searchParams?.get("idea") ?? "");
+  // Bridge Radar Viral → SV: o Radar manda `?brief=`/`?context=`/`?template=`/`?topic=`
+  // como params separados (canônico). Mantém retrocompat com `?idea=` (legacy:
+  // tudo concatenado num campo só) — ordem de prioridade no fallback é
+  // brief → topic → idea, com context vindo separado.
+  const [idea, setIdea] = useState(
+    () =>
+      searchParams?.get("brief") ??
+      searchParams?.get("topic") ??
+      searchParams?.get("idea") ??
+      "",
+  );
 
   useEffect(() => {
     // Se user clicou "Usar ideia" no dashboard, o card grava um briefing
@@ -171,8 +182,63 @@ export default function NewCarouselPage() {
     } catch {
       /* ignore */
     }
-    const q = searchParams?.get("idea");
-    if (q && !idea) setIdea(q);
+
+    // Bridge Radar Viral → SV: pre-popula campos quando user vem com params
+    // separados (`?brief=`/`?context=`/`?template=`). `?topic=` é alias de
+    // `?brief=`. `?idea=` continua como retrocompat (Radar antigo manda tudo
+    // concatenado nele). `?source=radar` dispara analytics.
+    const briefParam =
+      searchParams?.get("brief") ??
+      searchParams?.get("topic") ??
+      searchParams?.get("idea");
+    const contextParam = searchParams?.get("context");
+    const templateParam = searchParams?.get("template");
+    const sourceParam = searchParams?.get("source");
+
+    let consumedAny = false;
+
+    if (briefParam && !idea) {
+      setIdea(briefParam);
+      consumedAny = true;
+    }
+
+    if (contextParam) {
+      setAdvExtraContext(contextParam);
+      // Abre o painel pra user enxergar que veio contexto extra populado.
+      setAdvOpen(true);
+      consumedAny = true;
+    }
+
+    if (templateParam) {
+      const normalized = normalizeDesignTemplate(templateParam);
+      // Só seta se o picker da page suporta esse id (subset do canônico).
+      if (
+        normalized === "manifesto" ||
+        normalized === "twitter" ||
+        normalized === "ambitious" ||
+        normalized === "blank" ||
+        normalized === "bohdan"
+      ) {
+        setDesignTemplate(normalized);
+        consumedAny = true;
+      }
+    }
+
+    // Analytics: dispara evento custom no Meta Pixel pra medir conversão
+    // do funil Radar → SV. Safe-no-op se fbq não estiver pronto.
+    if (sourceParam === "radar" && typeof window !== "undefined") {
+      try {
+        window.fbq?.("trackCustom", "RadarBridgeArrival", { source: "radar" });
+      } catch {
+        /* ignore — pixel é best-effort */
+      }
+    }
+
+    // Limpa a URL depois de consumir os params pra não re-disparar em
+    // refresh/navigate-back e pra não vazar conteúdo do brief no histórico.
+    if (consumedAny || sourceParam) {
+      router.replace("/app/create/new");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
   // Tom e idioma agora vêm do profile (definidos no onboarding/settings).

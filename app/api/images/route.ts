@@ -7,7 +7,7 @@ import {
   normalizeImagePeopleMode,
 } from "@/lib/carousel-templates";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
-import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
+import { rateLimit, getRateLimitKey, getRequestIp } from "@/lib/server/rate-limit";
 import {
   costForCall,
   costForImages,
@@ -217,6 +217,28 @@ export async function POST(request: Request) {
     const rlLikelyGenerate = mode === "generate" || useDecider;
     const rlBucket = rlLikelyGenerate ? "images-generate" : "images-search";
     const rlLimit = rlLikelyGenerate ? 40 : 120;
+    // IP-tier roda ANTES do user-tier no modo generate. User-only era
+    // bypassável: atacante com N contas multiplicava o cap real (40 × N).
+    // Mesmo pattern de /api/generate (linhas 274-282). Search mode segue
+    // só com user-tier (Serper é grátis, custo de abuso é baixo).
+    if (rlLikelyGenerate) {
+      const ipLimiter = await rateLimit({
+        key: `images-generate-ip:${getRequestIp(request)}`,
+        limit: 20,
+        windowMs: 60 * 1000,
+      });
+      if (!ipLimiter.allowed) {
+        return Response.json(
+          { error: "Rate limit exceeded. Try again later." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(ipLimiter.retryAfterSec),
+            },
+          }
+        );
+      }
+    }
     const limiter = await rateLimit({
       key: getRateLimitKey(request, rlBucket, user.id),
       limit: rlLimit,

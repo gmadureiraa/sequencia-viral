@@ -1582,7 +1582,13 @@ Regras:
     // efetivamente incrementado antes. Limpa também `usageIncrementedFlag`
     // pra evitar double-rollback do safety-net no finally.
     async function rollbackUsage() {
-      if (!sb || !usageAlreadyIncremented) return;
+      // Bug fix (2026-05-02): antes checava `usageAlreadyIncremented` (só RPC
+      // path). Quando a RPC falhava e caímos no fallback manual (linhas
+      // ~1252-1269), `usageIncrementedFlag` virava true mas
+      // `usageAlreadyIncremented` continuava false — rollback no-op e o user
+      // pagava 1 slot por geração que falhou. Agora rolla sempre que o flag
+      // do increment efetivo estiver ligado, cobrindo ambos os caminhos.
+      if (!sb || !usageIncrementedFlag) return;
       try {
         const { data: prof } = await sb
           .from("profiles")

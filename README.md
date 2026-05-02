@@ -101,7 +101,7 @@ Detalhes: [`docs/technical/scrapers.md`](docs/technical/scrapers.md).
 
 - `free`: 5 carrosséis/mês
 - `pro` (Creator): 10 carrosséis/mês
-- `business` (Pro): 300 carrosséis/mês
+- `business` (Pro): 30 carrosséis/mês
 
 Stripe usa os mesmos IDs de plano (`pro`, `business`) para manter consistência entre UI, checkout e webhook.
 

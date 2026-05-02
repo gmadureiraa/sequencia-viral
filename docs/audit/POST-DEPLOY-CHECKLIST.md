@@ -8,7 +8,7 @@
 
 ### Stripe (sync de plano)
 - [ ] `STRIPE_PRICE_PRO` — sem isso, webhook `subscription.updated` não mapeia upgrade/downgrade pra tier Pro
-- [ ] `STRIPE_PRICE_BUSINESS` — idem para tier Business (300 carrosséis/mês)
+- [ ] `STRIPE_PRICE_BUSINESS` — idem para tier Business (30 carrosséis/mês)
 - [ ] `STRIPE_SECRET_KEY` — usar chave **live** (`sk_live_...`), nunca test em prod
 - [ ] `STRIPE_WEBHOOK_SECRET` — validação de assinatura dos eventos do Stripe (impede spoofing)
 - [ ] `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` — Stripe.js no browser; sem isso, checkout não abre
@@ -40,7 +40,7 @@
 - [ ] Geração completa (brief → carrossel) termina sem timeout (< 55s)
 - [ ] Imagens geradas são salvas no bucket `carousel-images` do Supabase Storage
 - [ ] Usuário free não ultrapassa cap mensal (guard em `/api/generate`)
-- [ ] Usuário Business respeita cap de 300 carrosséis/mês
+- [ ] Usuário Business respeita cap de 30 carrosséis/mês
 
 ### CORS e preflight
 - [ ] Chamadas cross-origin de `viral.kaleidos.com.br` → `/api/*` funcionam sem erro CORS

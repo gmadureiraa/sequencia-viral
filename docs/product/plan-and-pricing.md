@@ -12,7 +12,7 @@ Os IDs de plano válidos do produto e billing são:
 
 - `free`: 5 carrosséis por mês
 - `pro` (Creator): 10 carrosséis por mês
-- `business` (Pro): 300 carrosséis por mês
+- `business` (Pro): 30 carrosséis por mês
 
 ## Stripe
 

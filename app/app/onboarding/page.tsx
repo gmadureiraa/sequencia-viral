@@ -33,6 +33,7 @@ import type { BrandAnalysis } from "@/lib/auth-context";
 import { jsonWithAuth, authHeaders } from "@/lib/api-auth-headers";
 import { scrubInstagramCdn } from "@/lib/instagram-cdn";
 import { upsertUserCarousel } from "@/lib/carousel-storage";
+import { trackCompleteRegistration } from "@/lib/meta-pixel";
 import { supabase } from "@/lib/supabase";
 import type { DesignTemplateId } from "@/lib/carousel-templates";
 import { FacebookLoginButton } from "@/components/facebook-login-button";
@@ -815,6 +816,20 @@ export default function OnboardingPage() {
                 : p
             )
           );
+          // Meta Pixel `CompleteRegistration` — primeiro carrossel gerado.
+          // Gate via localStorage idêntico ao `use-generate.ts` pra dedup
+          // entre fluxo onboarding e fluxo /create/new.
+          try {
+            if (typeof window !== "undefined") {
+              const flagKey = "sv_first_generation_tracked";
+              if (!window.localStorage.getItem(flagKey)) {
+                trackCompleteRegistration("first_carousel");
+                window.localStorage.setItem(flagKey, String(Date.now()));
+              }
+            }
+          } catch {
+            /* ignore — pixel é fire-and-forget */
+          }
         }
       } catch (err) {
         setGenProgress((prev) =>

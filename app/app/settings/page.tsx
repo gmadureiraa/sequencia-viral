@@ -29,6 +29,7 @@ import {
 import { toast } from "sonner";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
 import posthog from "posthog-js";
+import { trackSubscribe } from "@/lib/meta-pixel";
 
 function isPaidPlanParam(id: string): id is PlanId {
   return id === "pro" || id === "business";
@@ -313,6 +314,36 @@ function SettingsPageContent() {
           : "Pagamento confirmado."
       );
       void refreshProfile();
+
+      // Meta Pixel `Subscribe` — pós-checkout Stripe success. Valor mensal
+      // em BRL decimal (PLANS[].priceMonthly é em centavos). Limpa URL após
+      // disparo pra não re-fire em refresh. Idempotência adicional via
+      // sessionStorage com session_id quando disponível (não temos aqui,
+      // então usamos um marker local). O `window.history.replaceState`
+      // remove `payment` e `plan` da URL preservando o resto.
+      if (planParam && isPaidPlanParam(planParam)) {
+        try {
+          if (typeof window !== "undefined") {
+            const flagKey = `sv_subscribe_tracked_${planParam}`;
+            // Janela curta de dedup pra cobrir StrictMode double-render.
+            const last = window.sessionStorage.getItem(flagKey);
+            const now = Date.now();
+            if (!last || now - Number(last) > 30_000) {
+              const value = PLANS[planParam].priceMonthly / 100;
+              trackSubscribe(value, planParam);
+              window.sessionStorage.setItem(flagKey, String(now));
+            }
+            // Limpa querystring pra não disparar de novo num refresh.
+            const url = new URL(window.location.href);
+            url.searchParams.delete("payment");
+            url.searchParams.delete("plan");
+            url.searchParams.delete("bump");
+            window.history.replaceState({}, "", url.toString());
+          }
+        } catch {
+          /* ignore — pixel é fire-and-forget */
+        }
+      }
     } else if (pay === "cancelled") {
       setPaymentNotice("Checkout cancelado. Nada foi cobrado.");
     }

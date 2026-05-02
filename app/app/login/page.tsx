@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import posthog from "posthog-js";
+import { trackLead } from "@/lib/meta-pixel";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -99,12 +100,31 @@ export default function LoginPage() {
     if (result.needsEmailConfirmation) {
       posthog.identify(email, { email });
       posthog.capture("user_signed_up", { method: "email", needs_confirmation: true });
+      // Meta Pixel `Lead` — email cadastrado (signup). Marca flag genérica
+      // por email aqui pra que o auth-context (que monitora SIGNED_IN) não
+      // duplique o evento quando o user confirmar e logar.
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(`sv_lead_tracked_email_${email}`, String(Date.now()));
+        }
+      } catch {
+        /* ignore */
+      }
+      trackLead("free_signup_email");
       setSuccess("Conta criada! Verifique seu email pra confirmar antes de entrar.");
       setLoading(false);
       return;
     }
     posthog.identify(email, { email });
     posthog.capture("user_signed_up", { method: "email", needs_confirmation: false });
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(`sv_lead_tracked_email_${email}`, String(Date.now()));
+      }
+    } catch {
+      /* ignore */
+    }
+    trackLead("free_signup_email");
     router.push("/app");
   }
 

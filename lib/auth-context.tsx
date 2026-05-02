@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { trackLead } from "./meta-pixel";
 export interface BrandAnalysis {
   detected_niche: string[];
   tone_detected: string;
@@ -183,6 +184,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }).catch(() => {
             /* ignora */
           });
+
+          // Meta Pixel `Lead` — só dispara em SIGNUP, não em login. Usa
+          // localStorage flag por user.id pra não duplicar entre sessões.
+          // OAuth (Google/X) não tem evento separado de signup, então
+          // detectamos via `created_at` recente (<60s) na primeira vez que
+          // vemos o user nesse browser. Email signup já dispara em
+          // `app/app/login/page.tsx` e marca `sv_lead_tracked_email_<email>`
+          // pra que essa branch não duplique no SIGNED_IN seguinte.
+          try {
+            if (typeof window !== "undefined") {
+              const flagKey = `sv_lead_tracked_${s.user.id}`;
+              const emailFlagKey = s.user.email
+                ? `sv_lead_tracked_email_${s.user.email}`
+                : null;
+              const alreadyTracked =
+                !!window.localStorage.getItem(flagKey) ||
+                (emailFlagKey ? !!window.localStorage.getItem(emailFlagKey) : false);
+              if (!alreadyTracked) {
+                const createdAt = s.user.created_at
+                  ? new Date(s.user.created_at).getTime()
+                  : 0;
+                const isFreshSignup =
+                  createdAt > 0 && Date.now() - createdAt < 60_000;
+                if (isFreshSignup) {
+                  const provider =
+                    (s.user.app_metadata?.provider as string | undefined) ??
+                    "unknown";
+                  trackLead(`free_signup_${provider}`);
+                }
+                // Marca de qualquer jeito pra nunca refazer detect nesse user.
+                window.localStorage.setItem(flagKey, String(Date.now()));
+              }
+            }
+          } catch {
+            /* ignora — pixel é fire-and-forget */
+          }
         }
       } else if (event === "SIGNED_OUT") {
         setProfile(null);

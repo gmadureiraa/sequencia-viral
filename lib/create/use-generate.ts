@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
+import { trackCompleteRegistration } from "@/lib/meta-pixel";
 import type { CreateConcept, CreateVariation } from "./types";
 
 /**
@@ -147,6 +148,22 @@ export function useGenerate(session: Session | null) {
           throw buildError(data.error || "Falha na geração.", res, data.code);
         if (!data.variations?.length)
           throw new Error("Nenhum carrossel gerado.");
+
+        // Meta Pixel `CompleteRegistration` — primeiro carrossel gerado
+        // sinaliza "user ativo de verdade" pro Meta otimizar Ads. Gate via
+        // localStorage pra nunca duplicar (passa entre sessões nesse browser).
+        try {
+          if (typeof window !== "undefined") {
+            const flagKey = "sv_first_generation_tracked";
+            if (!window.localStorage.getItem(flagKey)) {
+              trackCompleteRegistration("first_carousel");
+              window.localStorage.setItem(flagKey, String(Date.now()));
+            }
+          }
+        } catch {
+          /* ignore — pixel é fire-and-forget */
+        }
+
         return {
           variations: data.variations,
           promptUsed: data.promptUsed,

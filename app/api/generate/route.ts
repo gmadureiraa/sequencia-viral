@@ -310,6 +310,13 @@ export async function POST(request: Request) {
     // foi permitido. Se não tiver RPC disponível (ambiente antigo), faz
     // fallback pro check + increment sequencial (mantém compatibilidade
     // enquanto migration não roda).
+    //
+    // ⚠️ Ordem importa (fix 2026-05-02): fazemos o pre-check do planCap ANTES
+    // da RPC porque a RPC só compara `usage_count < usage_limit`. Users
+    // grandfathered com `usage_limit=300` (cap antigo) bypassavam o cap novo
+    // de 30 do plano `business` — a RPC permitia o increment até 300.
+    // Agora: 1) carrega profile + cap do plano, 2) rejeita se count>=planCap,
+    // 3) só então tenta a RPC atômica (que protege da race condition).
     const sb = createServiceRoleSupabaseClient();
     sbForRollback = sb;
     let brandContext = "";
@@ -317,6 +324,37 @@ export async function POST(request: Request) {
     let generationMemoryContext = "";
     let usageAlreadyIncremented = false;
     if (sb) {
+      const { data: prof } = await sb
+        .from("profiles")
+        .select("usage_count, usage_limit, plan, brand_analysis")
+        .eq("id", user.id)
+        .single();
+
+      // Pre-check planCap. Cap automático por plano — fonte de verdade é
+      // `lib/pricing.ts`. Se o usage_limit no banco vier desalinhado (user
+      // legado com 9999, ou cap antigo 100/300 vs cap novo 30), aplicamos
+      // o min(dbLimit, planCap) por cima da RPC atômica.
+      if (prof) {
+        const dbLimit = prof.usage_limit ?? 5;
+        const planCap =
+          prof.plan === "business"
+            ? PLANS.business.carouselsPerMonth
+            : prof.plan === "pro"
+              ? PLANS.pro.carouselsPerMonth
+              : FREE_PLAN_USAGE_LIMIT;
+        const effectiveLimit = Math.min(dbLimit, planCap);
+        const count = prof.usage_count ?? 0;
+        if (count >= effectiveLimit) {
+          return Response.json(
+            {
+              error: `Você atingiu o limite de ${effectiveLimit} carrosséis do plano ${prof.plan || "free"}. Faça upgrade para continuar gerando.`,
+              code: "PLAN_LIMIT_REACHED",
+            },
+            { status: 403 }
+          );
+        }
+      }
+
       const { data: gate, error: gateErr } = await sb.rpc(
         "try_increment_usage_count",
         { uid: user.id }
@@ -346,33 +384,7 @@ export async function POST(request: Request) {
         );
       }
 
-      const { data: prof } = await sb
-        .from("profiles")
-        .select("usage_count, usage_limit, plan, brand_analysis")
-        .eq("id", user.id)
-        .single();
       if (prof) {
-        // Cap automático por plano — fonte de verdade é `lib/pricing.ts`.
-        // Se o usage_limit no banco vier desalinhado (user legado com 9999,
-        // overrides manuais, etc), aplicamos o cap do plano por cima.
-        const dbLimit = prof.usage_limit ?? 5;
-        const planCap =
-          prof.plan === "business"
-            ? PLANS.business.carouselsPerMonth
-            : prof.plan === "pro"
-              ? PLANS.pro.carouselsPerMonth
-              : FREE_PLAN_USAGE_LIMIT;
-        const limit = Math.min(dbLimit, planCap);
-        const count = prof.usage_count ?? 0;
-        if (!usageAlreadyIncremented && count >= limit) {
-          return Response.json(
-            {
-              error: `Você atingiu o limite de ${limit} carrosséis do plano ${prof.plan || "free"}. Faça upgrade para continuar gerando.`,
-              code: "PLAN_LIMIT_REACHED",
-            },
-            { status: 403 }
-          );
-        }
         // Extract brand context from same query
         const ba = prof.brand_analysis as Record<string, unknown> | null;
         if (ba && typeof ba === "object") {

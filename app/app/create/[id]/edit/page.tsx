@@ -489,7 +489,12 @@ export default function EditPage(props: {
 
     async function fillMissing() {
       const concurrency = 2;
-      const maxRetries = 4;
+      // Cap reduzido de 4 → 2 em 2026-05-01 pra controlar custo Imagen 4.0
+      // ($0.04/imagem). Pior caso antes: 4 passes × 2 concurrency × 12 slides
+      // = 96 chamadas → ~$3.84/carrossel só em retry. Agora: máximo ~24
+      // chamadas → ~$0.96. Slides que falharem em 2 passes viram imageFailed
+      // e mostram card "Gerar de novo" pro user pedir manualmente.
+      const maxRetries = 2;
       let passIndex = 0;
       // Multiplos passes: enquanto ainda ha slides sem imagem, tenta de novo
       // com backoff. Se depois de N passes ainda falhar, marca imageFailed=true

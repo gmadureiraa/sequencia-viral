@@ -94,6 +94,12 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+  // Facebook domain verification — pareia com Pixel 1315597820451507 no
+  // Madureira BM (704738313932684). Atribui o domínio viral.kaleidos.com.br
+  // ao BM. Necessário pra Aggregated Event Measurement (iOS 14+).
+  other: {
+    "facebook-domain-verification": "1nig6wpksxkny1vv602vd5ym0jnr3z",
+  },
 };
 
 const jsonLd = {

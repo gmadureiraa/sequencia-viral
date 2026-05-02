@@ -253,13 +253,36 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
       const subscription = event.data.object as Stripe.Subscription & {
         metadata?: { userId?: string; planId?: string };
       };
-      const userId = subscription.metadata?.userId;
+      let userId = subscription.metadata?.userId;
       const metadataPlanId = subscription.metadata?.planId;
       const status = subscription.status;
 
+      // Fallback: mudanças via Stripe Billing Portal (user mexe no plano
+      // pelo customer portal) NÃO carregam metadata.userId — só Checkout
+      // popula isso. Resolvemos via stripe_customer_id buscando o profile
+      // que tem esse customer linked. Sem fallback, upgrade/downgrade do
+      // portal era silenciosamente ignorado.
+      if (!userId) {
+        const customerId = subscription.customer as string | undefined;
+        if (customerId) {
+          const { data: profile } = await supabaseAdmin
+            .from("profiles")
+            .select("id")
+            .eq("stripe_customer_id", customerId)
+            .maybeSingle();
+          if (profile?.id) {
+            userId = profile.id;
+            console.log(
+              "[stripe webhook] subscription.updated userId resolvido via stripe_customer_id:",
+              { customerId, userId }
+            );
+          }
+        }
+      }
+
       if (!userId) {
         console.warn(
-          "[stripe webhook] subscription.updated sem metadata.userId — ignorando",
+          "[stripe webhook] subscription.updated sem userId resolvable — ignorando",
           subscription.id
         );
         break;

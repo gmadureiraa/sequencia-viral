@@ -20,6 +20,7 @@
  */
 
 import { requireAuthenticatedUser } from "@/lib/server/auth";
+import { rateLimit, getRequestIp } from "@/lib/server/rate-limit";
 import {
   assertSafeUrl,
   assertResolvedIpIsSafe,
@@ -107,9 +108,25 @@ export async function GET(request: Request) {
 
   // Publico apenas para CDNs conhecidas (imagens ja publicas de origem).
   // URLs fora da whitelist ainda exigem Bearer token.
-  if (!hostAllowedPublic(target.hostname)) {
+  const isPublicHost = hostAllowedPublic(target.hostname);
+  if (!isPublicHost) {
     const auth = await requireAuthenticatedUser(request);
     if (!auth.ok) return auth.response;
+  } else {
+    // Sem auth → cap por IP pra nao virar bandwidth amplifier publico.
+    // 120 req/min cobre carrosseis grandes (~12 imgs × 10 carrosseis/min)
+    // sem permitir scraping pesado por IPs aleatorios.
+    const limiter = await rateLimit({
+      key: `img-proxy-public-ip:${getRequestIp(request)}`,
+      limit: 120,
+      windowMs: 60 * 1000,
+    });
+    if (!limiter.allowed) {
+      return new Response("rate limit exceeded", {
+        status: 429,
+        headers: { "Retry-After": String(limiter.retryAfterSec) },
+      });
+    }
   }
 
   let upstream: Response;

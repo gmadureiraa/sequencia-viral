@@ -1,7 +1,9 @@
 /**
- * MVP: aceita chamadas sem sessão (onboarding só com @). Quando login/anti-abuso
- * estiverem maduros, restringir a usuários autenticados — ver
- * `docs/product/roadmap-internal.md`.
+ * Requer sessão Supabase (Bearer token). Apify tem custo por chamada;
+ * sem auth o endpoint vira vetor de abuso. Comentário antigo dizia
+ * "aceita sem sessão" mas o handler ja faz `getAuthenticatedUser` +
+ * 40 req/h por user (linha 337-360). Atualizado em 2026-05-02 pra
+ * refletir o estado real e evitar regressao em PR futura.
  */
 export const maxDuration = 60;
 import { getAuthenticatedUser } from "@/lib/server/auth";

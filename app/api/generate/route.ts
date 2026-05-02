@@ -261,12 +261,23 @@ interface GenerateResponse {
 }
 
 export async function POST(request: Request) {
+  // Safety-net pra rollback de usage caso o handler dê throw entre o
+  // increment atômico e o `return` final. O rollbackUsage interno cobre
+  // falhas previstas (Gemini error, parse fail), mas exceptions não
+  // capturadas (Sentry, network, OOM) caíam só no catch externo que
+  // retornava 500 — user pagava 1/30 sem receber carrossel. Setamos
+  // `returnedOk = true` na linha que precede o Response.json de sucesso.
+  let usageIncrementedFlag = false;
+  let userIdForRollback: string | null = null;
+  let sbForRollback: ReturnType<typeof createServiceRoleSupabaseClient> = null;
+  let returnedOk = false;
   try {
     const auth = await requireAuthenticatedUser(request);
     if (!auth.ok) {
       return auth.response;
     }
     const { user } = auth;
+    userIdForRollback = user.id;
 
     // Throttle por IP (5/min) para mitigar abuso quando atacante cria
     // múltiplos usuários autenticados rapidamente. Roda em paralelo com
@@ -300,6 +311,7 @@ export async function POST(request: Request) {
     // fallback pro check + increment sequencial (mantém compatibilidade
     // enquanto migration não roda).
     const sb = createServiceRoleSupabaseClient();
+    sbForRollback = sb;
     let brandContext = "";
     let feedbackContext = "";
     let generationMemoryContext = "";
@@ -326,6 +338,7 @@ export async function POST(request: Request) {
           );
         }
         usageAlreadyIncremented = true;
+        usageIncrementedFlag = true;
       } else if (gateErr) {
         console.warn(
           "[generate] try_increment_usage_count RPC indisponível, usando fallback:",
@@ -1234,11 +1247,17 @@ Se ignorar, o carrossel fica shallow e generico — não é o que o criador quer
           .eq("id", user.id)
           .single();
         if (currentProfile) {
-          await sb
+          const { error: updErr } = await sb
             .from("profiles")
             .update({ usage_count: (currentProfile.usage_count ?? 0) + 1 })
             .eq("id", user.id);
+          if (!updErr) {
+            usageIncrementedFlag = true;
+          }
         }
+      } else {
+        // RPC funcionou — usage subiu. Marca pra rollback safety-net.
+        usageIncrementedFlag = true;
       }
     }
 
@@ -1548,7 +1567,8 @@ Regras:
 
     // Rollback de uso (decrementa) quando 2 tentativas falham. User não paga
     // por falha do modelo — é problema nosso, não dele. Chama só se o uso foi
-    // efetivamente incrementado antes.
+    // efetivamente incrementado antes. Limpa também `usageIncrementedFlag`
+    // pra evitar double-rollback do safety-net no finally.
     async function rollbackUsage() {
       if (!sb || !usageAlreadyIncremented) return;
       try {
@@ -1563,6 +1583,8 @@ Regras:
             .from("profiles")
             .update({ usage_count: current - 1 })
             .eq("id", user.id);
+          // Limpa o flag pra finally não rodar de novo.
+          usageIncrementedFlag = false;
           console.log(
             `[generate] usage rollback: userId=${user.id} ${current} → ${current - 1}`
           );
@@ -1913,6 +1935,10 @@ Regras:
     // Visível pra admin no editor (painel Debug IA). Users normais ignoram.
     const promptUsed = `${systemPrompt}\n\n========== USER MESSAGE ==========\n\n${userMessage}`;
 
+    // Marca sucesso ANTES do Response.json — qualquer throw depois dessa
+    // linha é bug nosso e o usage NÃO deve voltar (carrossel já tá pronto
+    // na response). O finally só rolla back quando returnedOk=false.
+    returnedOk = true;
     return Response.json({
       ...result,
       promptUsed,
@@ -1955,6 +1981,35 @@ Regras:
       },
       { status: 500 }
     );
+  } finally {
+    // Safety-net: se incrementamos o usage mas NÃO retornamos sucesso
+    // (exception não capturada), devolvemos 1 ao usuário pra ele não
+    // perder o slot. Idempotente em relação ao rollback interno —
+    // este só atua quando o handler "explodiu" antes do return final.
+    if (usageIncrementedFlag && !returnedOk && sbForRollback && userIdForRollback) {
+      try {
+        const { data: prof } = await sbForRollback
+          .from("profiles")
+          .select("usage_count")
+          .eq("id", userIdForRollback)
+          .single();
+        const current = prof?.usage_count ?? 0;
+        if (current > 0) {
+          await sbForRollback
+            .from("profiles")
+            .update({ usage_count: current - 1 })
+            .eq("id", userIdForRollback);
+          console.log(
+            `[generate] safety-net rollback (catch externo): userId=${userIdForRollback} ${current} → ${current - 1}`
+          );
+        }
+      } catch (rbErr) {
+        console.error(
+          "[generate] safety-net rollback falhou:",
+          rbErr instanceof Error ? rbErr.message : String(rbErr)
+        );
+      }
+    }
   }
 }
 

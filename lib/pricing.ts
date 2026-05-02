@@ -59,15 +59,18 @@ export const PLANS = {
     priceAnchor: 19990, // R$ 199,90 preco riscado (anchor visual)
     // Product ID do Stripe. DB key 'business' mapeia pro produto "Pro".
     stripeProductId: "prod_UNrgO9pSZYSveR",
-    // Cap reduzido 300 → 100 em 2026-04-28: audit completo mostrou
-    // que 300 × ~R$ 0,85/carrossel = R$ 255 de custo bruto vs R$ 97,90
-    // de receita = MARGEM NEGATIVA. Cap 100 = ~R$ 85 custo, fecha
-    // margem ~13% (apertada mas não queima dinheiro). Users do plano
-    // existentes mantêm 300 via grandfathering — Stripe webhook preserva
-    // usage_limit setado quando subscription foi criada.
-    carouselsPerMonth: 100,
+    // Cap reduzido 100 → 30 em 2026-05-01: alinha promessa pública com a
+    // economia real. 30 × ~R$ 0,85/carrossel = R$ 25,50 custo bruto vs
+    // R$ 97,90 receita = ~74% margem. Cap 100 anterior fechava só ~13%.
+    // Users existentes (free/pro/business) mantêm seu `usage_limit` atual
+    // via grandfathering — só é mexido em `subscription.created` ou
+    // `subscription.updated` no webhook Stripe. Histórico:
+    //   • até 2026-04-28: 300/mês (margem negativa)
+    //   • 2026-04-28 → 2026-05-01: 100/mês (margem ~13%)
+    //   • 2026-05-01 →: 30/mês (margem ~74%)
+    carouselsPerMonth: 30,
     features: [
-      "100 carrosséis/mês",
+      "30 carrosséis/mês",
       "Carrosséis de até 12 slides",
       "Todas as origens",
       "Sem marca d'água",

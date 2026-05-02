@@ -336,7 +336,7 @@ export function PricingSection() {
             anchor={isAnnual ? `${proMonth}/mês no mensal` : proAnchor}
             annualSaving={isAnnual ? `Cobrado ${proYearTotal}` : undefined}
             features={[
-              "100 carrosséis/mês",
+              "30 carrosséis/mês",
               "Tudo que o Creator tem",
               "Acesso antecipado a novos templates",
               "Agendamento + publicação (em breve)",

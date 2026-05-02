@@ -185,7 +185,7 @@ export async function POST(request: Request) {
     const rawText = result.text || "";
     let voiceDna: VoiceDna;
     try {
-      voiceDna = JSON.parse(rawText);
+      voiceDna = JSON.parse(rawText) as VoiceDna;
     } catch {
       const match = rawText.match(/\{[\s\S]*\}/);
       if (!match) {
@@ -194,7 +194,36 @@ export async function POST(request: Request) {
           { status: 502 }
         );
       }
-      voiceDna = JSON.parse(match[0]);
+      try {
+        voiceDna = JSON.parse(match[0]) as VoiceDna;
+      } catch (parseErr) {
+        console.warn(
+          "[voice-ingest] JSON parse falhou no fallback regex:",
+          parseErr instanceof Error ? parseErr.message : parseErr
+        );
+        return Response.json(
+          { error: "Resposta inválida da IA. Tenta de novo." },
+          { status: 502 }
+        );
+      }
+    }
+
+    // Validacao defensiva — se o modelo devolver shape estranho (string,
+    // array, objeto sem summary), evita salvar lixo em brand_analysis.
+    if (
+      !voiceDna ||
+      typeof voiceDna !== "object" ||
+      Array.isArray(voiceDna) ||
+      typeof (voiceDna as VoiceDna).summary !== "string"
+    ) {
+      console.warn(
+        "[voice-ingest] voiceDna shape invalido, ignorando save:",
+        rawText.slice(0, 200)
+      );
+      return Response.json(
+        { error: "IA não retornou um perfil de voz válido. Tenta de novo." },
+        { status: 502 }
+      );
     }
 
     const sb = createServiceRoleSupabaseClient();

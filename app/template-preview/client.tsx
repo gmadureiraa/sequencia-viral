@@ -26,48 +26,113 @@ const MOCK_CTA_HEADING = "salva pra usar amanhã.";
 const MOCK_CTA_BODY =
   "manda pro amigo founder que tá adiando 'começar a usar IA pra valer'.";
 
-const SLIDES: {
-  variant: SlideProps["variant"];
+const MOCK_QUOTE = "se você não tá criando friction, não tá criando memória.";
+const MOCK_QUOTE_BODY = "— me citando ontem, 3am, depois de 4 reels que ninguém salvou.";
+
+const ALL_VARIANTS: NonNullable<SlideProps["variant"]>[] = [
+  "cover",
+  "headline",
+  "photo",
+  "quote",
+  "split",
+  "cta",
+  "solid-brand",
+  "text-only",
+  "full-photo-bottom",
+];
+
+type SlideSpec = {
+  variant: NonNullable<SlideProps["variant"]>;
   heading: string;
   body: string;
   imageUrl?: string;
   slideNumber: number;
   isLastSlide?: boolean;
-}[] = [
-  {
-    variant: "cover",
-    heading: MOCK_HEADING,
-    body: "",
-    imageUrl: MOCK_IMAGE_BLACK_AND_WHITE,
-    slideNumber: 1,
-  },
-  {
-    variant: "headline",
-    heading: MOCK_TITLE,
-    body: MOCK_TITLE_BODY,
-    slideNumber: 2,
-  },
-  {
-    variant: "cta",
-    heading: MOCK_CTA_HEADING,
-    body: MOCK_CTA_BODY,
-    slideNumber: 3,
-    isLastSlide: true,
-  },
-];
+};
+
+function buildSlides(variants: NonNullable<SlideProps["variant"]>[]): SlideSpec[] {
+  return variants.map((variant, idx) => {
+    const slideNumber = idx + 1;
+    const isLast = idx === variants.length - 1;
+    if (variant === "cover") {
+      return {
+        variant,
+        heading: MOCK_HEADING,
+        body: "",
+        imageUrl: MOCK_IMAGE_BLACK_AND_WHITE,
+        slideNumber,
+      };
+    }
+    if (variant === "cta") {
+      return {
+        variant,
+        heading: MOCK_CTA_HEADING,
+        body: MOCK_CTA_BODY,
+        slideNumber,
+        isLastSlide: isLast,
+      };
+    }
+    if (variant === "quote") {
+      return {
+        variant,
+        heading: MOCK_QUOTE,
+        body: MOCK_QUOTE_BODY,
+        slideNumber,
+      };
+    }
+    if (variant === "photo" || variant === "full-photo-bottom") {
+      return {
+        variant,
+        heading: MOCK_TITLE,
+        body: MOCK_TITLE_BODY,
+        imageUrl: MOCK_IMAGE_BLACK_AND_WHITE,
+        slideNumber,
+      };
+    }
+    if (variant === "split") {
+      return {
+        variant,
+        heading: MOCK_TITLE,
+        body: MOCK_TITLE_BODY,
+        imageUrl: MOCK_IMAGE_BLACK_AND_WHITE,
+        slideNumber,
+      };
+    }
+    return {
+      variant,
+      heading: MOCK_TITLE,
+      body: MOCK_TITLE_BODY,
+      slideNumber,
+    };
+  });
+}
+
+const SLIDES_DEFAULT: SlideSpec[] = buildSlides(["cover", "headline", "cta"]);
+const SLIDES_FULL: SlideSpec[] = buildSlides(ALL_VARIANTS);
 
 export default function TemplatePreviewClient({
   initial,
+  initialFull,
+  initialDark,
 }: {
   initial: TemplateId;
+  initialFull: boolean;
+  initialDark: boolean;
 }) {
   const [selected, setSelected] = useState<TemplateId>(initial);
+  const [showAll, setShowAll] = useState<boolean>(initialFull);
+  const [dark, setDark] = useState<boolean>(initialDark);
+  const slides = showAll ? SLIDES_FULL : SLIDES_DEFAULT;
 
   useEffect(() => {
     const url = new URL(window.location.href);
     url.searchParams.set("id", selected);
+    if (showAll) url.searchParams.set("full", "1");
+    else url.searchParams.delete("full");
+    if (dark) url.searchParams.set("style", "dark");
+    else url.searchParams.delete("style");
     window.history.replaceState({}, "", url.toString());
-  }, [selected]);
+  }, [selected, showAll, dark]);
 
   return (
     <div
@@ -112,9 +177,38 @@ export default function TemplatePreviewClient({
         ))}
       </div>
 
-      <div style={{ marginBottom: 16, color: "#000" }}>
-        <strong>Template selecionado:</strong>{" "}
-        <span data-testid="selected-id">{selected}</span>
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          marginBottom: 16,
+          color: "#000",
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <strong>Template:</strong>{" "}
+          <span data-testid="selected-id">{selected}</span>
+        </div>
+        <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input
+            type="checkbox"
+            checked={showAll}
+            onChange={(e) => setShowAll(e.target.checked)}
+          />
+          <span data-testid="full-mode">
+            Mostrar todas as 9 variantes ({showAll ? "on" : "off"})
+          </span>
+        </label>
+        <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input
+            type="checkbox"
+            checked={dark}
+            onChange={(e) => setDark(e.target.checked)}
+          />
+          <span data-testid="dark-mode">Dark style ({dark ? "on" : "off"})</span>
+        </label>
       </div>
 
       <div
@@ -125,7 +219,7 @@ export default function TemplatePreviewClient({
           alignItems: "flex-start",
         }}
       >
-        {SLIDES.map((slide) => (
+        {slides.map((slide) => (
           <div key={slide.slideNumber}>
             <div
               style={{
@@ -134,6 +228,7 @@ export default function TemplatePreviewClient({
                 marginBottom: 8,
                 fontFamily: "monospace",
               }}
+              data-testid={`slide-label-${slide.slideNumber}`}
             >
               slide {slide.slideNumber} · variant: {slide.variant}
             </div>
@@ -144,9 +239,9 @@ export default function TemplatePreviewClient({
               body={slide.body}
               imageUrl={slide.imageUrl}
               slideNumber={slide.slideNumber}
-              totalSlides={SLIDES.length}
+              totalSlides={slides.length}
               profile={MOCK_PROFILE}
-              style="white"
+              style={dark ? "dark" : "white"}
               isLastSlide={slide.isLastSlide}
               scale={0.42}
             />

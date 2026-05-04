@@ -13,6 +13,7 @@ import {
  */
 function parseBriefingOverrides(topic: string): {
   requiredTitle: string | null;
+  requiredCta: string | null;
   strictFidelity: boolean;
   referenceWithTwist: boolean;
   literalQuotes: string[];
@@ -36,6 +37,23 @@ function parseBriefingOverrides(topic: string): {
     }
   }
 
+  // Briefing pode pedir CTA explícita: "cta: 'X'", "no final escreva 'X'",
+  // "termina com 'X'", "call to action: ...". Quando detecta, vira ordem
+  // direta e VENCE a regra estilística "CTA semântico" do system prompt.
+  const ctaPatterns = [
+    /(?:c\.?t\.?a\.?|call\s+to\s+action|chamada\s+(?:final|para\s+a[çc][ãa]o))\s*(?:deve\s+ser|tem\s+que\s+ser|precisa\s+ser|exata|exato|literal)?\s*[:=]\s*["“”'‘’]{1,2}([^"“”'‘’]{3,240})["“”'‘’]{1,2}/i,
+    /(?:c\.?t\.?a\.?|call\s+to\s+action)\s+["“”'‘’]{1,2}([^"“”'‘’]{3,240})["“”'‘’]{1,2}/i,
+    /(?:no\s+final|[uú]ltimo\s+slide|slide\s+final|fechar?|encerre?|termina(?:r|e)?)\s+(?:com|colocar?|escreve(?:r|ndo)?|coloque)\s*:?\s*["“”'‘’]{1,2}([^"“”'‘’]{3,240})["“”'‘’]{1,2}/i,
+  ];
+  let requiredCta: string | null = null;
+  for (const p of ctaPatterns) {
+    const m = text.match(p);
+    if (m && m[1]) {
+      requiredCta = m[1].trim();
+      break;
+    }
+  }
+
   const strictFidelity =
     /siga\s+exat(a|amente)|reproduz(a|ir)\s+(o|esse|este)\s+conte[úu]do|copie\s+(o|esse|este)\s+conte[úu]do|use\s+o\s+mesmo\s+texto|exatamente\s+o\s+mesmo|palavra\s+por\s+palavra|verbatim/i.test(
       text
@@ -46,16 +64,81 @@ function parseBriefingOverrides(topic: string): {
       text
     );
 
-  // Coleta frases curtas entre aspas (≠ título) pra usar como "texto literal
-  // que o user quer ver em algum slide ou CTA". Limita a 5 pra não poluir.
+  // Coleta frases curtas entre aspas (≠ título / ≠ cta) pra usar como
+  // "texto literal que o user quer ver em algum slide". Limita a 5.
   const quoteMatches = Array.from(
     text.matchAll(/["“”'‘’]{1,2}([^"“”'‘’]{4,180})["“”'‘’]{1,2}/g)
   )
     .map((m) => m[1].trim())
-    .filter((q) => !!q && q !== requiredTitle);
+    .filter((q) => !!q && q !== requiredTitle && q !== requiredCta);
   const literalQuotes = Array.from(new Set(quoteMatches)).slice(0, 5);
 
-  return { requiredTitle, strictFidelity, referenceWithTwist, literalQuotes };
+  return {
+    requiredTitle,
+    requiredCta,
+    strictFidelity,
+    referenceWithTwist,
+    literalQuotes,
+  };
+}
+
+/**
+ * Detecta contagem explícita de slides/tópicos no brief do usuário.
+ * Bug 28/04: user pediu "cada página = 1 dos 6 tópicos do vídeo" e a IA
+ * gerou 16 slides. Aqui parseamos sinais explícitos e travamos a contagem
+ * antes do writer (depende de `advanced.numSlides` não estar setado;
+ * Modo Avançado vence).
+ *
+ * - "8 slides" / "12 paginas" / "10 cards" → semantics="exact-slides"
+ * - "6 topicos" / "5 partes" / "4 etapas" → semantics="topics-plus-shell"
+ *   (slides totais = N + 2: capa + N + CTA)
+ */
+function detectSlideCountFromBrief(brief: string): {
+  count: number;
+  semantics: "exact-slides" | "topics-plus-shell";
+} | null {
+  if (!brief) return null;
+  const text = brief
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+
+  // "X slides + capa + cta", "X slides pra cada tópico", "X slides um por
+  // tópico" → semântica = capa + N + CTA. User está descrevendo o miolo,
+  // não o total. Regex específica vence a "exact-slides" abaixo.
+  const slidesPlusShellMatch = text.match(
+    /\b(\d{1,2})\s*slides?\s*(?:\+\s*capa\s*\+\s*cta|um?\s*p(?:ra|ara)\s*cada\s*topico|por\s*topico|um\s*por\s*topico)/
+  );
+  if (slidesPlusShellMatch) {
+    const n = parseInt(slidesPlusShellMatch[1], 10);
+    if (n >= 2 && n <= 18) {
+      return { count: n, semantics: "topics-plus-shell" };
+    }
+  }
+
+  // "8 slides", "12 paginas", "10 cards"
+  const slidesMatch = text.match(
+    /\b(\d{1,2})\s*(slides?|paginas?|cards?)\b/
+  );
+  if (slidesMatch) {
+    const n = parseInt(slidesMatch[1], 10);
+    if (n >= 3 && n <= 20) {
+      return { count: n, semantics: "exact-slides" };
+    }
+  }
+
+  // "6 topicos", "5 partes", "4 secoes", "3 etapas", "7 passos" —
+  // semântica = capa + N + CTA (slides totais = N + 2)
+  const topicsMatch = text.match(
+    /\b(\d{1,2})\s*(topicos?|partes?|seco?es?|etapas?|passos?|fases?|pontos?|itens?)\b/
+  );
+  if (topicsMatch) {
+    const n = parseInt(topicsMatch[1], 10);
+    if (n >= 2 && n <= 18) {
+      return { count: n, semantics: "topics-plus-shell" };
+    }
+  }
+  return null;
 }
 import { extractContentFromUrl } from "@/lib/url-extractor";
 import { getYouTubeTranscript } from "@/lib/youtube-transcript";
@@ -89,6 +172,7 @@ import {
   describeImages,
   type ImageDescription,
 } from "@/lib/server/describe-images";
+import { z } from "zod";
 
 // 120s cobre com folga: IG extract (~12s) + NER (~5s) + Pro writer (~45s)
 // + retry Flash (~15s) + overhead. Antes era 60s — bug recorrente em gerações
@@ -173,6 +257,12 @@ interface Slide {
   variant: SlideVariant;
   /** Optional: URL direta quando o usuário subiu imagem no modo avançado. */
   imageUrl?: string;
+  /**
+   * Optional: 1-based index na lista de imagens enviadas pelo user.
+   * Quando presente, o pós-processamento usa esse mapeamento semântico
+   * (vence o fallback posicional).
+   */
+  imageRef?: number;
 }
 
 const VALID_VARIANTS: readonly SlideVariant[] = [
@@ -186,6 +276,41 @@ const VALID_VARIANTS: readonly SlideVariant[] = [
   "text-only",
   "full-photo-bottom",
 ] as const;
+
+/**
+ * Schema Zod do output do Gemini (P0-2 do audit).
+ *
+ * Antes confiávamos só na verificação `parsed.variations is Array`. Quando o
+ * modelo devolvia heading vazio, slide com variant inválido, ou body com
+ * 5000 chars, normalize "tampava o buraco" silenciosamente — o user via um
+ * carrossel quebrado sem nenhum sinal de degradação.
+ *
+ * Política agora:
+ *  - Schema falha → tenta retry strict (Flash + prompt minimal) com mensagem
+ *    específica do field/error.
+ *  - Retry também falha → 500 com mensagem clara (não cobramos do user).
+ *  - Sucesso → segue pro normalize (que ainda corrige variant inválido,
+ *    fallback de imageQuery genérico, etc — defensivo).
+ */
+const SlideSchema = z.object({
+  heading: z.string().min(1).max(400),
+  body: z.string().max(1200).optional().default(""),
+  imageQuery: z.string().max(400).optional().default(""),
+  variant: z.string().optional(),
+  imageRef: z.number().int().min(1).max(12).optional(),
+  imageUrl: z.string().url().optional(),
+});
+
+const VariationSchema = z.object({
+  title: z.string().min(1).max(300),
+  style: z.enum(["data", "story", "provocative"]).optional(),
+  ctaType: z.enum(["save", "comment", "share"]).optional(),
+  slides: z.array(SlideSchema).min(3).max(20),
+});
+
+const GenerateOutputSchema = z.object({
+  variations: z.array(VariationSchema).min(1).max(3),
+});
 
 /**
  * Distribuição narrativa default quando o modelo esquece de preencher variant
@@ -516,10 +641,19 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
           }
         }
       } catch (err) {
+        // Audit P0-5: feedback do user sumindo silenciosamente quebra a
+        // promessa "IA aprende com você". Manter como warn (não fatal —
+        // brand voice loading é best-effort) mas com Sentry pra alertar
+        // quando começar a falhar de verdade.
         console.warn(
           "[generate] falha ao ler feedback do user:",
           err instanceof Error ? err.message : err
         );
+        captureRouteError(err, {
+          route: "/api/generate",
+          userId: user.id,
+          tags: { stage: "load-user-feedback" },
+        });
       }
     }
 
@@ -562,6 +696,34 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
       advanced.numSlides <= 12
         ? Math.round(advanced.numSlides)
         : null;
+
+    // Detecta contagem explícita no texto do brief (ex.: "8 slides",
+    // "6 tópicos") quando o user NÃO usou o Modo Avançado. Bug 28/04:
+    // pediu "6 tópicos" e o modelo gerou 16 slides porque a regra
+    // estilística "6-10 slides" do prompt se sobrepunha à intenção
+    // explícita. Modo Avançado vence.
+    const detectedCount =
+      advNumSlides == null && typeof topic === "string"
+        ? detectSlideCountFromBrief(topic)
+        : null;
+    const explicitSlideCount = detectedCount
+      ? detectedCount.semantics === "topics-plus-shell"
+        ? detectedCount.count + 2 // capa + N tópicos + CTA
+        : detectedCount.count
+      : null;
+    if (explicitSlideCount) {
+      console.log(
+        `[generate] slide count explícito detectado: ${detectedCount?.count} ${detectedCount?.semantics} → ${explicitSlideCount} slides`
+      );
+    }
+
+    // Contagem final que vai pro prompt (e que será aplicada no
+    // hard-truncate pós-Gemini). Prioridade:
+    // 1. advNumSlides (Modo Avançado, UI explícita)
+    // 2. explicitSlideCount (detectado no brief: "8 slides" / "6 tópicos")
+    // 3. null → modelo escolhe entre 6-10
+    const enforcedSlideCount: number | null = advNumSlides ?? explicitSlideCount;
+
     const advPreferredStyle =
       advanced?.preferredStyle === "data" ||
       advanced?.preferredStyle === "story" ||
@@ -596,7 +758,7 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
         ? advanced.contentFramework
         : null;
     const advancedActive =
-      !!(advCustomCta || advHookDirection || advExtraContext || advNumSlides || advPreferredStyle || advContentFramework);
+      !!(advCustomCta || advHookDirection || advExtraContext || advNumSlides || advPreferredStyle || advContentFramework || enforcedSlideCount);
 
     if (sourceType === "idea" && !topic) {
       return Response.json({ error: "Topic is required" }, { status: 400 });
@@ -674,8 +836,13 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
             cost_usd: 0,
             prompt_type: "source-scrape",
           });
-        } catch {
-          /* silent */
+        } catch (err) {
+          // Silent fail aqui era invisível — perdíamos visibilidade de
+          // quanto firecrawl é usado. Não bloqueia geração.
+          console.warn(
+            "[generate] falha ao logar firecrawl scrape:",
+            err instanceof Error ? err.message : String(err)
+          );
         }
       }
     } else if (sourceType === "video" && sourceUrl) {
@@ -709,8 +876,13 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
               cost_usd: 0.02,
               prompt_type: "ig-scrape",
             });
-          } catch {
-            /* silent */
+          } catch (err) {
+            // Mantemos silent-soft — falha de log não bloqueia geração,
+            // mas pelo menos vemos no console quando o tracking quebra.
+            console.warn(
+              "[generate] falha ao logar IG scrape:",
+              err instanceof Error ? err.message : String(err)
+            );
           }
         }
       } catch (err) {
@@ -761,8 +933,28 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
       ? `
 # MODO AVANÇADO — DIRECIONAMENTOS EXPLÍCITOS DO USUÁRIO (prioridade alta)
 Esses direcionamentos VENCEM as defaults do prompt. Respeite literalmente.
-${advHookDirection ? `- Gancho (slide 1) deve: ${advHookDirection}\n` : ""}${advCustomCta ? `- CTA final EXATO a usar (não reescreva, mantenha a intenção): "${advCustomCta}"\n` : ""}${advNumSlides ? `- Número de slides desejado: EXATAMENTE ${advNumSlides} (incluindo hook e CTA).\n` : ""}${advPreferredStyle ? `- Estilo forçado: ENTREGUE APENAS A VARIAÇÃO "${advPreferredStyle}" (ignore as outras 2 — array variations terá 1 item só).\n` : ""}${advContentFramework ? `- Framework narrativo ATIVO: ${frameworkSpec[advContentFramework]}\n` : ""}${advExtraContext ? `- Contexto adicional a considerar (dados, provas, quotes, exemplos do usuário):\n"""\n${advExtraContext}\n"""\n` : ""}
+${advHookDirection ? `- Gancho (slide 1) deve: ${advHookDirection}\n` : ""}${advCustomCta ? `- CTA final EXATO a usar (não reescreva, mantenha a intenção): "${advCustomCta}"\n` : ""}${enforcedSlideCount ? `- Número de slides desejado: EXATAMENTE ${enforcedSlideCount} (incluindo hook e CTA).\n` : ""}${advPreferredStyle ? `- Estilo forçado: ENTREGUE APENAS A VARIAÇÃO "${advPreferredStyle}" (ignore as outras 2 — array variations terá 1 item só).\n` : ""}${advContentFramework ? `- Framework narrativo ATIVO: ${frameworkSpec[advContentFramework]}\n` : ""}${advExtraContext ? `- Contexto adicional a considerar (dados, provas, quotes, exemplos do usuário):\n"""\n${advExtraContext}\n"""\n` : ""}
 Se algum desses itens contradizer outra instrução genérica, o direcionamento do usuário vence.
+`
+      : "";
+
+    // Regra inviolável de contagem — destaca como REGRA #2 acima do resto
+    // do prompt. Detalha estrutura quando user pediu N tópicos
+    // (capa + N + CTA), pra evitar IA expandir/comprimir tópicos.
+    const slideCountStrictBlock = enforcedSlideCount
+      ? `
+
+🔒 REGRA INVIOLÁVEL #2 — CONTAGEM DE SLIDES
+NÚMERO DE SLIDES = EXATAMENTE ${enforcedSlideCount}. Nem mais, nem menos.
+${
+  detectedCount?.semantics === "topics-plus-shell"
+    ? `O usuário pediu ${detectedCount.count} tópicos. Estrutura obrigatória:
+- Slide 1: capa (cover)
+- Slides 2 a ${enforcedSlideCount - 1}: cada um cobre exatamente UM dos ${detectedCount.count} tópicos da fonte/brief — não invente tópicos extras, não funda dois em um.
+- Slide ${enforcedSlideCount}: CTA final.`
+    : `Capa + miolo + CTA cabem dentro de ${enforcedSlideCount}. Não estoure.`
+}
+Se você gerar diferente, o output será REJEITADO.
 `
       : "";
 
@@ -809,7 +1001,7 @@ ${languageInstruction}
 - NÃO muda o CTA.
 - NÃO inventa dado, empresa, nome, número.
 
-${advancedBlock}
+${advancedBlock}${slideCountStrictBlock}
 
 # OUTPUT
 Retorne APENAS 1 variação (array \`variations\` com 1 item), style: "story" como default.
@@ -918,7 +1110,7 @@ ${templateLockBlock}
 Escreva como se uma criança de 12 anos precisasse entender sem reler. Frases máx 18 palavras. Zero jargão, zero corporês. Se não falaria em conversa com amigo, reescreva. Exceção: tom analítico pode usar 1-2 termos do nicho que o leitor reconhece.
 
 ${languageInstruction}
-TONE: ${tone || "professional"}${shouldApplyNiche ? ` | NICHE: ${niche}` : ""}${nicheGuide}${igFidelityBlock}${advancedBlock}
+TONE: ${tone || "professional"}${shouldApplyNiche ? ` | NICHE: ${niche}` : ""}${nicheGuide}${igFidelityBlock}${advancedBlock}${slideCountStrictBlock}
 
 Briefing do usuário é inspiração — você ESCREVE o carrossel, não só formata. Preserve dados/nomes (zero invenção).${brandContext ? `
 
@@ -1554,14 +1746,50 @@ Regras:
         }
       }
 
-      const typed = parsed as { variations?: unknown };
-      if (!typed.variations || !Array.isArray(typed.variations)) {
+      // Zod schema validation (P0-2 do audit). Antes só checávamos
+      // `Array.isArray(variations)` — heading vazio, body absurdo, variant
+      // inválido passavam direto e o normalize tampava o buraco. Agora se
+      // o schema falha, retry strict roda com mensagem específica do erro.
+      const schemaResult = GenerateOutputSchema.safeParse(parsed);
+      if (!schemaResult.success) {
+        const issues = schemaResult.error.issues.slice(0, 5).map((iss) => ({
+          path: iss.path.join("."),
+          code: iss.code,
+          message: iss.message,
+        }));
+        try {
+          getPostHogClient().capture({
+            distinctId: user.id,
+            event: "gemini_schema_failed",
+            properties: {
+              strict,
+              issues,
+              firstPath: issues[0]?.path,
+              firstCode: issues[0]?.code,
+            },
+          });
+        } catch {
+          // posthog é fire-and-forget — sem ele não pode quebrar a request
+        }
+        captureRouteError(
+          new Error(
+            `gemini-schema-failed: ${issues
+              .map((i) => `${i.path}=${i.code}`)
+              .join(",")}`
+          ),
+          {
+            route: "/api/generate",
+            userId: user.id,
+            tags: { stage: "gemini-schema", strict: String(strict) },
+            extra: { issues, textResponseHead: textResponse.slice(0, 600) },
+          }
+        );
         return {
           ok: false,
           reason: "structure",
           details: {
-            resultKeys: Object.keys(typed ?? {}),
-            variationsType: typeof typed?.variations,
+            resultKeys: Object.keys(parsed ?? {}),
+            schemaIssues: issues,
             strict,
           },
           retryable: true,
@@ -1570,7 +1798,7 @@ Regras:
 
       return {
         ok: true,
-        result: parsed as GenerateResponse,
+        result: schemaResult.data as unknown as GenerateResponse,
         textResponse,
         inputTokens,
         outputTokens,
@@ -1705,6 +1933,7 @@ Regras:
           imageQuery?: unknown;
           variant?: unknown;
           imageUrl?: unknown;
+          imageRef?: unknown;
         };
         const heading =
           typeof raw.heading === "string" && raw.heading.trim()
@@ -1748,7 +1977,21 @@ Regras:
         } else {
           variant = normalizeVariant(raw.variant, i, total);
         }
-        return { heading, body, imageQuery, variant, ...(imageUrl ? { imageUrl } : {}) };
+        // Preserva imageRef quando o Gemini devolveu um número 1-based —
+        // sem isso, etapa 1 do mapping de imagens do user (linhas abaixo)
+        // sempre cai no fallback posicional. Bug do P0-3 do audit.
+        const imageRef =
+          typeof raw.imageRef === "number" && Number.isFinite(raw.imageRef)
+            ? Math.round(raw.imageRef)
+            : undefined;
+        return {
+          heading,
+          body,
+          imageQuery,
+          variant,
+          ...(typeof imageRef === "number" ? { imageRef } : {}),
+          ...(imageUrl ? { imageUrl } : {}),
+        };
       });
 
       // Anti-monotonia: nunca 2 slides iguais consecutivos. Percorre toda
@@ -1783,6 +2026,37 @@ Regras:
       );
       if (filtered.length > 0) {
         result.variations = filtered.slice(0, 1);
+      }
+    }
+
+    // Hard truncate: se o user pediu N slides explícito (Modo Avançado OU
+    // detecção no brief tipo "6 tópicos"), e o modelo desobedeceu, corta
+    // pra contagem certa. Mantém capa (slide 0) e CTA (último), corta
+    // o miolo. Bug 28/04: user pediu 8 slides, modelo deu 16; agora trunca
+    // pra 8 mantendo capa + 6 do meio + CTA. Se vier MENOS slides do que
+    // pedido, deixa rolar — não tem como inventar slide com qualidade
+    // pós-fato. Toast no front pode avisar.
+    if (enforcedSlideCount && enforcedSlideCount >= 3) {
+      for (const variation of result.variations) {
+        if (
+          !variation?.slides ||
+          variation.slides.length === enforcedSlideCount
+        ) {
+          continue;
+        }
+        const slides = variation.slides;
+        if (slides.length > enforcedSlideCount) {
+          const cover = slides[0];
+          const cta = slides[slides.length - 1];
+          const middleNeeded = enforcedSlideCount - 2;
+          const middleAvailable = slides.slice(1, -1);
+          // Pega os primeiros N-2 do miolo (ordem narrativa preservada).
+          const middle = middleAvailable.slice(0, middleNeeded);
+          variation.slides = [cover, ...middle, cta];
+          console.log(
+            `[generate] truncate: ${slides.length} → ${variation.slides.length} slides (enforced=${enforcedSlideCount})`
+          );
+        }
       }
     }
 

@@ -8,6 +8,7 @@ import {
 } from "@/lib/carousel-templates";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { rateLimit, getRateLimitKey, getRequestIp } from "@/lib/server/rate-limit";
+import { captureRouteError } from "@/lib/server/sentry";
 import {
   costForCall,
   costForImages,
@@ -321,8 +322,19 @@ export async function POST(request: Request) {
             )
             .slice(0, 10);
         }
-      } catch {
-        /* silently fall back to no aesthetic */
+      } catch (err) {
+        // Falha aqui = perde brand aesthetic (paleta, mood, image rules
+        // que vieram de feedback do user). Imagem ainda gera, mas com
+        // estética genérica — degradação invisível pro user. Log.
+        console.warn(
+          "[images] falha ao carregar brand_analysis (aesthetic):",
+          err instanceof Error ? err.message : String(err)
+        );
+        captureRouteError(err, {
+          route: "/api/images",
+          userId: user.id,
+          tags: { stage: "load-brand-aesthetic" },
+        });
       }
     }
 
@@ -446,8 +458,19 @@ export async function POST(request: Request) {
             ],
           });
         }
-      } catch {
-        /* best-effort */
+      } catch (err) {
+        // Cache miss não é crítico — segue gerando do zero. Mas falha
+        // recorrente aqui significa Supabase/Storage com problema, e o user
+        // perde o cache hit (paga 1 imagem nova quando deveria reusar).
+        console.warn(
+          "[images] cache lookup falhou:",
+          err instanceof Error ? err.message : String(err)
+        );
+        captureRouteError(err, {
+          route: "/api/images",
+          userId: user.id,
+          tags: { stage: "cache-lookup", cacheMode: String(mode ?? "unknown") },
+        });
       }
     }
 

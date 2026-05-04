@@ -370,7 +370,23 @@ function normalizeStructuredPrompt(
     return fallback;
   };
 
-  const fallbackSubject = `editorial scene inspired by: ${input.heading.slice(0, 100)}`;
+  // P0-4 do audit: heading costuma estar em PT-BR mas Imagen é treinado em
+  // inglês — "editorial scene inspired by: PARE DE OTIMIZAR LANDING PAGE"
+  // gera resultado degradado. Preferimos entity nomeada (NER), depois niche
+  // genérico. Heading só entra se nada melhor existir, e mesmo assim
+  // marcamos como "subject from non-english brief" pra Imagen entender que
+  // é texto fora do dicionário canônico.
+  const firstEntity =
+    Array.isArray(input.facts?.entities) && input.facts.entities.length > 0
+      ? String(input.facts.entities[0]).slice(0, 80)
+      : "";
+  const nicheFallback =
+    typeof input.niche === "string" && input.niche && input.niche !== "general"
+      ? `${input.niche} concept scene`
+      : "abstract minimal editorial composition";
+  const fallbackSubject = firstEntity
+    ? `editorial scene featuring ${firstEntity}`
+    : nicheFallback;
   return {
     subject: s(r.subject, fallbackSubject),
     composition: s(

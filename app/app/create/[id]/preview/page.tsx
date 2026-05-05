@@ -160,6 +160,32 @@ export default function PreviewPage(props: {
   const canPlanInCalendar =
     isAdmin || profile?.plan === "pro" || profile?.plan === "business";
   const [plannedModalOpenPreview, setPlannedModalOpenPreview] = useState(false);
+  // Conta entries no calendário linkadas ao draft atual (carouselId).
+  // Mostra "X agendamentos" como feedback contextual. Atualiza quando
+  // user adiciona via modal.
+  const [carouselEntries, setCarouselEntries] = useState<
+    { id: string; status: string; scheduled_for: string | null }[] | null
+  >(null);
+  useEffect(() => {
+    if (!session || !draft?.id || !canPlanInCalendar) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/zernio/by-carousel?carouselId=${encodeURIComponent(draft.id)}`,
+          { headers: { Authorization: `Bearer ${session.access_token}` } }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setCarouselEntries(data.posts || []);
+      } catch {
+        // silent
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session, draft?.id, canPlanInCalendar, plannedModalOpenPreview, zernioOpen]);
   async function handleExportZip() {
     await exportZip(draft?.title || "carrossel");
     scheduleFeedbackModal();
@@ -812,6 +838,43 @@ export default function PreviewPage(props: {
               </div>
             )}
           </div>
+
+          {/* Indicador de entries no calendário pra esse carrossel */}
+          {canPlanInCalendar && carouselEntries && carouselEntries.length > 0 && (
+            <div
+              style={{
+                padding: 12,
+                background: "var(--sv-pink, #D262B2)",
+                border: "1.5px solid var(--sv-ink)",
+                boxShadow: "2px 2px 0 0 var(--sv-ink)",
+                fontFamily: "var(--sv-mono)",
+                fontSize: 10,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                fontWeight: 700,
+                color: "var(--sv-ink)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                justifyContent: "space-between",
+              }}
+            >
+              <span>
+                {carouselEntries.length}{" "}
+                {carouselEntries.length === 1 ? "agendamento" : "agendamentos"}
+              </span>
+              <a
+                href="/app/zernio/calendar"
+                style={{
+                  color: "var(--sv-ink)",
+                  textDecoration: "underline",
+                  fontSize: 9,
+                }}
+              >
+                Ver calendário →
+              </a>
+            </div>
+          )}
 
           {/* Adicionar ao calendário (Pro) — planejamento manual sem Zernio */}
           {!canScheduleZernio && canPlanInCalendar && draft?.id && (

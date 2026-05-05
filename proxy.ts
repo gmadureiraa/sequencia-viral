@@ -111,6 +111,9 @@ export function getSupabaseSessionEmail(request: NextRequest): string | null {
   return null;
 }
 
+// Mantido pra compat futura — quando migrar pra @supabase/ssr e
+// reativar gate edge, volta a ser usado em proxy().
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const ADMIN_EMAILS_LOWER = new Set(ADMIN_EMAILS.map((e) => e.toLowerCase()));
 
 /**

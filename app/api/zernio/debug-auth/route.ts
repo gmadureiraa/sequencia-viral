@@ -61,7 +61,7 @@ export async function GET(request: Request) {
   const isAdmin = email !== null && ADMIN_EMAILS.map((e) => e.toLowerCase()).includes(email);
 
   // Diagnóstico extra: tenta extrair JWT bruto pra debug se falhou
-  let jwtParseAttempt: {
+  const jwtParseAttempt: {
     sourceCookies: number;
     combinedSize: number;
     parseOk: boolean;

@@ -45,7 +45,9 @@ function nameSlug(name: string | null | undefined): string {
   // Remove acentos e caracteres nao-ASCII, mantem so [A-Z0-9].
   const ascii = raw
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    // Remove combining diacritical marks (U+0300–U+036F) — uso \p{M}
+    // pra evitar problemas com encoding do source file.
+    .replace(/\p{M}/gu, "")
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "");
   return (ascii || "USER").slice(0, 12);

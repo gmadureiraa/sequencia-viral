@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  Calendar,
   ChevronDown,
   Clock,
   Copy,
@@ -27,19 +26,6 @@ import { useAuth } from "@/lib/auth-context";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
 import { isAdminEmail } from "@/lib/admin-emails";
 
-/**
- * /app/admin/zernio/autopilot — Piloto Auto v2.
- *
- * Triggers (gatilhos) que disparam geração de carrossel + post automático.
- *
- * 3 tipos:
- *  - schedule: cadência baseada em tempo (daily, every_n_days, etc).
- *  - rss:      poll URL RSS, dispara quando aparece nova entrada.
- *  - webhook:  endpoint público com secret pra Zapier/Make/n8n disparar.
- *
- * Plataformas: IG + LinkedIn (multi-checkbox, default ambas).
- */
-
 type TriggerType = "schedule" | "rss" | "webhook";
 type CadenceType = "daily" | "every_n_days" | "weekly_dow" | "specific_dates";
 type PublishMode = "scheduled" | "draft" | "publish_now";
@@ -54,7 +40,6 @@ interface Trigger {
   niche: string | null;
   target_platforms: string[];
   publish_mode: PublishMode;
-  // schedule
   cadence_type: CadenceType | null;
   interval_days: number | null;
   days_of_week: number[] | null;
@@ -63,14 +48,11 @@ interface Trigger {
   publish_minute: number;
   timezone: string;
   next_run_at: string | null;
-  // rss
   rss_url: string | null;
   rss_check_interval_minutes: number;
   rss_last_checked_at: string | null;
   rss_max_items_per_check: number;
-  // webhook
   webhook_secret: string | null;
-  // meta
   last_fired_at: string | null;
   last_error: string | null;
   created_at: string;
@@ -86,28 +68,38 @@ interface Run {
   error: string | null;
 }
 
-const TRIGGER_TYPE_META: Record<TriggerType, { label: string; icon: typeof Clock; desc: string; color: string }> = {
+const TRIGGER_TYPE_META: Record<
+  TriggerType,
+  { label: string; icon: typeof Clock; desc: string; cardBg: string; iconBg: string }
+> = {
   schedule: {
     label: "Agendado",
     icon: Clock,
-    desc: "Dispara em cadência fixa (todo dia, semanal, datas específicas)",
-    color: "#3b82f6",
+    desc: "Cadência fixa de tempo (diário, semanal, datas específicas)",
+    cardBg: "var(--sv-white)",
+    iconBg: "var(--sv-green)",
   },
   rss: {
     label: "RSS Feed",
     icon: Rss,
-    desc: "Toda vez que aparece um item novo num feed RSS",
-    color: "#f97316",
+    desc: "Toda vez que aparece item novo num feed RSS",
+    cardBg: "var(--sv-white)",
+    iconBg: "var(--sv-yellow)",
   },
   webhook: {
     label: "Webhook",
     icon: Webhook,
-    desc: "Endpoint público pra Zapier / Make / n8n disparar manualmente",
-    color: "#a855f7",
+    desc: "Endpoint público pra Zapier / Make / n8n disparar",
+    cardBg: "var(--sv-white)",
+    iconBg: "var(--sv-pink)",
   },
 };
 
 const DOW_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const PLATFORM_COLORS: Record<string, string> = {
+  instagram: "var(--sv-pink, #D262B2)",
+  linkedin: "var(--sv-yellow, #F5C518)",
+};
 
 export default function ZernioAutopilotPage() {
   const router = useRouter();
@@ -116,7 +108,6 @@ export default function ZernioAutopilotPage() {
   const [loading, setLoading] = useState(true);
   const [runningNowFor, setRunningNowFor] = useState<string | null>(null);
 
-  // Form state
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -129,19 +120,16 @@ export default function ZernioAutopilotPage() {
     new Set(["instagram", "linkedin"])
   );
   const [fPublishMode, setFPublishMode] = useState<PublishMode>("scheduled");
-  // schedule
   const [fCadence, setFCadence] = useState<CadenceType>("every_n_days");
   const [fInterval, setFInterval] = useState(3);
   const [fDays, setFDays] = useState<number[]>([1, 3, 5]);
   const [fSpecificDates, setFSpecificDates] = useState("");
   const [fHour, setFHour] = useState(9);
   const [fMinute, setFMinute] = useState(0);
-  // rss
   const [fRssUrl, setFRssUrl] = useState("");
   const [fRssIntervalMin, setFRssIntervalMin] = useState(60);
   const [fRssMaxItems, setFRssMaxItems] = useState(1);
 
-  // Runs (lazy)
   const [openRunsFor, setOpenRunsFor] = useState<string | null>(null);
   const [runsByTrigger, setRunsByTrigger] = useState<Record<string, Run[]>>({});
   const [loadingRunsFor, setLoadingRunsFor] = useState<string | null>(null);
@@ -155,7 +143,9 @@ export default function ZernioAutopilotPage() {
     if (!session) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/zernio/triggers", { headers: jsonWithAuth(session) });
+      const res = await fetch("/api/zernio/triggers", {
+        headers: jsonWithAuth(session),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Falha");
       setTriggers(data.triggers || []);
@@ -225,10 +215,7 @@ export default function ZernioAutopilotPage() {
     if (!fName.trim()) return toast.error("Nome obrigatório.");
     if (fPlatforms.size === 0)
       return toast.error("Escolha pelo menos 1 plataforma.");
-    const themesList = fThemes
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const themesList = fThemes.split("\n").map((s) => s.trim()).filter(Boolean);
     if (fType !== "rss" && themesList.length === 0) {
       return toast.error("Adicione pelo menos 1 tema.");
     }
@@ -250,7 +237,6 @@ export default function ZernioAutopilotPage() {
         targetPlatforms: Array.from(fPlatforms),
         publishMode: fPublishMode,
       };
-
       if (fType === "schedule") {
         payload.cadenceType = fCadence;
         if (fCadence === "every_n_days") payload.intervalDays = fInterval;
@@ -272,8 +258,7 @@ export default function ZernioAutopilotPage() {
 
       let res;
       if (editingId) {
-        // PATCH usa snake_case (DB column names)
-        const patchPayload: Record<string, unknown> = {
+        const patch: Record<string, unknown> = {
           name: payload.name,
           themes: payload.themes,
           editorial_line: payload.editorialLine,
@@ -282,21 +267,21 @@ export default function ZernioAutopilotPage() {
           publish_mode: payload.publishMode,
         };
         if (fType === "schedule") {
-          patchPayload.cadence_type = payload.cadenceType;
-          patchPayload.interval_days = payload.intervalDays;
-          patchPayload.days_of_week = payload.daysOfWeek;
-          patchPayload.specific_dates = payload.specificDates;
-          patchPayload.publish_hour = payload.publishHour;
-          patchPayload.publish_minute = payload.publishMinute;
+          patch.cadence_type = payload.cadenceType;
+          patch.interval_days = payload.intervalDays;
+          patch.days_of_week = payload.daysOfWeek;
+          patch.specific_dates = payload.specificDates;
+          patch.publish_hour = payload.publishHour;
+          patch.publish_minute = payload.publishMinute;
         } else if (fType === "rss") {
-          patchPayload.rss_url = payload.rssUrl;
-          patchPayload.rss_check_interval_minutes = payload.rssCheckIntervalMinutes;
-          patchPayload.rss_max_items_per_check = payload.rssMaxItemsPerCheck;
+          patch.rss_url = payload.rssUrl;
+          patch.rss_check_interval_minutes = payload.rssCheckIntervalMinutes;
+          patch.rss_max_items_per_check = payload.rssMaxItemsPerCheck;
         }
         res = await fetch(`/api/zernio/triggers/${editingId}`, {
           method: "PATCH",
           headers: jsonWithAuth(session),
-          body: JSON.stringify(patchPayload),
+          body: JSON.stringify(patch),
         });
       } else {
         res = await fetch("/api/zernio/triggers", {
@@ -307,7 +292,9 @@ export default function ZernioAutopilotPage() {
       }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Falha");
-      toast.success(`Trigger "${data.trigger.name}" ${editingId ? "atualizado" : "criado"}.`);
+      toast.success(
+        `"${data.trigger.name}" ${editingId ? "atualizado" : "criado"}.`
+      );
       setShowForm(false);
       resetForm();
       await fetchTriggers();
@@ -360,7 +347,7 @@ export default function ZernioAutopilotPage() {
   const onDelete = useCallback(
     async (id: string) => {
       if (!session) return;
-      if (!confirm("Deletar esse gatilho? Histórico de runs vai junto.")) return;
+      if (!confirm("Deletar esse gatilho?")) return;
       try {
         const res = await fetch(`/api/zernio/triggers/${id}`, {
           method: "DELETE",
@@ -379,7 +366,8 @@ export default function ZernioAutopilotPage() {
   const onRunNow = useCallback(
     async (id: string) => {
       if (!session) return;
-      if (!confirm("Disparar AGORA? Vai gerar carrossel + agendar/postar.")) return;
+      if (!confirm("Disparar AGORA? Vai gerar carrossel + agendar/postar."))
+        return;
       setRunningNowFor(id);
       try {
         const res = await fetch(`/api/zernio/triggers/${id}/run-now`, {
@@ -389,7 +377,10 @@ export default function ZernioAutopilotPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Falha");
         if (data.status === "scheduled") toast.success("Agendado.");
-        else toast.warning(`${data.status}${data.detail ? `: ${data.detail}` : ""}`);
+        else
+          toast.warning(
+            `${data.status}${data.detail ? `: ${data.detail}` : ""}`
+          );
         setRunsByTrigger((prev) => {
           const next = { ...prev };
           delete next[id];
@@ -439,52 +430,84 @@ export default function ZernioAutopilotPage() {
     []
   );
 
-  const focusedTriggers = useMemo(
-    () => triggers.filter((t) => t.is_active),
-    [triggers]
-  );
-  const inactiveTriggers = useMemo(
+  const focused = useMemo(() => triggers.filter((t) => t.is_active), [triggers]);
+  const inactive = useMemo(
     () => triggers.filter((t) => !t.is_active),
     [triggers]
   );
 
   if (authLoading || !user) {
     return (
-      <div style={containerStyle}>
+      <div
+        className="flex items-center justify-center"
+        style={{ minHeight: "60vh" }}
+      >
         <Loader2 className="animate-spin" size={20} />
       </div>
     );
   }
 
   return (
-    <div style={containerStyle}>
-      <Link href="/app/admin/zernio" style={backLinkStyle}>
-        <ArrowLeft size={14} /> Voltar
+    <div
+      className="mx-auto px-6 py-8 lg:px-10 lg:py-12"
+      style={{ maxWidth: 1100 }}
+    >
+      <Link
+        href="/app/admin/zernio"
+        className="inline-flex items-center gap-1 mb-4"
+        style={{
+          fontFamily: "var(--sv-mono)",
+          fontSize: 10.5,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "var(--sv-muted, #6b6b6b)",
+          textDecoration: "none",
+        }}
+      >
+        <ArrowLeft size={12} /> Voltar
       </Link>
 
-      <header style={heroStyle}>
+      {/* HERO */}
+      <header className="flex flex-wrap items-start justify-between gap-4 mb-8">
         <div style={{ flex: 1, minWidth: 280 }}>
-          <span style={kickerStyle}>
-            <Rocket size={11} /> Piloto Auto · Gatilhos
+          <span className="sv-eyebrow">
+            <span className="sv-dot" /> Nº 04 · Piloto Auto · Gatilhos
           </span>
-          <h1 style={titleStyle}>
+          <h1
+            className="sv-display mt-3"
+            style={{ fontSize: "clamp(34px, 5.2vw, 52px)", lineHeight: 1.02 }}
+          >
             Postar no <em>automático</em>.
           </h1>
-          <p style={subtitleStyle}>
-            Configure um gatilho (tempo, RSS feed ou webhook). A IA gera o
+          <p
+            className="mt-2"
+            style={{
+              color: "var(--sv-muted, #555)",
+              fontSize: 13.5,
+              maxWidth: 540,
+            }}
+          >
+            Configure um gatilho — tempo, RSS feed ou webhook. A IA gera o
             carrossel no seu DNA e posta no Instagram + LinkedIn sem você
             levantar um dedo.
           </p>
         </div>
-        <button onClick={fetchTriggers} style={btnGhost} disabled={loading}>
-          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+        <button
+          onClick={fetchTriggers}
+          className="sv-btn sv-btn-outline"
+          disabled={loading}
+        >
+          <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
           Atualizar
         </button>
       </header>
 
       {/* TIPOS DE GATILHO */}
       {!showForm && (
-        <section style={typeCardsGridStyle}>
+        <section
+          className="grid gap-4 mb-8"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}
+        >
           {(Object.keys(TRIGGER_TYPE_META) as TriggerType[]).map((type) => {
             const meta = TRIGGER_TYPE_META[type];
             const Icon = meta.icon;
@@ -496,21 +519,49 @@ export default function ZernioAutopilotPage() {
                   setFType(type);
                   setShowForm(true);
                 }}
-                style={{ ...typeCardStyle, borderColor: meta.color }}
+                className="sv-card text-left flex flex-col gap-3"
+                style={{ cursor: "pointer", padding: 22, fontFamily: "inherit" }}
               >
                 <div
                   style={{
-                    ...typeCardIcon,
-                    background: meta.color,
-                    color: "#fff",
+                    ...iconWrapStyle,
+                    background: meta.iconBg,
                   }}
                 >
-                  <Icon size={22} />
+                  <Icon size={20} color="var(--sv-ink)" />
                 </div>
-                <div style={typeCardTitle}>{meta.label}</div>
-                <div style={typeCardDesc}>{meta.desc}</div>
-                <div style={typeCardCTA}>
-                  <Plus size={12} /> Criar gatilho
+                <h3
+                  className="sv-display"
+                  style={{ fontSize: 22, lineHeight: 1.05, margin: 0 }}
+                >
+                  {meta.label}
+                </h3>
+                <p
+                  style={{
+                    fontSize: 12.5,
+                    color: "var(--sv-muted, #555)",
+                    margin: 0,
+                    lineHeight: 1.45,
+                    minHeight: 36,
+                  }}
+                >
+                  {meta.desc}
+                </p>
+                <div
+                  style={{
+                    fontFamily: "var(--sv-mono)",
+                    fontSize: 9.5,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    fontWeight: 700,
+                    marginTop: "auto",
+                    color: "var(--sv-ink)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  <Plus size={10} /> Criar gatilho
                 </div>
               </button>
             );
@@ -520,33 +571,46 @@ export default function ZernioAutopilotPage() {
 
       {/* FORM */}
       {showForm && (
-        <section style={formCardStyle} data-trigger-form>
-          <div style={formHeaderStyle}>
-            <h2 style={h2Style}>
-              {editingId ? "Editar gatilho" : "Novo gatilho"} —{" "}
-              <span style={{ color: TRIGGER_TYPE_META[fType].color }}>
-                {TRIGGER_TYPE_META[fType].label}
+        <section className="sv-card mb-6" data-trigger-form style={{ padding: 24 }}>
+          <div className="flex justify-between items-center mb-5">
+            <div>
+              <span
+                style={{
+                  fontFamily: "var(--sv-mono)",
+                  fontSize: 9.5,
+                  letterSpacing: "0.18em",
+                  textTransform: "uppercase",
+                  color: "var(--sv-muted, #888)",
+                }}
+              >
+                {editingId ? "Editar gatilho" : "Novo gatilho"}
               </span>
-            </h2>
+              <h2
+                className="sv-display"
+                style={{ fontSize: 26, margin: "4px 0 0", lineHeight: 1.04 }}
+              >
+                {TRIGGER_TYPE_META[fType].label}
+              </h2>
+            </div>
             <button
               onClick={() => {
                 setShowForm(false);
                 resetForm();
               }}
-              style={btnGhost}
+              className="sv-btn sv-btn-outline"
             >
               Cancelar
             </button>
           </div>
 
-          {/* Tipo (só na criação) */}
           {!editingId && (
-            <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>Tipo</label>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <div style={{ marginBottom: 16 }}>
+              <Label>Tipo</Label>
+              <div className="flex gap-2 flex-wrap">
                 {(Object.keys(TRIGGER_TYPE_META) as TriggerType[]).map((t) => {
                   const meta = TRIGGER_TYPE_META[t];
                   const Icon = meta.icon;
+                  const on = fType === t;
                   return (
                     <button
                       key={t}
@@ -554,12 +618,12 @@ export default function ZernioAutopilotPage() {
                       onClick={() => setFType(t)}
                       style={{
                         ...typeChipStyle,
-                        background: fType === t ? meta.color : "transparent",
-                        color: fType === t ? "#fff" : "var(--sv-ink)",
-                        borderColor: meta.color,
+                        background: on ? meta.iconBg : "var(--sv-white)",
+                        color: "var(--sv-ink)",
+                        boxShadow: on ? "2px 2px 0 0 var(--sv-ink)" : "none",
                       }}
                     >
-                      <Icon size={12} /> {meta.label}
+                      <Icon size={11} /> {meta.label}
                     </button>
                   );
                 })}
@@ -567,17 +631,17 @@ export default function ZernioAutopilotPage() {
             </div>
           )}
 
-          <div style={{ display: "grid", gap: 12 }}>
-            <FormField label="Nome do gatilho">
+          <div className="grid gap-4">
+            <Field label="Nome do gatilho">
               <input
                 value={fName}
                 onChange={(e) => setFName(e.target.value)}
                 placeholder="Ex: Posts diários sobre marketing"
                 style={inputStyle}
               />
-            </FormField>
+            </Field>
 
-            <FormField
+            <Field
               label={
                 fType === "rss"
                   ? "Temas fallback (opcional — se RSS estiver vazio, sorteia daqui)"
@@ -591,51 +655,57 @@ export default function ZernioAutopilotPage() {
                 placeholder={
                   "Marketing pra agência B2B\nIA aplicada a redes sociais\nFunil de conteúdo orgânico"
                 }
-                style={{ ...inputStyle, resize: "vertical", fontFamily: "var(--sv-sans)" }}
+                style={{
+                  ...inputStyle,
+                  resize: "vertical",
+                  fontFamily: "var(--sv-sans)",
+                }}
               />
-            </FormField>
+            </Field>
 
-            <FormField label="Linha editorial / voz (opcional)">
+            <Field label="Linha editorial / voz (opcional)">
               <textarea
                 value={fEditorial}
                 onChange={(e) => setFEditorial(e.target.value)}
                 rows={3}
                 placeholder="Ex: tom direto, exemplos concretos, primeira pessoa"
-                style={{ ...inputStyle, resize: "vertical", fontFamily: "var(--sv-sans)" }}
+                style={{
+                  ...inputStyle,
+                  resize: "vertical",
+                  fontFamily: "var(--sv-sans)",
+                }}
               />
-            </FormField>
+            </Field>
 
-            <FormField label="Nicho (opcional)">
+            <Field label="Nicho (opcional)">
               <input
                 value={fNiche}
                 onChange={(e) => setFNiche(e.target.value)}
                 placeholder="Ex: marketing, cripto, finance"
                 style={inputStyle}
               />
-            </FormField>
+            </Field>
 
-            <FormField label={`Plataformas alvo (${fPlatforms.size})`}>
-              <div style={{ display: "flex", gap: 8 }}>
+            <Field label={`Plataformas alvo (${fPlatforms.size})`}>
+              <div className="flex gap-2">
                 {(["instagram", "linkedin"] as const).map((p) => {
-                  const active = fPlatforms.has(p);
-                  const accent = p === "instagram" ? "#E4405F" : "#0A66C2";
+                  const on = fPlatforms.has(p);
                   return (
                     <button
                       key={p}
                       type="button"
-                      onClick={() => {
+                      onClick={() =>
                         setFPlatforms((prev) => {
                           const next = new Set(prev);
                           if (next.has(p)) next.delete(p);
                           else next.add(p);
                           return next;
-                        });
-                      }}
+                        })
+                      }
                       style={{
-                        ...platformChipStyle,
-                        background: active ? accent : "transparent",
-                        color: active ? "#fff" : "var(--sv-ink)",
-                        borderColor: accent,
+                        ...platformChipBigStyle,
+                        background: on ? PLATFORM_COLORS[p] : "var(--sv-white)",
+                        boxShadow: on ? "2px 2px 0 0 var(--sv-ink)" : "none",
                       }}
                     >
                       {p === "instagram" ? "Instagram" : "LinkedIn"}
@@ -643,12 +713,11 @@ export default function ZernioAutopilotPage() {
                   );
                 })}
               </div>
-            </FormField>
+            </Field>
 
-            {/* SCHEDULE specific */}
             {fType === "schedule" && (
               <>
-                <FormField label="Cadência">
+                <Field label="Cadência">
                   <select
                     value={fCadence}
                     onChange={(e) => setFCadence(e.target.value as CadenceType)}
@@ -659,10 +728,10 @@ export default function ZernioAutopilotPage() {
                     <option value="weekly_dow">Dias da semana específicos</option>
                     <option value="specific_dates">Datas específicas</option>
                   </select>
-                </FormField>
+                </Field>
 
                 {fCadence === "every_n_days" && (
-                  <FormField label="Intervalo (dias)">
+                  <Field label="Intervalo (dias)">
                     <input
                       type="number"
                       min={1}
@@ -671,12 +740,12 @@ export default function ZernioAutopilotPage() {
                       onChange={(e) => setFInterval(Number(e.target.value))}
                       style={inputStyle}
                     />
-                  </FormField>
+                  </Field>
                 )}
 
                 {fCadence === "weekly_dow" && (
-                  <FormField label="Dias da semana">
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  <Field label="Dias da semana">
+                    <div className="flex gap-1 flex-wrap">
                       {DOW_LABELS.map((label, i) => {
                         const on = fDays.includes(i);
                         return (
@@ -691,9 +760,9 @@ export default function ZernioAutopilotPage() {
                               )
                             }
                             style={{
-                              ...dowBtn,
-                              background: on ? "var(--sv-ink)" : "transparent",
-                              color: on ? "#fff" : "var(--sv-ink)",
+                              ...dowBtnStyle,
+                              background: on ? "var(--sv-ink)" : "var(--sv-white)",
+                              color: on ? "var(--sv-paper)" : "var(--sv-ink)",
                             }}
                           >
                             {label}
@@ -701,23 +770,23 @@ export default function ZernioAutopilotPage() {
                         );
                       })}
                     </div>
-                  </FormField>
+                  </Field>
                 )}
 
                 {fCadence === "specific_dates" && (
-                  <FormField label="Datas (YYYY-MM-DD, separadas por vírgula)">
+                  <Field label="Datas (YYYY-MM-DD, vírgula)">
                     <textarea
                       value={fSpecificDates}
                       onChange={(e) => setFSpecificDates(e.target.value)}
                       rows={2}
-                      placeholder="2026-05-15, 2026-05-22, 2026-06-01"
+                      placeholder="2026-05-15, 2026-05-22"
                       style={{ ...inputStyle, resize: "vertical" }}
                     />
-                  </FormField>
+                  </Field>
                 )}
 
-                <div style={{ display: "flex", gap: 8 }}>
-                  <FormField label="Hora">
+                <div className="flex gap-2">
+                  <Field label="Hora">
                     <input
                       type="number"
                       min={0}
@@ -726,8 +795,8 @@ export default function ZernioAutopilotPage() {
                       onChange={(e) => setFHour(Number(e.target.value))}
                       style={inputStyle}
                     />
-                  </FormField>
-                  <FormField label="Minuto">
+                  </Field>
+                  <Field label="Minuto">
                     <input
                       type="number"
                       min={0}
@@ -736,18 +805,17 @@ export default function ZernioAutopilotPage() {
                       onChange={(e) => setFMinute(Number(e.target.value))}
                       style={inputStyle}
                     />
-                  </FormField>
-                  <FormField label="Timezone">
+                  </Field>
+                  <Field label="Timezone">
                     <input value="America/Sao_Paulo" disabled style={inputStyle} />
-                  </FormField>
+                  </Field>
                 </div>
               </>
             )}
 
-            {/* RSS specific */}
             {fType === "rss" && (
               <>
-                <FormField label="URL do RSS feed">
+                <Field label="URL do RSS feed">
                   <input
                     type="url"
                     value={fRssUrl}
@@ -755,9 +823,9 @@ export default function ZernioAutopilotPage() {
                     placeholder="https://exemplo.com/feed.xml"
                     style={inputStyle}
                   />
-                </FormField>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <FormField label="Verificar a cada (min)">
+                </Field>
+                <div className="flex gap-2">
+                  <Field label="Verificar a cada (min)">
                     <input
                       type="number"
                       min={15}
@@ -766,8 +834,8 @@ export default function ZernioAutopilotPage() {
                       onChange={(e) => setFRssIntervalMin(Number(e.target.value))}
                       style={inputStyle}
                     />
-                  </FormField>
-                  <FormField label="Itens novos por check">
+                  </Field>
+                  <Field label="Itens novos por check">
                     <input
                       type="number"
                       min={1}
@@ -776,70 +844,67 @@ export default function ZernioAutopilotPage() {
                       onChange={(e) => setFRssMaxItems(Number(e.target.value))}
                       style={inputStyle}
                     />
-                  </FormField>
+                  </Field>
                 </div>
-                <div style={infoBoxStyle}>
-                  <Rss size={13} />
-                  <span>
-                    Quando aparecer item novo no feed, o título vira o tema do
-                    carrossel. Limite Hobby: cron diário, então mín 60min entre
-                    checks.
-                  </span>
-                </div>
+                <InfoBox icon={Rss}>
+                  Quando aparecer item novo no feed, o título vira o tema do
+                  carrossel. No Hobby tier, cron diário — mín 60min entre checks.
+                </InfoBox>
               </>
             )}
 
-            {/* WEBHOOK specific */}
             {fType === "webhook" && !editingId && (
-              <div style={infoBoxStyle}>
-                <Webhook size={13} />
-                <span>
-                  Após criar, vamos gerar uma URL única com secret pra você usar
-                  no Zapier / Make / n8n. Toda chamada POST nessa URL dispara
-                  geração + post imediato.
-                </span>
-              </div>
+              <InfoBox icon={Webhook}>
+                Após criar, vamos gerar uma URL única com secret pra você
+                colar no Zapier / Make / n8n. Toda chamada POST nessa URL
+                dispara geração + post imediato.
+              </InfoBox>
             )}
 
-            {/* Modo de publicação */}
             {fType !== "webhook" && (
-              <FormField label="Modo de publicação">
-                <div style={{ display: "flex", gap: 8 }}>
+              <Field label="Modo de publicação">
+                <div className="flex gap-2">
                   {(["scheduled", "draft"] as const).map((m) => (
                     <button
                       key={m}
                       type="button"
                       onClick={() => setFPublishMode(m)}
                       style={{
-                        ...modeBtn,
-                        background: fPublishMode === m ? "var(--sv-ink)" : "transparent",
-                        color: fPublishMode === m ? "#fff" : "var(--sv-ink)",
+                        ...modeBtnStyle,
+                        background:
+                          fPublishMode === m ? "var(--sv-ink)" : "var(--sv-white)",
+                        color:
+                          fPublishMode === m ? "var(--sv-paper)" : "var(--sv-ink)",
                       }}
                     >
                       {m === "scheduled" ? "Agendar e publicar" : "Salvar rascunho"}
                     </button>
                   ))}
                 </div>
-              </FormField>
+              </Field>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+            <div className="flex justify-end gap-2 mt-2">
               <button
                 onClick={() => {
                   setShowForm(false);
                   resetForm();
                 }}
-                style={btnGhost}
+                className="sv-btn sv-btn-outline"
               >
                 Cancelar
               </button>
-              <button onClick={onSubmit} disabled={creating} style={btnPrimary}>
+              <button
+                onClick={onSubmit}
+                disabled={creating}
+                className="sv-btn sv-btn-primary"
+              >
                 {creating ? (
-                  <Loader2 className="animate-spin" size={14} />
+                  <Loader2 className="animate-spin" size={13} />
                 ) : editingId ? (
-                  <Save size={14} />
+                  <Save size={13} />
                 ) : (
-                  <Plus size={14} />
+                  <Plus size={13} />
                 )}
                 {editingId ? "Salvar" : "Criar gatilho"}
               </button>
@@ -849,47 +914,93 @@ export default function ZernioAutopilotPage() {
       )}
 
       {/* LISTA DE TRIGGERS */}
-      <section style={{ marginTop: 24 }}>
-        <h2 style={h2Style}>
-          Gatilhos ativos ({focusedTriggers.length})
-        </h2>
+      <section className="mt-6">
+        <div className="flex items-baseline justify-between mb-4">
+          <h2 className="sv-display" style={{ fontSize: 22, margin: 0 }}>
+            Gatilhos <em>ativos</em>
+          </h2>
+          <span
+            style={{
+              fontFamily: "var(--sv-mono)",
+              fontSize: 9,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: "var(--sv-muted, #888)",
+            }}
+          >
+            {focused.length} ativo{focused.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+
         {loading ? (
-          <div style={{ padding: 20, textAlign: "center" }}>
+          <div className="flex items-center justify-center py-10">
             <Loader2 className="animate-spin" size={18} />
           </div>
-        ) : focusedTriggers.length === 0 ? (
-          <p style={emptyStateStyle}>
-            Nenhum gatilho ativo. Crie um nos cards acima pra começar.
-          </p>
+        ) : focused.length === 0 ? (
+          <div
+            className="text-center py-10"
+            style={{
+              border: "1.5px dashed var(--sv-ink)",
+              background: "var(--sv-paper)",
+              fontFamily: "var(--sv-mono)",
+              fontSize: 11,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "var(--sv-muted, #888)",
+            }}
+          >
+            <Rocket
+              size={22}
+              style={{ opacity: 0.4, marginBottom: 6, display: "inline" }}
+            />
+            <div>Nenhum gatilho ativo</div>
+            <div style={{ fontSize: 10, marginTop: 4 }}>
+              Crie um nos cards acima
+            </div>
+          </div>
         ) : (
-          <ul style={triggerListStyle}>
-            {focusedTriggers.map((t) =>
-              renderTriggerCard(
-                t,
-                {
-                  webhookUrl,
-                  onEdit: openEdit,
-                  onToggle,
-                  onDelete,
-                  onRunNow,
-                  toggleRuns,
-                  runningNowFor,
-                  openRunsFor,
-                  runsByTrigger,
-                  loadingRunsFor,
-                }
-              )
+          <ul
+            className="flex flex-col gap-3"
+            style={{ listStyle: "none", padding: 0, margin: 0 }}
+          >
+            {focused.map((t) =>
+              renderTriggerCard(t, {
+                webhookUrl,
+                onEdit: openEdit,
+                onToggle,
+                onDelete,
+                onRunNow,
+                toggleRuns,
+                runningNowFor,
+                openRunsFor,
+                runsByTrigger,
+                loadingRunsFor,
+              })
             )}
           </ul>
         )}
 
-        {inactiveTriggers.length > 0 && (
-          <details style={{ marginTop: 18 }}>
-            <summary style={historyToggleStyle}>
-              Pausados ({inactiveTriggers.length})
+        {inactive.length > 0 && (
+          <details className="mt-6">
+            <summary
+              style={{
+                cursor: "pointer",
+                fontFamily: "var(--sv-mono)",
+                fontSize: 10,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color: "var(--sv-muted, #888)",
+                fontWeight: 700,
+                marginBottom: 12,
+              }}
+            >
+              Pausados ({inactive.length})
             </summary>
-            <ul style={triggerListStyle}>
-              {inactiveTriggers.map((t) =>
+            <ul
+              className="flex flex-col gap-3"
+              style={{ listStyle: "none", padding: 0, margin: 0 }}
+            >
+              {inactive.map((t) =>
                 renderTriggerCard(t, {
                   webhookUrl,
                   onEdit: openEdit,
@@ -907,6 +1018,68 @@ export default function ZernioAutopilotPage() {
           </details>
         )}
       </section>
+    </div>
+  );
+}
+
+// ────────────────────────── COMPONENTES ──────────────────────────
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ flex: 1 }}>
+      <Label>{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <label
+      style={{
+        display: "block",
+        fontFamily: "var(--sv-mono)",
+        fontSize: 9.5,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.18em",
+        marginBottom: 6,
+        color: "var(--sv-ink)",
+      }}
+    >
+      {children}
+    </label>
+  );
+}
+
+function InfoBox({
+  icon: Icon,
+  children,
+}: {
+  icon: typeof Rss;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="flex items-start gap-2"
+      style={{
+        padding: 12,
+        background: "var(--sv-paper)",
+        border: "1.5px solid var(--sv-ink)",
+        boxShadow: "2px 2px 0 0 var(--sv-ink)",
+        fontSize: 12,
+        fontFamily: "var(--sv-sans)",
+        lineHeight: 1.45,
+      }}
+    >
+      <Icon size={14} style={{ flexShrink: 0, marginTop: 2 }} />
+      <span>{children}</span>
     </div>
   );
 }
@@ -936,49 +1109,62 @@ function renderTriggerCard(t: Trigger, h: CardHandlers): React.ReactNode {
     else if (t.cadence_type === "every_n_days")
       cadenceLabel = `A cada ${t.interval_days} dias`;
     else if (t.cadence_type === "weekly_dow")
-      cadenceLabel = (t.days_of_week ?? [])
-        .map((d) => DOW_LABELS[d])
-        .join("/");
+      cadenceLabel = (t.days_of_week ?? []).map((d) => DOW_LABELS[d]).join(" / ");
     else if (t.cadence_type === "specific_dates")
-      cadenceLabel = `${(t.specific_dates ?? []).length} datas específicas`;
-  } else if (t.trigger_type === "rss") {
-    cadenceLabel = `RSS check a cada ${t.rss_check_interval_minutes}min`;
-  } else if (t.trigger_type === "webhook") {
-    cadenceLabel = "Disparo via webhook";
-  }
+      cadenceLabel = `${(t.specific_dates ?? []).length} datas`;
+  } else if (t.trigger_type === "rss")
+    cadenceLabel = `RSS · check a cada ${t.rss_check_interval_minutes}min`;
+  else cadenceLabel = "Disparo via webhook";
 
   return (
-    <li key={t.id} style={triggerCardStyle}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-        <div
-          style={{
-            ...triggerIconStyle,
-            background: meta.color,
-          }}
-        >
-          <Icon size={18} />
+    <li key={t.id} className="sv-card" style={{ padding: 16 }}>
+      <div className="flex items-start gap-3">
+        <div style={{ ...iconWrapStyle, background: meta.iconBg, flexShrink: 0 }}>
+          <Icon size={16} color="var(--sv-ink)" />
         </div>
+
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <strong style={{ fontSize: 15 }}>{t.name}</strong>
-            <span style={{ ...miniBadge, background: meta.color, color: "#fff" }}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <strong
+              className="sv-display"
+              style={{ fontSize: 18, lineHeight: 1.2 }}
+            >
+              {t.name}
+            </strong>
+            <span
+              style={{
+                ...miniBadgeStyle,
+                background: meta.iconBg,
+              }}
+            >
               {meta.label}
             </span>
             {!t.is_active && (
-              <span style={{ ...miniBadge, background: "#9ca3af", color: "#fff" }}>
+              <span
+                style={{ ...miniBadgeStyle, background: "var(--sv-muted, #888)", color: "#fff" }}
+              >
                 Pausado
               </span>
             )}
-            <span style={{ ...miniBadge, background: "#f3f4f6", color: "#374151" }}>
-              {t.target_platforms.join(" + ")}
-            </span>
+            {t.target_platforms.map((pf) => (
+              <span
+                key={pf}
+                style={{
+                  ...miniBadgeStyle,
+                  background: PLATFORM_COLORS[pf] || "var(--sv-paper)",
+                }}
+              >
+                {pf === "instagram" ? "IG" : "LI"}
+              </span>
+            ))}
           </div>
+
           <div style={metaLineStyle}>{cadenceLabel}</div>
           <div style={metaLineStyle}>
             {t.next_run_at && (
               <>
                 Próximo:{" "}
-                <strong>
+                <strong style={{ color: "var(--sv-ink)" }}>
                   {new Date(t.next_run_at).toLocaleString("pt-BR", {
                     day: "2-digit",
                     month: "2-digit",
@@ -990,19 +1176,34 @@ function renderTriggerCard(t: Trigger, h: CardHandlers): React.ReactNode {
               </>
             )}
             {t.last_fired_at && (
-              <>Último disparo: {new Date(t.last_fired_at).toLocaleString("pt-BR")}</>
+              <>
+                Último: {new Date(t.last_fired_at).toLocaleString("pt-BR")}
+              </>
             )}
             {!t.next_run_at && !t.last_fired_at && (
               <span style={{ fontStyle: "italic" }}>Nunca disparado</span>
             )}
           </div>
 
-          {/* Webhook URL display */}
           {t.trigger_type === "webhook" && t.webhook_secret && (
             <WebhookUrlBox url={h.webhookUrl(t)} />
           )}
 
-          {t.last_error && <div style={errorBoxStyle}>Último erro: {t.last_error}</div>}
+          {t.last_error && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: 8,
+                background: "rgba(201, 79, 59, 0.08)",
+                border: "1.5px solid #C94F3B",
+                fontSize: 11,
+                color: "#7a2a1a",
+                fontFamily: "var(--sv-sans)",
+              }}
+            >
+              Último erro: {t.last_error}
+            </div>
+          )}
 
           <button
             type="button"
@@ -1018,12 +1219,21 @@ function renderTriggerCard(t: Trigger, h: CardHandlers): React.ReactNode {
             />
             Histórico de runs
           </button>
+
           {isOpen && (
             <div style={runsBoxStyle}>
               {h.loadingRunsFor === t.id ? (
                 <Loader2 className="animate-spin" size={12} />
               ) : runs.length === 0 ? (
-                <p style={{ fontSize: 11, color: "var(--sv-soft, #888)" }}>
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: "var(--sv-muted, #888)",
+                    fontFamily: "var(--sv-mono)",
+                    letterSpacing: "0.06em",
+                    margin: 0,
+                  }}
+                >
                   Nenhum run ainda.
                 </p>
               ) : (
@@ -1031,7 +1241,13 @@ function renderTriggerCard(t: Trigger, h: CardHandlers): React.ReactNode {
                   {runs.map((r) => (
                     <li key={r.id} style={runItemStyle}>
                       <span style={runStatusBadge(r.status)}>{r.status}</span>
-                      <span style={{ fontSize: 11, color: "var(--sv-soft, #888)" }}>
+                      <span
+                        style={{
+                          fontFamily: "var(--sv-mono)",
+                          fontSize: 10,
+                          color: "var(--sv-muted, #888)",
+                        }}
+                      >
                         {new Date(r.fired_at).toLocaleString("pt-BR", {
                           day: "2-digit",
                           month: "2-digit",
@@ -1039,16 +1255,35 @@ function renderTriggerCard(t: Trigger, h: CardHandlers): React.ReactNode {
                           minute: "2-digit",
                         })}
                       </span>
-                      <span style={{ fontSize: 10, color: "var(--sv-soft, #888)" }}>
+                      <span
+                        style={{
+                          fontFamily: "var(--sv-mono)",
+                          fontSize: 9,
+                          color: "var(--sv-muted, #888)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                        }}
+                      >
                         ({r.fired_by})
                       </span>
                       {r.theme_chosen && (
-                        <span style={{ fontSize: 11, fontStyle: "italic" }}>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontStyle: "italic",
+                            fontFamily: "var(--sv-display)",
+                          }}
+                        >
                           {r.theme_chosen.slice(0, 60)}
                         </span>
                       )}
                       {r.error && (
-                        <span style={{ fontSize: 10, color: "#7f1d1d" }}>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color: "#7a2a1a",
+                          }}
+                        >
                           {r.error.slice(0, 80)}
                         </span>
                       )}
@@ -1059,31 +1294,32 @@ function renderTriggerCard(t: Trigger, h: CardHandlers): React.ReactNode {
             </div>
           )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+
+        <div className="flex flex-col gap-1.5" style={{ flexShrink: 0 }}>
           <button
             onClick={() => h.onRunNow(t.id)}
-            style={btnIconStyle}
+            style={iconBtnStyle}
             disabled={h.runningNowFor === t.id}
             title="Disparar agora"
           >
             {h.runningNowFor === t.id ? (
-              <Loader2 className="animate-spin" size={14} />
+              <Loader2 className="animate-spin" size={12} />
             ) : (
-              <Play size={14} />
+              <Play size={12} />
             )}
           </button>
-          <button onClick={() => h.onEdit(t)} style={btnIconStyle} title="Editar">
-            <Pencil size={14} />
+          <button onClick={() => h.onEdit(t)} style={iconBtnStyle} title="Editar">
+            <Pencil size={12} />
           </button>
           <button
             onClick={() => h.onToggle(t)}
-            style={btnIconStyle}
+            style={iconBtnStyle}
             title={t.is_active ? "Pausar" : "Ativar"}
           >
-            {t.is_active ? <PowerOff size={14} /> : <Power size={14} />}
+            {t.is_active ? <PowerOff size={12} /> : <Power size={12} />}
           </button>
-          <button onClick={() => h.onDelete(t.id)} style={btnIconStyle} title="Deletar">
-            <Trash2 size={14} />
+          <button onClick={() => h.onDelete(t.id)} style={iconBtnStyle} title="Deletar">
+            <Trash2 size={12} />
           </button>
         </div>
       </div>
@@ -1093,201 +1329,72 @@ function renderTriggerCard(t: Trigger, h: CardHandlers): React.ReactNode {
 
 function WebhookUrlBox({ url }: { url: string }) {
   return (
-    <div style={webhookBoxStyle}>
+    <div
+      className="flex items-center gap-2 mt-2"
+      style={{
+        padding: 8,
+        background: "var(--sv-pink, #D262B2)",
+        border: "1.5px solid var(--sv-ink)",
+        boxShadow: "2px 2px 0 0 var(--sv-ink)",
+      }}
+    >
       <Webhook size={11} />
-      <code style={{ flex: 1, fontSize: 10, fontFamily: "monospace", wordBreak: "break-all" }}>
+      <code
+        style={{
+          flex: 1,
+          fontSize: 10,
+          fontFamily: "var(--sv-mono)",
+          wordBreak: "break-all",
+          color: "var(--sv-ink)",
+        }}
+      >
         {url}
       </code>
       <button
         type="button"
-        style={btnGhostMini}
+        style={miniBtnSquareStyle}
         onClick={() => {
           navigator.clipboard.writeText(url);
           toast.success("URL copiada.");
         }}
       >
-        <Copy size={10} /> Copiar
+        <Copy size={10} />
       </button>
-    </div>
-  );
-}
-
-function FormField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div style={{ flex: 1 }}>
-      <label style={labelStyle}>{label}</label>
-      {children}
     </div>
   );
 }
 
 function runStatusBadge(status: string): React.CSSProperties {
   const colors: Record<string, string> = {
-    pending: "#9ca3af",
-    generating: "#f59e0b",
-    scheduled: "#3b82f6",
-    failed: "#ef4444",
-    skipped: "#6b7280",
+    pending: "var(--sv-muted, #888)",
+    generating: "var(--sv-yellow)",
+    scheduled: "var(--sv-green)",
+    failed: "#C94F3B",
+    skipped: "var(--sv-muted, #888)",
   };
   return {
-    fontSize: 9,
+    fontFamily: "var(--sv-mono)",
+    fontSize: 8.5,
     fontWeight: 700,
-    letterSpacing: "0.04em",
-    padding: "1px 5px",
-    background: colors[status] ?? "#9ca3af",
-    color: "#fff",
+    letterSpacing: "0.12em",
+    padding: "2px 6px",
+    background: colors[status] ?? "var(--sv-muted, #888)",
+    color: "var(--sv-ink)",
     textTransform: "uppercase",
+    border: "1px solid var(--sv-ink)",
   };
 }
 
-// ────────────────────────────── STYLES ──────────────────────────────
+// ────────────────────────── STYLES ──────────────────────────
 
-const containerStyle: React.CSSProperties = {
-  maxWidth: 1100,
-  margin: "0 auto",
-  padding: 24,
-  fontFamily: "var(--sv-sans)",
-};
-
-const backLinkStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 4,
-  fontSize: 12,
-  color: "var(--sv-soft, #6b6b6b)",
-  textDecoration: "none",
-  marginBottom: 12,
-};
-
-const heroStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 16,
-  marginBottom: 24,
-  flexWrap: "wrap",
-};
-
-const kickerStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 4,
-  fontFamily: "var(--sv-mono)",
-  fontSize: 9.5,
-  letterSpacing: "0.2em",
-  textTransform: "uppercase",
-  color: "#a855f7",
-  fontWeight: 700,
-};
-
-const titleStyle: React.CSSProperties = {
-  fontSize: "clamp(34px, 5.5vw, 50px)",
-  fontWeight: 800,
-  margin: "8px 0 4px",
-  letterSpacing: "-0.025em",
-  lineHeight: 1.02,
-  fontFamily: "var(--sv-display, Georgia, serif)",
-};
-
-const subtitleStyle: React.CSSProperties = {
-  fontSize: 14,
-  color: "var(--sv-muted, #555)",
-  margin: 0,
-  maxWidth: 520,
-};
-
-const h2Style: React.CSSProperties = {
-  fontSize: 16,
-  fontWeight: 700,
-  margin: 0,
-  letterSpacing: "-0.01em",
-};
-
-const typeCardsGridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-  gap: 12,
-  marginBottom: 24,
-};
-
-const typeCardStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "flex-start",
-  gap: 10,
-  padding: 18,
-  background: "var(--sv-white)",
-  border: "1.5px solid",
-  boxShadow: "3px 3px 0 0 var(--sv-ink)",
-  cursor: "pointer",
-  textAlign: "left",
-  transition: "transform 0.12s, box-shadow 0.12s",
-  fontFamily: "inherit",
-  color: "inherit",
-};
-
-const typeCardIcon: React.CSSProperties = {
-  width: 46,
-  height: 46,
+const iconWrapStyle: React.CSSProperties = {
+  width: 44,
+  height: 44,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   border: "1.5px solid var(--sv-ink)",
-};
-
-const typeCardTitle: React.CSSProperties = {
-  fontSize: 18,
-  fontWeight: 800,
-  letterSpacing: "-0.01em",
-};
-
-const typeCardDesc: React.CSSProperties = {
-  fontSize: 12,
-  color: "var(--sv-soft, #6b6b6b)",
-  lineHeight: 1.4,
-};
-
-const typeCardCTA: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 4,
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  color: "var(--sv-ink)",
-  marginTop: "auto",
-};
-
-const formCardStyle: React.CSSProperties = {
-  background: "var(--sv-white)",
-  border: "1.5px solid var(--sv-ink)",
-  boxShadow: "5px 5px 0 0 var(--sv-ink)",
-  padding: 22,
-};
-
-const formHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  marginBottom: 18,
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 11,
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  marginBottom: 5,
-  color: "var(--sv-ink)",
+  boxShadow: "2px 2px 0 0 var(--sv-ink)",
 };
 
 const inputStyle: React.CSSProperties = {
@@ -1296,177 +1403,119 @@ const inputStyle: React.CSSProperties = {
   padding: 10,
   border: "1.5px solid var(--sv-ink)",
   fontSize: 13,
+  fontFamily: "var(--sv-sans)",
   background: "var(--sv-white)",
   color: "var(--sv-ink)",
-  fontFamily: "var(--sv-sans)",
 };
 
 const typeChipStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 5,
-  padding: "6px 12px",
-  border: "1.5px solid",
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const platformChipStyle: React.CSSProperties = {
-  padding: "8px 14px",
-  border: "1.5px solid",
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: "pointer",
-  flex: 1,
-};
-
-const dowBtn: React.CSSProperties = {
-  padding: "6px 10px",
-  border: "1.5px solid var(--sv-ink)",
-  fontSize: 11,
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const modeBtn: React.CSSProperties = {
-  padding: "8px 14px",
-  border: "1.5px solid var(--sv-ink)",
-  fontSize: 12,
-  fontWeight: 600,
-  cursor: "pointer",
-  flex: 1,
-};
-
-const btnPrimary: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "10px 14px",
-  background: "var(--sv-ink)",
-  color: "#fff",
-  border: "1.5px solid var(--sv-ink)",
-  fontWeight: 700,
-  fontSize: 13,
-  cursor: "pointer",
-};
-
-const btnGhost: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
   padding: "8px 12px",
-  background: "transparent",
-  color: "var(--sv-ink)",
+  fontFamily: "var(--sv-mono)",
+  fontSize: 9.5,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  fontWeight: 700,
   border: "1.5px solid var(--sv-ink)",
-  fontWeight: 600,
-  fontSize: 12,
   cursor: "pointer",
 };
 
-const btnGhostMini: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 3,
-  padding: "3px 6px",
+const platformChipBigStyle: React.CSSProperties = {
+  flex: 1,
+  padding: "10px 14px",
+  border: "1.5px solid var(--sv-ink)",
+  fontFamily: "var(--sv-mono)",
+  fontSize: 11,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  fontWeight: 700,
+  cursor: "pointer",
+  color: "var(--sv-ink)",
+  transition: "transform 0.12s, box-shadow 0.12s",
+};
+
+const dowBtnStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  border: "1.5px solid var(--sv-ink)",
+  fontFamily: "var(--sv-mono)",
+  fontSize: 10,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const modeBtnStyle: React.CSSProperties = {
+  flex: 1,
+  padding: "10px 14px",
+  border: "1.5px solid var(--sv-ink)",
+  fontFamily: "var(--sv-mono)",
+  fontSize: 10.5,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const iconBtnStyle: React.CSSProperties = {
+  width: 30,
+  height: 30,
   background: "var(--sv-white)",
   color: "var(--sv-ink)",
-  border: "1px solid var(--sv-ink)",
-  fontWeight: 600,
-  fontSize: 9,
-  cursor: "pointer",
-};
-
-const btnIconStyle: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--sv-ink)",
-  border: "1px solid var(--sv-ink)",
-  padding: 5,
-  cursor: "pointer",
-};
-
-const triggerListStyle: React.CSSProperties = {
-  listStyle: "none",
-  padding: 0,
-  margin: "12px 0 0",
-  display: "flex",
-  flexDirection: "column",
-  gap: 12,
-};
-
-const triggerCardStyle: React.CSSProperties = {
-  background: "var(--sv-white)",
   border: "1.5px solid var(--sv-ink)",
-  boxShadow: "3px 3px 0 0 var(--sv-ink)",
-  padding: 14,
-};
-
-const triggerIconStyle: React.CSSProperties = {
-  width: 38,
-  height: 38,
+  cursor: "pointer",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  border: "1.5px solid var(--sv-ink)",
-  color: "#fff",
-  flexShrink: 0,
+  boxShadow: "2px 2px 0 0 var(--sv-ink)",
+  transition: "transform 0.1s",
 };
 
-const miniBadge: React.CSSProperties = {
+const miniBadgeStyle: React.CSSProperties = {
   display: "inline-block",
-  padding: "1px 6px",
+  padding: "2px 6px",
+  fontFamily: "var(--sv-mono)",
   fontSize: 9,
   fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.06em",
+  letterSpacing: "0.12em",
+  border: "1px solid var(--sv-ink)",
+  color: "var(--sv-ink)",
 };
 
 const metaLineStyle: React.CSSProperties = {
+  fontFamily: "var(--sv-mono)",
   fontSize: 11,
-  color: "var(--sv-soft, #6b6b6b)",
-  marginTop: 3,
-};
-
-const webhookBoxStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  padding: 8,
-  background: "rgba(168, 85, 247, 0.08)",
-  border: "1px solid #a855f7",
-  marginTop: 8,
-};
-
-const errorBoxStyle: React.CSSProperties = {
-  marginTop: 6,
-  padding: 6,
-  background: "rgba(239, 68, 68, 0.08)",
-  border: "1px solid #ef4444",
-  fontSize: 11,
-  color: "#7f1d1d",
+  letterSpacing: "0.04em",
+  color: "var(--sv-muted, #6b6b6b)",
+  marginTop: 4,
 };
 
 const runsToggleStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 4,
-  marginTop: 8,
-  padding: "3px 8px",
-  border: "1px solid var(--sv-soft, #d0d0d0)",
-  background: "transparent",
-  fontSize: 10,
-  fontWeight: 600,
-  cursor: "pointer",
+  marginTop: 10,
+  padding: "5px 10px",
+  border: "1.5px solid var(--sv-ink)",
+  background: "var(--sv-paper)",
+  fontFamily: "var(--sv-mono)",
+  fontSize: 9.5,
+  fontWeight: 700,
+  letterSpacing: "0.14em",
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  cursor: "pointer",
+  color: "var(--sv-ink)",
 };
 
 const runsBoxStyle: React.CSSProperties = {
   marginTop: 8,
-  padding: 8,
-  background: "var(--sv-paper, #faf7f2)",
-  border: "1px solid var(--sv-soft, #e0e0e0)",
-  maxHeight: 200,
+  padding: 10,
+  background: "var(--sv-paper)",
+  border: "1.5px solid var(--sv-ink)",
+  maxHeight: 240,
   overflowY: "auto",
 };
 
@@ -1474,39 +1523,18 @@ const runItemStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 6,
-  padding: "4px 0",
+  padding: "5px 0",
   flexWrap: "wrap",
+  borderBottom: "1px dashed var(--sv-muted, #ccc)",
 };
 
-const historyToggleStyle: React.CSSProperties = {
-  cursor: "pointer",
-  fontSize: 11,
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: "var(--sv-soft, #6b6b6b)",
-  marginBottom: 8,
-};
-
-const infoBoxStyle: React.CSSProperties = {
-  display: "flex",
+const miniBtnSquareStyle: React.CSSProperties = {
+  display: "inline-flex",
   alignItems: "center",
-  gap: 8,
-  padding: 10,
-  background: "rgba(99, 102, 241, 0.06)",
+  gap: 3,
+  padding: 6,
+  background: "var(--sv-white)",
+  color: "var(--sv-ink)",
   border: "1.5px solid var(--sv-ink)",
-  fontSize: 12,
+  cursor: "pointer",
 };
-
-const emptyStateStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: "var(--sv-soft, #6b6b6b)",
-  textAlign: "center",
-  padding: "30px 20px",
-  background: "var(--sv-paper, #faf7f2)",
-  border: "1px dashed var(--sv-soft, #d0d0d0)",
-  marginTop: 12,
-};
-
-// suppress unused imports warning
-void Calendar;

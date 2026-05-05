@@ -23,19 +23,14 @@ import { useAuth } from "@/lib/auth-context";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
 import { isAdminEmail } from "@/lib/admin-emails";
 
-/**
- * /app/admin/zernio/calendar (v2) — calendário visual.
- *
- * Mudanças vs v1:
- *  - Cores por PLATAFORMA (IG coral / LinkedIn azul) em vez de por profile.
- *    Reflete o modelo v2 onde cada user tem 1 profile interno e o que
- *    importa visualmente é a rede de destino.
- *  - Hero header estilo SV, KPI strip, day cells com hover suave + dots.
- *  - Empty states e loading skeletons.
- *  - Sidebar de posts com mídia preview ampliada e ações mais claras.
- */
-
-type Status = "draft" | "scheduled" | "publishing" | "published" | "failed" | "partial" | "cancelled";
+type Status =
+  | "draft"
+  | "scheduled"
+  | "publishing"
+  | "published"
+  | "failed"
+  | "partial"
+  | "cancelled";
 
 interface Post {
   id: string;
@@ -51,19 +46,23 @@ interface Post {
   failure_reason?: string | null;
 }
 
-const STATUS_META: Record<Status, { label: string; color: string; icon: typeof CheckCircle2 }> = {
-  draft: { label: "Rascunho", color: "#9ca3af", icon: Clock },
-  scheduled: { label: "Agendado", color: "#3b82f6", icon: CalendarClock },
-  publishing: { label: "Publicando", color: "#f59e0b", icon: Loader2 },
-  published: { label: "Publicado", color: "#10b981", icon: CheckCircle2 },
-  failed: { label: "Falhou", color: "#ef4444", icon: XCircle },
-  partial: { label: "Parcial", color: "#f97316", icon: XCircle },
-  cancelled: { label: "Cancelado", color: "#6b7280", icon: XCircle },
+const STATUS_META: Record<
+  Status,
+  { label: string; color: string; icon: typeof CheckCircle2 }
+> = {
+  draft: { label: "Rascunho", color: "var(--sv-muted, #888)", icon: Clock },
+  scheduled: { label: "Agendado", color: "var(--sv-ink)", icon: CalendarClock },
+  publishing: { label: "Publicando", color: "var(--sv-yellow)", icon: Loader2 },
+  published: { label: "Publicado", color: "var(--sv-green)", icon: CheckCircle2 },
+  failed: { label: "Falhou", color: "#C94F3B", icon: XCircle },
+  partial: { label: "Parcial", color: "#FF8A4C", icon: XCircle },
+  cancelled: { label: "Cancelado", color: "var(--sv-muted, #888)", icon: XCircle },
 };
 
+// IG mantém paleta SV (pink) — é a 2ª accent oficial. LinkedIn usa yellow Kaleidos.
 const PLATFORM_COLORS: Record<string, string> = {
-  instagram: "#E4405F",
-  linkedin: "#0A66C2",
+  instagram: "var(--sv-pink, #D262B2)",
+  linkedin: "var(--sv-yellow, #F5C518)",
 };
 
 export default function ZernioCalendarPage() {
@@ -109,9 +108,6 @@ export default function ZernioCalendarPage() {
     if (session) fetchAll();
   }, [session, fetchAll]);
 
-  // Filtra posts por plataforma (qualquer post que tenha pelo menos 1
-  // plataforma ativa entra). Drafts sem scheduled_for ainda aparecem na
-  // sidebar do dia atual mas não no grid.
   const filteredPosts = useMemo(
     () =>
       posts.filter((p) =>
@@ -123,8 +119,6 @@ export default function ZernioCalendarPage() {
   const postsByDay = useMemo(() => {
     const map = new Map<string, Post[]>();
     for (const p of filteredPosts) {
-      // Mostra no calendário pelo scheduled_for (quando agendado/draft com data)
-      // OU pelo published_at (quando já publicado).
       const isoDate = p.scheduled_for || p.published_at;
       if (!isoDate) continue;
       const day = isoDayLocal(isoDate);
@@ -135,20 +129,21 @@ export default function ZernioCalendarPage() {
     return map;
   }, [filteredPosts]);
 
-  // Stats KPIs
   const stats = useMemo(() => {
     const now = Date.now();
-    const sevenDaysFromNow = now + 7 * 24 * 60 * 60 * 1000;
-    const upcoming = filteredPosts.filter((p) => {
-      if (!p.scheduled_for) return false;
-      const t = new Date(p.scheduled_for).getTime();
-      return t >= now && t <= sevenDaysFromNow && p.status === "scheduled";
-    });
+    const sevenAhead = now + 7 * 24 * 60 * 60 * 1000;
+    const sevenAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const upcoming = filteredPosts.filter(
+      (p) =>
+        p.scheduled_for &&
+        new Date(p.scheduled_for).getTime() >= now &&
+        new Date(p.scheduled_for).getTime() <= sevenAhead &&
+        p.status === "scheduled"
+    );
     const failed = filteredPosts.filter((p) => p.status === "failed").length;
-    const published7d = filteredPosts.filter((p) => {
-      if (!p.published_at) return false;
-      return new Date(p.published_at).getTime() >= now - 7 * 24 * 60 * 60 * 1000;
-    }).length;
+    const published7d = filteredPosts.filter(
+      (p) => p.published_at && new Date(p.published_at).getTime() >= sevenAgo
+    ).length;
     const next = upcoming.sort(
       (a, b) =>
         new Date(a.scheduled_for!).getTime() - new Date(b.scheduled_for!).getTime()
@@ -170,24 +165,24 @@ export default function ZernioCalendarPage() {
 
   const weeks = useMemo(() => buildMonthGrid(cursor), [cursor]);
 
-  const onPrevMonth = () =>
-    setCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
-  const onNextMonth = () =>
-    setCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  const todayIso = isoDayLocal(new Date().toISOString());
+  const selectedPosts = selectedDay ? postsByDay.get(selectedDay) ?? [] : [];
+
+  const onPrev = () => setCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  const onNext = () => setCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
   const onToday = () => {
     const d = new Date();
     setCursor(new Date(d.getFullYear(), d.getMonth(), 1));
     setSelectedDay(isoDayLocal(d.toISOString()));
   };
 
-  const togglePlatform = (p: string) => {
+  const togglePlatform = (p: string) =>
     setActivePlatforms((prev) => {
       const next = new Set(prev);
       if (next.has(p)) next.delete(p);
       else next.add(p);
       return next;
     });
-  };
 
   const onDeletePost = useCallback(
     async (postId: string) => {
@@ -224,9 +219,7 @@ export default function ZernioCalendarPage() {
           }),
         });
         if (!res.ok) throw new Error((await res.json()).error || "Falha");
-        toast.success(
-          `Reagendado pra ${new Date(newScheduledLocal).toLocaleString("pt-BR")}`
-        );
+        toast.success("Reagendado.");
         setReschedulingPostId(null);
         setNewScheduledLocal("");
         await fetchAll();
@@ -248,85 +241,122 @@ export default function ZernioCalendarPage() {
     }
   }
 
-  const todayIso = isoDayLocal(new Date().toISOString());
-  const selectedPosts = selectedDay ? postsByDay.get(selectedDay) ?? [] : [];
-
   if (authLoading || !user) {
     return (
-      <div style={containerStyle}>
+      <div
+        className="flex items-center justify-center"
+        style={{ minHeight: "60vh" }}
+      >
         <Loader2 className="animate-spin" size={20} />
       </div>
     );
   }
 
   return (
-    <div style={containerStyle}>
-      <Link href="/app/admin/zernio" style={backLinkStyle}>
-        <ArrowLeft size={14} /> Voltar
+    <div
+      className="mx-auto px-6 py-8 lg:px-10 lg:py-12"
+      style={{ maxWidth: 1240 }}
+    >
+      <Link
+        href="/app/admin/zernio"
+        className="inline-flex items-center gap-1 mb-4"
+        style={{
+          fontFamily: "var(--sv-mono)",
+          fontSize: 10.5,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "var(--sv-muted, #6b6b6b)",
+          textDecoration: "none",
+        }}
+      >
+        <ArrowLeft size={12} /> Voltar
       </Link>
 
       {/* HERO */}
-      <header style={heroStyle}>
+      <header className="flex flex-wrap items-start justify-between gap-4 mb-8">
         <div style={{ flex: 1, minWidth: 280 }}>
-          <span style={kickerStyle}>
-            <CalendarClock size={11} /> Planejamento
+          <span className="sv-eyebrow">
+            <span className="sv-dot" /> Nº 03 · Planejamento
           </span>
-          <h1 style={titleStyle}>
+          <h1
+            className="sv-display mt-3"
+            style={{
+              fontSize: "clamp(36px, 5.5vw, 56px)",
+              lineHeight: 1.02,
+            }}
+          >
             Seu <em>calendário</em>.
           </h1>
-          <p style={subtitleStyle}>
+          <p
+            className="mt-2"
+            style={{ color: "var(--sv-muted, #555)", fontSize: 13.5, maxWidth: 540 }}
+          >
             Tudo que tá programado pro Instagram + LinkedIn em um lugar só.
           </p>
         </div>
-        <button onClick={fetchAll} style={btnGhost} disabled={loading}>
-          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+        <button
+          onClick={fetchAll}
+          className="sv-btn sv-btn-outline"
+          disabled={loading}
+        >
+          <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
           Atualizar
         </button>
       </header>
 
       {/* KPI STRIP */}
-      <section style={kpiStripStyle}>
-        <Tile label="Próximos 7d" value={stats.upcoming} accent="#3b82f6" />
-        <Tile label="Publicados 7d" value={stats.published7d} accent="#10b981" />
-        <Tile
+      <section
+        className="grid gap-3 mb-6"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}
+      >
+        <KpiCard label="Próximos 7d" value={stats.upcoming} accent="var(--sv-ink)" />
+        <KpiCard label="Publicados 7d" value={stats.published7d} accent="var(--sv-green)" />
+        <KpiCard
           label="Falharam"
           value={stats.failed}
-          accent={stats.failed > 0 ? "#ef4444" : "#9ca3af"}
+          accent={stats.failed > 0 ? "#C94F3B" : "var(--sv-muted, #888)"}
         />
-        <Tile label="Próximo" value={stats.nextLabel} accent="#a855f7" small />
+        <KpiCard label="Próximo" value={stats.nextLabel} accent="var(--sv-ink)" small />
       </section>
 
-      {/* MONTH NAV + PLATFORM FILTERS */}
-      <div style={controlBarStyle}>
-        <div style={navGroupStyle}>
-          <button onClick={onPrevMonth} style={btnIconLg} aria-label="Mês anterior">
-            <ChevronLeft size={16} />
+      {/* CONTROL BAR */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onPrev}
+            aria-label="Mês anterior"
+            style={navBtnStyle}
+          >
+            <ChevronLeft size={14} />
           </button>
           <h2 style={monthLabelStyle}>
-            {cursor.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+            {cursor.toLocaleDateString("pt-BR", {
+              month: "long",
+              year: "numeric",
+            })}
           </h2>
-          <button onClick={onNextMonth} style={btnIconLg} aria-label="Próximo mês">
-            <ChevronRight size={16} />
+          <button onClick={onNext} aria-label="Próximo mês" style={navBtnStyle}>
+            <ChevronRight size={14} />
           </button>
-          <button onClick={onToday} style={btnGhostSm}>
+          <button onClick={onToday} className="sv-btn sv-btn-outline" style={smBtnStyle}>
             Hoje
           </button>
         </div>
 
-        <div style={filterPillsStyle}>
+        <div className="flex gap-2 flex-wrap">
           {(["instagram", "linkedin"] as const).map((p) => {
             const on = activePlatforms.has(p);
-            const accent = PLATFORM_COLORS[p];
             const Icon = p === "instagram" ? Instagram : Linkedin;
+            const accent = PLATFORM_COLORS[p];
             return (
               <button
                 key={p}
                 onClick={() => togglePlatform(p)}
                 style={{
                   ...platformPillStyle,
-                  background: on ? accent : "transparent",
-                  color: on ? "#fff" : accent,
-                  borderColor: accent,
+                  background: on ? accent : "var(--sv-white)",
+                  borderColor: "var(--sv-ink)",
+                  boxShadow: on ? "2px 2px 0 0 var(--sv-ink)" : "none",
                 }}
               >
                 <Icon size={11} />
@@ -338,99 +368,116 @@ export default function ZernioCalendarPage() {
       </div>
 
       {/* GRID + SIDEBAR */}
-      <div style={gridContainerStyle}>
-        <div style={gridStyle}>
-          {/* Header dos dias da semana */}
-          {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => (
-            <div key={d} style={dayHeaderStyle}>
-              {d}
-            </div>
-          ))}
-          {/* Skeleton durante loading */}
-          {loading && posts.length === 0
-            ? Array.from({ length: 35 }).map((_, i) => (
-                <div key={`sk-${i}`} style={skeletonCellStyle} />
-              ))
-            : weeks.map((week, wi) =>
-                week.map((day, di) => {
-                  const iso = isoDayLocal(day.toISOString());
-                  const isOtherMonth = day.getMonth() !== cursor.getMonth();
-                  const dayPosts = postsByDay.get(iso) ?? [];
-                  const isToday = iso === todayIso;
-                  const isSelected = iso === selectedDay;
-                  // Cor do indicador: se múltiplas plataformas, mistura (ink)
-                  const platformsInDay = new Set(
-                    dayPosts.flatMap((p) => p.platforms.map((pl) => pl.platform))
-                  );
-                  return (
-                    <button
-                      key={`${wi}-${di}`}
-                      onClick={() => setSelectedDay(iso)}
-                      style={{
-                        ...dayCellStyle,
-                        background: isSelected
-                          ? "var(--sv-ink)"
-                          : isToday
-                            ? "rgba(124, 240, 103, 0.12)"
-                            : "var(--sv-white)",
-                        opacity: isOtherMonth ? 0.35 : 1,
-                        borderColor: isSelected
-                          ? "var(--sv-ink)"
-                          : isToday
-                            ? "#10b981"
-                            : "var(--sv-soft, #e5e5e5)",
-                        color: isSelected ? "var(--sv-paper)" : "var(--sv-ink)",
-                      }}
-                    >
-                      <div
+      <div
+        className="grid gap-5"
+        style={{ gridTemplateColumns: "minmax(0, 1fr) 380px" }}
+      >
+        {/* Grid mensal */}
+        <div className="sv-card" style={{ padding: 12 }}>
+          <div
+            className="grid gap-1"
+            style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}
+          >
+            {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => (
+              <div key={d} style={dowHeaderStyle}>
+                {d}
+              </div>
+            ))}
+            {loading && posts.length === 0
+              ? Array.from({ length: 35 }).map((_, i) => (
+                  <div key={`sk-${i}`} style={skeletonCellStyle} />
+                ))
+              : weeks.map((week, wi) =>
+                  week.map((day, di) => {
+                    const iso = isoDayLocal(day.toISOString());
+                    const isOtherMonth = day.getMonth() !== cursor.getMonth();
+                    const dayPosts = postsByDay.get(iso) ?? [];
+                    const isToday = iso === todayIso;
+                    const isSelected = iso === selectedDay;
+                    const platformsInDay = new Set(
+                      dayPosts.flatMap((p) => p.platforms.map((pl) => pl.platform))
+                    );
+                    return (
+                      <button
+                        key={`${wi}-${di}`}
+                        onClick={() => setSelectedDay(iso)}
                         style={{
-                          ...dayNumberStyle,
+                          ...dayCellStyle,
+                          background: isSelected
+                            ? "var(--sv-ink)"
+                            : isToday
+                              ? "var(--sv-green)"
+                              : "var(--sv-white)",
+                          opacity: isOtherMonth ? 0.32 : 1,
                           color: isSelected
                             ? "var(--sv-paper)"
-                            : isToday
-                              ? "#10b981"
-                              : "var(--sv-ink)",
-                          fontWeight: isToday ? 800 : 600,
+                            : "var(--sv-ink)",
+                          boxShadow: isSelected
+                            ? "3px 3px 0 0 var(--sv-green)"
+                            : "none",
                         }}
                       >
-                        {day.getDate()}
-                        {isToday && (
-                          <span style={todayDotStyle} aria-hidden>
-                            ●
-                          </span>
-                        )}
-                      </div>
-                      {dayPosts.length > 0 && (
-                        <div style={dotsRowStyle}>
-                          {Array.from(platformsInDay).slice(0, 2).map((pf) => (
+                        <div style={dayNumberStyle}>{day.getDate()}</div>
+                        {dayPosts.length > 0 && (
+                          <div style={dotsRowStyle}>
+                            {Array.from(platformsInDay)
+                              .slice(0, 2)
+                              .map((pf) => (
+                                <span
+                                  key={pf}
+                                  style={{
+                                    ...platformDotStyle,
+                                    background: PLATFORM_COLORS[pf] || "var(--sv-ink)",
+                                  }}
+                                  title={pf}
+                                />
+                              ))}
                             <span
-                              key={pf}
                               style={{
-                                ...platformDotStyle,
-                                background: PLATFORM_COLORS[pf] || "#999",
+                                ...countLabel,
+                                color: isSelected
+                                  ? "var(--sv-paper)"
+                                  : "var(--sv-ink)",
                               }}
-                              title={pf}
-                            />
-                          ))}
-                          <span style={countLabel}>
-                            {dayPosts.length} {dayPosts.length === 1 ? "post" : "posts"}
-                          </span>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })
-              )}
+                            >
+                              {dayPosts.length}
+                            </span>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+          </div>
         </div>
 
-        {/* SIDEBAR */}
-        <aside style={sidebarStyle}>
+        {/* Sidebar */}
+        <aside
+          className="sv-card"
+          style={{
+            position: "sticky",
+            top: 16,
+            maxHeight: "85vh",
+            overflowY: "auto",
+            padding: 18,
+          }}
+        >
           {selectedDay ? (
             <>
-              <div style={sidebarHeaderStyle}>
-                <h3 style={sidebarTitleStyle}>
+              <div
+                className="flex items-baseline justify-between gap-2 pb-3 mb-3"
+                style={{ borderBottom: "1.5px solid var(--sv-ink)" }}
+              >
+                <h3
+                  className="sv-display"
+                  style={{
+                    fontSize: 22,
+                    margin: 0,
+                    textTransform: "capitalize",
+                    lineHeight: 1.02,
+                  }}
+                >
                   {new Date(selectedDay + "T12:00:00").toLocaleDateString("pt-BR", {
-                    weekday: "long",
                     day: "numeric",
                     month: "long",
                   })}
@@ -440,14 +487,15 @@ export default function ZernioCalendarPage() {
                 </span>
               </div>
               {selectedPosts.length === 0 ? (
-                <div style={emptyStateStyle}>
-                  <CalendarClock size={20} style={{ opacity: 0.4 }} />
-                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--sv-soft, #888)" }}>
-                    Nenhum post nesse dia.
-                  </p>
-                </div>
+                <EmptyState
+                  icon={CalendarClock}
+                  text="Nenhum post nesse dia."
+                />
               ) : (
-                <ul style={listStyle}>
+                <ul
+                  className="flex flex-col gap-3"
+                  style={{ listStyle: "none", padding: 0, margin: 0 }}
+                >
                   {selectedPosts.map((p) =>
                     renderPostCard(p, {
                       isOpen: expandedPostId === p.id,
@@ -469,12 +517,10 @@ export default function ZernioCalendarPage() {
               )}
             </>
           ) : (
-            <div style={emptyStateStyle}>
-              <CalendarClock size={20} style={{ opacity: 0.4 }} />
-              <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--sv-soft, #888)" }}>
-                Selecione um dia pra ver os posts.
-              </p>
-            </div>
+            <EmptyState
+              icon={CalendarClock}
+              text="Selecione um dia no calendário."
+            />
           )}
         </aside>
       </div>
@@ -482,9 +528,9 @@ export default function ZernioCalendarPage() {
   );
 }
 
-// ────────────────────────────── COMPONENTES ──────────────────────────────
+// ────────────────────────── COMPONENTES ──────────────────────────
 
-function Tile({
+function KpiCard({
   label,
   value,
   accent,
@@ -496,17 +542,59 @@ function Tile({
   small?: boolean;
 }) {
   return (
-    <div style={tileStyle}>
-      <div style={tileLabelStyle}>{label}</div>
+    <div className="sv-card" style={{ padding: 14 }}>
       <div
         style={{
-          ...tileValueStyle,
+          fontFamily: "var(--sv-mono)",
+          fontSize: 9,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: "var(--sv-muted, #666)",
+          fontWeight: 700,
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        className="sv-display"
+        style={{
+          fontSize: small ? 22 : 36,
           color: accent,
-          fontSize: small ? 18 : 28,
+          lineHeight: 1,
+          letterSpacing: "-0.02em",
         }}
       >
         {value}
       </div>
+    </div>
+  );
+}
+
+function EmptyState({
+  icon: Icon,
+  text,
+}: {
+  icon: typeof CalendarClock;
+  text: string;
+}) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center text-center py-10 px-4"
+      style={{ color: "var(--sv-muted, #888)" }}
+    >
+      <Icon size={22} style={{ opacity: 0.5 }} />
+      <p
+        style={{
+          margin: "8px 0 0",
+          fontSize: 12,
+          fontFamily: "var(--sv-mono)",
+          textTransform: "uppercase",
+          letterSpacing: "0.1em",
+        }}
+      >
+        {text}
+      </p>
     </div>
   );
 }
@@ -543,9 +631,13 @@ function renderPostCard(p: Post, h: PostCardHandlers): React.ReactNode {
 
   return (
     <li key={p.id} style={postCardStyle}>
-      <button type="button" onClick={h.onToggle} style={postHeaderBtn}>
+      <button
+        type="button"
+        onClick={h.onToggle}
+        style={postHeaderBtn}
+      >
         <span style={timeStyle}>{time}</span>
-        <div style={{ display: "flex", gap: 4, flex: 1, minWidth: 0 }}>
+        <div className="flex gap-1 flex-1 min-w-0">
           {p.platforms.map((pl, idx) => {
             const Icon = pl.platform === "instagram" ? Instagram : Linkedin;
             return (
@@ -553,22 +645,17 @@ function renderPostCard(p: Post, h: PostCardHandlers): React.ReactNode {
                 key={idx}
                 style={{
                   ...platformChipStyle,
-                  background: PLATFORM_COLORS[pl.platform] || "#999",
+                  background: PLATFORM_COLORS[pl.platform] || "var(--sv-ink)",
                 }}
                 title={pl.platform}
               >
-                <Icon size={11} />
+                <Icon size={10} color="var(--sv-ink)" />
               </span>
             );
           })}
         </div>
         {p.source === "autopilot" && <span style={autoBadgeStyle}>auto</span>}
-        <span
-          style={{
-            ...statusBadgeStyle,
-            background: statusMeta.color,
-          }}
-        >
+        <span style={{ ...statusBadgeStyle, color: statusMeta.color }}>
           <StatusIcon size={10} />
           {statusMeta.label}
         </span>
@@ -577,16 +664,18 @@ function renderPostCard(p: Post, h: PostCardHandlers): React.ReactNode {
       <p style={contentStyle}>
         {h.isOpen
           ? p.content
-          : p.content.length > 120
-            ? p.content.slice(0, 120) + "..."
+          : p.content.length > 110
+            ? p.content.slice(0, 110) + "…"
             : p.content}
       </p>
 
       {h.isOpen && (
         <>
-          {/* Mídia */}
           {mediaUrls.length > 0 && (
-            <div style={mediaGridStyle}>
+            <div
+              className="grid gap-1 mt-2"
+              style={{ gridTemplateColumns: "repeat(3, 1fr)" }}
+            >
               {mediaUrls.slice(0, 6).map((u, i) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -602,26 +691,46 @@ function renderPostCard(p: Post, h: PostCardHandlers): React.ReactNode {
             </div>
           )}
 
-          {/* Per-platform results */}
           {platformResults.length > 0 && (
-            <div style={{ marginTop: 8, fontSize: 11 }}>
-              <strong style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <div style={{ marginTop: 8 }}>
+              <strong
+                style={{
+                  fontFamily: "var(--sv-mono)",
+                  fontSize: 9,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                }}
+              >
                 Por plataforma
               </strong>
               <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none" }}>
                 {platformResults.map((r, i) => (
-                  <li key={i} style={{ display: "flex", gap: 6, alignItems: "center", padding: "2px 0" }}>
-                    <span style={{ textTransform: "capitalize", minWidth: 70 }}>{r.platform}</span>
+                  <li
+                    key={i}
+                    style={{
+                      display: "flex",
+                      gap: 6,
+                      alignItems: "center",
+                      padding: "2px 0",
+                      fontSize: 11,
+                    }}
+                  >
+                    <span style={{ textTransform: "capitalize", minWidth: 70 }}>
+                      {r.platform}
+                    </span>
                     <span
                       style={{
-                        color: r.status === "success" ? "#10b981" : "#ef4444",
+                        color:
+                          r.status === "success" ? "var(--sv-green)" : "#C94F3B",
                         fontWeight: 700,
                       }}
                     >
                       {r.status}
                     </span>
                     {r.error && (
-                      <span style={{ color: "var(--sv-soft, #888)", fontSize: 10 }}>
+                      <span
+                        style={{ color: "var(--sv-muted, #888)", fontSize: 10 }}
+                      >
                         · {r.error.slice(0, 60)}
                       </span>
                     )}
@@ -631,10 +740,8 @@ function renderPostCard(p: Post, h: PostCardHandlers): React.ReactNode {
             </div>
           )}
 
-          {/* Failure reason */}
           {p.failure_reason && <div style={errBoxStyle}>{p.failure_reason}</div>}
 
-          {/* Reschedule form */}
           {h.reschedulingPostId === p.id && (
             <div style={rescheduleBoxStyle}>
               <input
@@ -643,22 +750,26 @@ function renderPostCard(p: Post, h: PostCardHandlers): React.ReactNode {
                 onChange={(e) => h.setNewScheduledLocal(e.target.value)}
                 style={inputStyle}
               />
-              <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+              <div className="flex gap-1 mt-2">
                 <button
                   onClick={() => h.onReschedule(p.id)}
-                  style={btnPrimarySmall}
+                  className="sv-btn sv-btn-primary"
+                  style={miniBtnStyle}
                 >
                   Salvar
                 </button>
-                <button onClick={h.cancelReschedule} style={btnGhostSmall}>
+                <button
+                  onClick={h.cancelReschedule}
+                  className="sv-btn sv-btn-outline"
+                  style={miniBtnStyle}
+                >
                   Cancelar
                 </button>
               </div>
             </div>
           )}
 
-          {/* Actions */}
-          <div style={actionsRowStyle}>
+          <div className="flex gap-1 mt-3 flex-wrap">
             {p.status !== "published" &&
               p.status !== "cancelled" &&
               p.status !== "failed" &&
@@ -666,12 +777,17 @@ function renderPostCard(p: Post, h: PostCardHandlers): React.ReactNode {
                 <>
                   <button
                     onClick={() => h.onStartReschedule(p)}
-                    style={btnGhostSmall}
+                    className="sv-btn sv-btn-outline"
+                    style={miniBtnStyle}
                   >
-                    <CalendarClock size={11} /> Reagendar
+                    <CalendarClock size={10} /> Reagendar
                   </button>
-                  <button onClick={() => h.onDelete(p.id)} style={btnDangerSmall}>
-                    <Trash2 size={11} /> Cancelar
+                  <button
+                    onClick={() => h.onDelete(p.id)}
+                    className="sv-btn sv-btn-outline"
+                    style={{ ...miniBtnStyle, borderColor: "#C94F3B", color: "#C94F3B" }}
+                  >
+                    <Trash2 size={10} /> Cancelar
                   </button>
                 </>
               )}
@@ -680,9 +796,10 @@ function renderPostCard(p: Post, h: PostCardHandlers): React.ReactNode {
                 href={`https://zernio.com/dashboard/posts/${p.zernio_post_id}`}
                 target="_blank"
                 rel="noreferrer"
-                style={btnGhostSmall}
+                className="sv-btn sv-btn-ghost"
+                style={miniBtnStyle}
               >
-                <ExternalLink size={11} /> Zernio
+                <ExternalLink size={10} /> Zernio
               </a>
             )}
           </div>
@@ -692,7 +809,7 @@ function renderPostCard(p: Post, h: PostCardHandlers): React.ReactNode {
   );
 }
 
-// ────────────────────────────── HELPERS ──────────────────────────────
+// ────────────────────────── HELPERS ──────────────────────────
 
 function isoDayLocal(iso: string): string {
   const d = new Date(iso);
@@ -719,7 +836,9 @@ function buildMonthGrid(monthStart: Date): Date[][] {
   return weeks;
 }
 
-function extractMediaUrls(raw: Record<string, unknown> | null | undefined): string[] {
+function extractMediaUrls(
+  raw: Record<string, unknown> | null | undefined
+): string[] {
   if (!raw || typeof raw !== "object") return [];
   const candidates: unknown[] = [
     raw.mediaUrls,
@@ -770,194 +889,84 @@ function extractPlatformResults(
   return out;
 }
 
-// ────────────────────────────── STYLES ──────────────────────────────
+// ────────────────────────── STYLES ──────────────────────────
 
-const containerStyle: React.CSSProperties = {
-  maxWidth: 1240,
-  margin: "0 auto",
-  padding: 24,
-  fontFamily: "var(--sv-sans)",
-};
-
-const backLinkStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 4,
-  fontSize: 12,
-  color: "var(--sv-soft, #6b6b6b)",
-  textDecoration: "none",
-  marginBottom: 12,
-};
-
-const heroStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 20,
-  marginBottom: 24,
-  flexWrap: "wrap",
-};
-
-const kickerStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 4,
-  fontFamily: "var(--sv-mono)",
-  fontSize: 9.5,
-  letterSpacing: "0.2em",
-  textTransform: "uppercase",
-  color: "#3b82f6",
-  fontWeight: 700,
-};
-
-const titleStyle: React.CSSProperties = {
-  fontSize: "clamp(34px, 5.5vw, 50px)",
-  fontWeight: 800,
-  margin: "8px 0 4px",
-  letterSpacing: "-0.025em",
-  lineHeight: 1.02,
-  fontFamily: "var(--sv-display, Georgia, serif)",
-};
-
-const subtitleStyle: React.CSSProperties = {
-  fontSize: 14,
-  color: "var(--sv-muted, #555)",
-  margin: 0,
-  maxWidth: 520,
-};
-
-const kpiStripStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-  gap: 10,
-  marginBottom: 20,
-};
-
-const tileStyle: React.CSSProperties = {
-  padding: 14,
-  background: "var(--sv-white)",
+const navBtnStyle: React.CSSProperties = {
+  width: 32,
+  height: 32,
   border: "1.5px solid var(--sv-ink)",
-  boxShadow: "3px 3px 0 0 var(--sv-ink)",
-};
-
-const tileLabelStyle: React.CSSProperties = {
-  fontFamily: "var(--sv-mono)",
-  fontSize: 9,
-  letterSpacing: "0.18em",
-  textTransform: "uppercase",
-  color: "var(--sv-soft, #6b6b6b)",
-  fontWeight: 700,
-};
-
-const tileValueStyle: React.CSSProperties = {
-  fontWeight: 800,
-  letterSpacing: "-0.02em",
-  marginTop: 4,
-  lineHeight: 1.1,
-};
-
-const controlBarStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  marginBottom: 14,
-  flexWrap: "wrap",
-};
-
-const navGroupStyle: React.CSSProperties = {
+  background: "var(--sv-white)",
+  color: "var(--sv-ink)",
+  cursor: "pointer",
   display: "flex",
   alignItems: "center",
-  gap: 8,
+  justifyContent: "center",
+  boxShadow: "2px 2px 0 0 var(--sv-ink)",
 };
 
 const monthLabelStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: 18,
-  fontWeight: 700,
+  fontFamily: "var(--sv-display)",
+  fontSize: 22,
+  fontWeight: 400,
   minWidth: 200,
   textAlign: "center",
   textTransform: "capitalize",
-  letterSpacing: "-0.01em",
+  letterSpacing: "-0.02em",
+  color: "var(--sv-ink)",
 };
 
-const filterPillsStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 6,
-  flexWrap: "wrap",
+const smBtnStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  fontSize: 9.5,
 };
 
 const platformPillStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  gap: 4,
-  padding: "5px 10px",
+  gap: 5,
+  padding: "6px 12px",
   border: "1.5px solid",
-  fontSize: 11,
+  fontFamily: "var(--sv-mono)",
+  fontSize: 9.5,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
   fontWeight: 700,
   cursor: "pointer",
+  color: "var(--sv-ink)",
+  transition: "transform 0.12s, box-shadow 0.12s",
 };
 
-const gridContainerStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) 360px",
-  gap: 16,
-  alignItems: "start",
-};
-
-const gridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-  gap: 4,
-  background: "var(--sv-white)",
-  border: "1.5px solid var(--sv-ink)",
-  padding: 8,
-  boxShadow: "3px 3px 0 0 var(--sv-ink)",
-};
-
-const dayHeaderStyle: React.CSSProperties = {
+const dowHeaderStyle: React.CSSProperties = {
   textAlign: "center",
-  fontSize: 10,
+  fontFamily: "var(--sv-mono)",
+  fontSize: 9,
   fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  color: "var(--sv-soft, #888)",
+  letterSpacing: "0.16em",
+  color: "var(--sv-muted, #888)",
   padding: 6,
+  background: "var(--sv-paper)",
 };
 
 const dayCellStyle: React.CSSProperties = {
   minHeight: 84,
-  border: "1px solid",
+  border: "1.5px solid var(--sv-ink)",
   padding: 8,
   textAlign: "left",
   cursor: "pointer",
   display: "flex",
   flexDirection: "column",
-  gap: 6,
+  gap: 4,
   fontFamily: "var(--sv-sans)",
-  transition: "transform 0.1s, box-shadow 0.1s",
-  background: "var(--sv-white)",
+  transition: "transform 0.12s, box-shadow 0.12s",
 };
 
 const dayNumberStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 4,
-  fontSize: 13,
-};
-
-const todayDotStyle: React.CSSProperties = {
-  fontSize: 6,
-  color: "#10b981",
-  marginLeft: -2,
-};
-
-const skeletonCellStyle: React.CSSProperties = {
-  minHeight: 84,
-  background: "linear-gradient(90deg, var(--sv-paper, #f5f5f5) 25%, #ebebeb 50%, var(--sv-paper, #f5f5f5) 75%)",
-  backgroundSize: "200% 100%",
-  animation: "skel 1.5s linear infinite",
-  border: "1px solid var(--sv-soft, #e5e5e5)",
+  fontFamily: "var(--sv-display)",
+  fontSize: 16,
+  fontWeight: 400,
+  letterSpacing: "-0.01em",
 };
 
 const dotsRowStyle: React.CSSProperties = {
@@ -965,7 +974,6 @@ const dotsRowStyle: React.CSSProperties = {
   alignItems: "center",
   gap: 4,
   marginTop: "auto",
-  flexWrap: "wrap",
 };
 
 const platformDotStyle: React.CSSProperties = {
@@ -973,67 +981,40 @@ const platformDotStyle: React.CSSProperties = {
   width: 8,
   height: 8,
   borderRadius: "50%",
+  border: "1px solid var(--sv-ink)",
 };
 
 const countLabel: React.CSSProperties = {
+  fontFamily: "var(--sv-mono)",
   fontSize: 9,
   fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-  color: "var(--sv-soft, #888)",
+  letterSpacing: "0.06em",
 };
 
-const sidebarStyle: React.CSSProperties = {
-  background: "var(--sv-white)",
+const skeletonCellStyle: React.CSSProperties = {
+  minHeight: 84,
+  background:
+    "linear-gradient(90deg, var(--sv-paper) 25%, #ebebeb 50%, var(--sv-paper) 75%)",
+  backgroundSize: "200% 100%",
+  animation: "skel 1.5s linear infinite",
   border: "1.5px solid var(--sv-ink)",
-  padding: 14,
-  boxShadow: "3px 3px 0 0 var(--sv-ink)",
-  position: "sticky",
-  top: 16,
-  maxHeight: "85vh",
-  overflowY: "auto",
-};
-
-const sidebarHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "baseline",
-  gap: 8,
-  paddingBottom: 10,
-  borderBottom: "1.5px solid var(--sv-ink)",
-  marginBottom: 10,
-};
-
-const sidebarTitleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 14,
-  fontWeight: 700,
-  letterSpacing: "-0.01em",
-  textTransform: "capitalize",
 };
 
 const sidebarCountStyle: React.CSSProperties = {
   fontFamily: "var(--sv-mono)",
   fontSize: 9,
+  letterSpacing: "0.16em",
   textTransform: "uppercase",
-  letterSpacing: "0.1em",
-  color: "var(--sv-soft, #888)",
-};
-
-const listStyle: React.CSSProperties = {
-  listStyle: "none",
-  padding: 0,
-  margin: 0,
-  display: "flex",
-  flexDirection: "column",
-  gap: 10,
+  color: "var(--sv-muted, #888)",
+  fontWeight: 700,
 };
 
 const postCardStyle: React.CSSProperties = {
-  border: "1.5px solid var(--sv-soft, #e0e0e0)",
+  border: "1.5px solid var(--sv-ink)",
   padding: 10,
-  background: "var(--sv-paper, #faf7f2)",
-  transition: "border-color 0.12s",
+  background: "var(--sv-white)",
+  boxShadow: "2px 2px 0 0 var(--sv-ink)",
+  transition: "transform 0.12s",
 };
 
 const postHeaderBtn: React.CSSProperties = {
@@ -1054,6 +1035,7 @@ const timeStyle: React.CSSProperties = {
   fontFamily: "var(--sv-mono)",
   fontSize: 11,
   fontWeight: 700,
+  letterSpacing: "0.04em",
   color: "var(--sv-ink)",
 };
 
@@ -1063,167 +1045,91 @@ const platformChipStyle: React.CSSProperties = {
   justifyContent: "center",
   width: 18,
   height: 18,
-  borderRadius: 2,
-  color: "#fff",
+  border: "1px solid var(--sv-ink)",
 };
 
 const autoBadgeStyle: React.CSSProperties = {
-  fontSize: 9,
+  fontFamily: "var(--sv-mono)",
+  fontSize: 8,
   fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  padding: "1px 5px",
-  background: "#a855f7",
-  color: "#fff",
+  letterSpacing: "0.12em",
+  padding: "2px 5px",
+  background: "var(--sv-pink, #D262B2)",
+  color: "var(--sv-ink)",
+  border: "1px solid var(--sv-ink)",
 };
 
 const statusBadgeStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 3,
-  fontSize: 9,
+  fontFamily: "var(--sv-mono)",
+  fontSize: 8.5,
   fontWeight: 700,
-  letterSpacing: "0.04em",
+  letterSpacing: "0.1em",
   textTransform: "uppercase",
   padding: "2px 6px",
-  color: "#fff",
+  background: "var(--sv-white)",
+  border: "1px solid currentColor",
 };
 
 const contentStyle: React.CSSProperties = {
+  fontFamily: "var(--sv-sans)",
   fontSize: 12,
-  lineHeight: 1.4,
+  lineHeight: 1.45,
   margin: "0 0 6px",
   color: "var(--sv-ink)",
-};
-
-const mediaGridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
-  gap: 4,
-  marginTop: 8,
 };
 
 const mediaThumbStyle: React.CSSProperties = {
   width: "100%",
   aspectRatio: "4 / 5",
   objectFit: "cover",
-  border: "1px solid var(--sv-soft, #ddd)",
+  border: "1.5px solid var(--sv-ink)",
 };
 
 const mediaMoreStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "var(--sv-white)",
-  border: "1px solid var(--sv-soft, #ddd)",
-  fontSize: 13,
-  fontWeight: 700,
+  background: "var(--sv-paper)",
+  border: "1.5px solid var(--sv-ink)",
+  fontFamily: "var(--sv-display)",
+  fontSize: 14,
   aspectRatio: "4 / 5",
 };
 
 const errBoxStyle: React.CSSProperties = {
   marginTop: 8,
-  padding: 6,
-  background: "rgba(239, 68, 68, 0.08)",
-  border: "1px solid #ef4444",
+  padding: 8,
+  background: "rgba(201, 79, 59, 0.08)",
+  border: "1.5px solid #C94F3B",
   fontSize: 11,
-  color: "#7f1d1d",
+  fontFamily: "var(--sv-sans)",
+  color: "#7a2a1a",
 };
 
 const rescheduleBoxStyle: React.CSSProperties = {
   marginTop: 8,
-  padding: 8,
-  background: "var(--sv-white)",
+  padding: 10,
+  background: "var(--sv-paper)",
   border: "1.5px solid var(--sv-ink)",
 };
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
-  padding: 6,
+  padding: 8,
   border: "1.5px solid var(--sv-ink)",
   fontSize: 12,
+  fontFamily: "var(--sv-sans)",
+  background: "var(--sv-white)",
 };
 
-const actionsRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 4,
-  marginTop: 8,
-  flexWrap: "wrap",
-};
-
-const btnGhost: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "8px 12px",
-  background: "transparent",
-  color: "var(--sv-ink)",
-  border: "1.5px solid var(--sv-ink)",
-  fontWeight: 600,
-  fontSize: 12,
-  cursor: "pointer",
-};
-
-const btnGhostSm: React.CSSProperties = {
-  ...btnGhost,
+const miniBtnStyle: React.CSSProperties = {
   padding: "6px 10px",
-  fontSize: 11,
-};
-
-const btnIconLg: React.CSSProperties = {
-  width: 32,
-  height: 32,
-  border: "1.5px solid var(--sv-ink)",
-  background: "var(--sv-white)",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const btnPrimarySmall: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 4,
-  padding: "4px 8px",
-  border: "1px solid var(--sv-ink)",
-  background: "var(--sv-ink)",
-  color: "#fff",
-  fontSize: 10,
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const btnGhostSmall: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 3,
-  padding: "4px 8px",
-  border: "1px solid var(--sv-soft, #d0d0d0)",
-  background: "var(--sv-white)",
-  fontSize: 10,
-  fontWeight: 600,
-  cursor: "pointer",
-  textDecoration: "none",
-  color: "var(--sv-ink)",
-};
-
-const btnDangerSmall: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 3,
-  padding: "4px 8px",
-  border: "1px solid #ef4444",
-  background: "transparent",
-  fontSize: 10,
-  fontWeight: 600,
-  cursor: "pointer",
-  color: "#ef4444",
-};
-
-const emptyStateStyle: React.CSSProperties = {
-  textAlign: "center",
-  padding: "40px 16px",
-  color: "var(--sv-soft, #888)",
+  fontSize: 9,
+  letterSpacing: "0.12em",
+  flex: "0 0 auto",
 };

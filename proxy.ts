@@ -41,24 +41,62 @@ export function decodeJwtEmail(token: string): string | null {
 }
 
 /**
- * Lê cookie de sessão Supabase. O nome do cookie depende do project ref
- * — formato `sb-<projectRef>-auth-token`. Pegamos qualquer cookie que
- * comece com `sb-` e termine em `-auth-token`. Valor é JSON com access_token.
+ * Lê cookie de sessão Supabase. Formatos suportados:
+ *  - `sb-<projectRef>-auth-token` único (sessão pequena)
+ *  - `sb-<projectRef>-auth-token.0`, `.1`, `.2`... (chunked quando JWT
+ *    + refresh excedem o tamanho do cookie ~4KB). Concatenamos os chunks
+ *    em ordem antes do parse.
+ *
+ * Valor (já concatenado) é JSON com access_token, ou string com prefixo
+ * `base64-` que envolve o JSON.
+ *
+ * Implementação espelha @supabase/ssr/dist/main/utils.js::combineChunks
+ * pra paridade com o storage do Supabase JS no cliente.
  */
 export function getSupabaseSessionEmail(request: NextRequest): string | null {
-  // Itera cookies pra achar o sb-*-auth-token (project ref muda por env).
+  // 1. Agrupa cookies sb-*-auth-token (e seus chunks .0/.1/...) por base name.
+  // Match: cookie.name começa com "sb-" e contém "-auth-token", com ou sem
+  // sufixo ".<digit>". Captura: `base` = parte antes de qualquer sufixo `.N`.
+  const chunkPattern = /^(sb-.+-auth-token)(?:\.(\d+))?$/;
+  const groups = new Map<string, Array<{ index: number; value: string }>>();
+
   for (const cookie of request.cookies.getAll()) {
-    if (!cookie.name.startsWith("sb-") || !cookie.name.endsWith("-auth-token")) {
-      continue;
+    const m = cookie.name.match(chunkPattern);
+    if (!m) continue;
+    const base = m[1];
+    const index = m[2] !== undefined ? Number(m[2]) : -1; // -1 = não-chunked (cookie único)
+    const arr = groups.get(base) ?? [];
+    arr.push({ index, value: cookie.value });
+    groups.set(base, arr);
+  }
+
+  // 2. Pra cada base name, monta o valor completo (concatenando chunks em
+  // ordem), parseia e tenta extrair o access_token.
+  for (const chunks of groups.values()) {
+    let combined: string;
+    if (chunks.length === 1 && chunks[0].index === -1) {
+      // Cookie único, sem chunking
+      combined = chunks[0].value;
+    } else {
+      // Ordena por index e concatena. -1 (cookie único) tem prioridade — se
+      // existir, usa só ele em vez dos chunks (defesa contra estado misto).
+      const single = chunks.find((c) => c.index === -1);
+      if (single) {
+        combined = single.value;
+      } else {
+        combined = chunks
+          .filter((c) => c.index >= 0)
+          .sort((a, b) => a.index - b.index)
+          .map((c) => c.value)
+          .join("");
+      }
     }
+
     try {
-      // Cookie value pode ser JSON puro OU base64-encoded prefixed com `base64-`.
-      let raw = cookie.value;
+      let raw = combined;
       if (raw.startsWith("base64-")) {
         raw = atob(raw.slice("base64-".length));
       }
-      // Supabase recente armazena array [access_token, refresh_token, ...]
-      // OU objeto { access_token, ... }. Detecta os dois formatos.
       const parsed = JSON.parse(raw);
       const accessToken: string | undefined = Array.isArray(parsed)
         ? parsed[0]
@@ -67,7 +105,7 @@ export function getSupabaseSessionEmail(request: NextRequest): string | null {
       const email = decodeJwtEmail(accessToken);
       if (email) return email;
     } catch {
-      // Cookie corrompido ou formato desconhecido — pula.
+      // Cookie corrompido, JSON inválido após concat, ou base64 ruim — pula.
     }
   }
   return null;

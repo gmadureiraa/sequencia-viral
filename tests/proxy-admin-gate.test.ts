@@ -168,4 +168,55 @@ describe("getSupabaseSessionEmail", () => {
     ]);
     expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
   });
+
+  it("concatena chunks .0 .1 .2 (cookies grandes do Supabase JS)", () => {
+    // Cookie chunked: o Supabase JS divide JSON grande em pedaços
+    // sb-x-auth-token.0, .1, .2... Cada pedaço é uma fatia do JSON original.
+    const fullValue = JSON.stringify([validJwt, "refresh-tok", null, null]);
+    // Simula chunking: divide em 3 pedaços iguais
+    const chunkSize = Math.ceil(fullValue.length / 3);
+    const chunk0 = fullValue.slice(0, chunkSize);
+    const chunk1 = fullValue.slice(chunkSize, chunkSize * 2);
+    const chunk2 = fullValue.slice(chunkSize * 2);
+    const req = mockRequestWithCookies([
+      // ordem aleatória pra garantir que o sort por index funciona
+      { name: "sb-x-auth-token.2", value: chunk2 },
+      { name: "sb-x-auth-token.0", value: chunk0 },
+      { name: "sb-x-auth-token.1", value: chunk1 },
+    ]);
+    expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
+  });
+
+  it("concatena chunks com prefixo base64- depois do join", () => {
+    const arrayValue = JSON.stringify([validJwt, "refresh", null, null]);
+    const fullValue = "base64-" + Buffer.from(arrayValue, "utf8").toString("base64");
+    const half = Math.ceil(fullValue.length / 2);
+    const req = mockRequestWithCookies([
+      { name: "sb-x-auth-token.0", value: fullValue.slice(0, half) },
+      { name: "sb-x-auth-token.1", value: fullValue.slice(half) },
+    ]);
+    expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
+  });
+
+  it("se há cookie único E chunks, prefere o cookie único (estado misto)", () => {
+    const goodValue = JSON.stringify([validJwt]);
+    // Chunks com email diferente — não deveriam ser usados se há single
+    const otherJwt = makeJwt({ email: "should-not-use@x.com", exp: future });
+    const chunkedValue = JSON.stringify([otherJwt]);
+    const req = mockRequestWithCookies([
+      { name: "sb-x-auth-token.0", value: chunkedValue.slice(0, 5) },
+      { name: "sb-x-auth-token.1", value: chunkedValue.slice(5) },
+      { name: "sb-x-auth-token", value: goodValue },
+    ]);
+    expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
+  });
+
+  it("suporta múltiplos project refs (escolhe o que tem JWT válido)", () => {
+    const value = JSON.stringify([validJwt]);
+    const req = mockRequestWithCookies([
+      { name: "sb-other-auth-token", value: "{ corrompido}" },
+      { name: "sb-mainref-auth-token", value },
+    ]);
+    expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
+  });
 });

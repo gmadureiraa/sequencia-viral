@@ -83,7 +83,7 @@ export function PlannedPostModal({
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/zernio/posts/planned", {
+      const res = await fetch("/api/zernio/planned-posts", {
         method: "POST",
         headers: jsonWithAuth(session),
         body: JSON.stringify({

@@ -70,7 +70,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 };
 
 export default function ZernioCalendarPage() {
-  const { user, session, loading: authLoading } = useAuth();
+  const { user, session, profile, loading: authLoading } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [activePlatforms, setActivePlatforms] = useState<Set<string>>(
@@ -86,6 +86,14 @@ export default function ZernioCalendarPage() {
   const [newScheduledLocal, setNewScheduledLocal] = useState("");
   const [plannedModalOpen, setPlannedModalOpen] = useState(false);
   const [plannedModalDate, setPlannedModalDate] = useState<string | undefined>();
+  const [editingPlanned, setEditingPlanned] = useState<{
+    id: string;
+    content: string;
+    scheduledFor: string;
+    platforms: string[];
+  } | null>(null);
+  const [promotingId, setPromotingId] = useState<string | null>(null);
+  const canPromote = !!profile && profile.plan === "business";
 
   const fetchAll = useCallback(async () => {
     if (!session) return;
@@ -240,6 +248,44 @@ export default function ZernioCalendarPage() {
       );
     }
   }
+
+  function startEditPlanned(post: Post) {
+    setEditingPlanned({
+      id: post.id,
+      content: post.content,
+      scheduledFor: post.scheduled_for ?? "",
+      platforms: post.platforms.map((p) => p.platform),
+    });
+    setPlannedModalOpen(true);
+  }
+
+  const onPromote = useCallback(
+    async (post: Post) => {
+      if (!session) return;
+      if (
+        !confirm(
+          "Promover essa entrada planejada pra publicação real via Zernio? IG/LinkedIn precisam estar conectados."
+        )
+      )
+        return;
+      setPromotingId(post.id);
+      try {
+        const res = await fetch(`/api/zernio/planned-posts/${post.id}/promote`, {
+          method: "POST",
+          headers: jsonWithAuth(session),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha");
+        toast.success("Promovido pra publicação real.");
+        await fetchAll();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Erro");
+      } finally {
+        setPromotingId(null);
+      }
+    },
+    [session, fetchAll]
+  );
 
   if (authLoading || !user) {
     return (
@@ -561,10 +607,35 @@ export default function ZernioCalendarPage() {
                 </span>
               </div>
               {selectedPosts.length === 0 ? (
-                <EmptyState
-                  icon={CalendarClock}
-                  text="Nenhum post nesse dia."
-                />
+                <div className="flex flex-col items-center text-center py-8 px-4">
+                  <CalendarClock
+                    size={22}
+                    style={{ opacity: 0.4, color: "var(--sv-muted)" }}
+                  />
+                  <p
+                    style={{
+                      margin: "8px 0 14px",
+                      fontFamily: "var(--sv-mono)",
+                      fontSize: 11,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      color: "var(--sv-muted, #888)",
+                    }}
+                  >
+                    Nenhum post nesse dia
+                  </p>
+                  <button
+                    onClick={() => {
+                      setPlannedModalDate(selectedDay ?? undefined);
+                      setEditingPlanned(null);
+                      setPlannedModalOpen(true);
+                    }}
+                    className="sv-btn sv-btn-primary"
+                    style={{ padding: "8px 14px", fontSize: 10 }}
+                  >
+                    <CalendarPlus size={11} /> Adicionar nesse dia
+                  </button>
+                </div>
               ) : (
                 <ul
                   className="flex flex-col gap-3"
@@ -585,6 +656,10 @@ export default function ZernioCalendarPage() {
                         setReschedulingPostId(null);
                         setNewScheduledLocal("");
                       },
+                      onEditPlanned: startEditPlanned,
+                      onPromote,
+                      canPromote,
+                      promotingId,
                     })
                   )}
                 </ul>
@@ -599,15 +674,20 @@ export default function ZernioCalendarPage() {
         </aside>
       </div>
 
-      {/* Modal "Novo no calendário" — entrada planejada manual sem Zernio */}
+      {/* Modal "Novo no calendário" — também usado em modo edição. */}
       {session && (
         <PlannedPostModal
           open={plannedModalOpen}
-          onClose={() => setPlannedModalOpen(false)}
+          onClose={() => {
+            setPlannedModalOpen(false);
+            setEditingPlanned(null);
+          }}
           session={session}
           initialDate={plannedModalDate}
+          editing={editingPlanned ?? undefined}
           onCreated={() => {
             fetchAll();
+            setEditingPlanned(null);
           }}
         />
       )}
@@ -696,6 +776,13 @@ interface PostCardHandlers {
   newScheduledLocal: string;
   setNewScheduledLocal: (v: string) => void;
   cancelReschedule: () => void;
+  /** Pra entries 'planned': abre modal de edição. */
+  onEditPlanned?: (p: Post) => void;
+  /** Pra entries 'planned': promove pra publicação real (Max). */
+  onPromote?: (p: Post) => Promise<void>;
+  /** True quando user é admin OR business — habilita "Promover". */
+  canPromote?: boolean;
+  promotingId?: string | null;
 }
 
 function renderPostCard(p: Post, h: PostCardHandlers): React.ReactNode {
@@ -857,27 +944,63 @@ function renderPostCard(p: Post, h: PostCardHandlers): React.ReactNode {
           )}
 
           <div className="flex gap-1 mt-3 flex-wrap">
+            {/* Editar (só pra entries 'planned' — sem Zernio) */}
+            {p.status === "planned" && h.onEditPlanned && (
+              <button
+                onClick={() => h.onEditPlanned!(p)}
+                className="sv-btn sv-btn-outline"
+                style={miniBtnStyle}
+              >
+                <CalendarClock size={10} /> Editar
+              </button>
+            )}
+
+            {/* Promover planned → scheduled (Max only) */}
+            {p.status === "planned" && h.canPromote && h.onPromote && (
+              <button
+                onClick={() => h.onPromote!(p)}
+                disabled={h.promotingId === p.id}
+                className="sv-btn sv-btn-primary"
+                style={miniBtnStyle}
+              >
+                {h.promotingId === p.id ? (
+                  <Loader2 size={10} className="animate-spin" />
+                ) : (
+                  <ExternalLink size={10} />
+                )}
+                Programar publicação
+              </button>
+            )}
+
+            {/* Reagendar (posts 'scheduled' via Zernio) */}
+            {p.status !== "planned" &&
+              p.status !== "published" &&
+              p.status !== "cancelled" &&
+              p.status !== "failed" &&
+              h.reschedulingPostId !== p.id && (
+                <button
+                  onClick={() => h.onStartReschedule(p)}
+                  className="sv-btn sv-btn-outline"
+                  style={miniBtnStyle}
+                >
+                  <CalendarClock size={10} /> Reagendar
+                </button>
+              )}
+
+            {/* Cancelar — todas exceto published/cancelled/failed */}
             {p.status !== "published" &&
               p.status !== "cancelled" &&
               p.status !== "failed" &&
               h.reschedulingPostId !== p.id && (
-                <>
-                  <button
-                    onClick={() => h.onStartReschedule(p)}
-                    className="sv-btn sv-btn-outline"
-                    style={miniBtnStyle}
-                  >
-                    <CalendarClock size={10} /> Reagendar
-                  </button>
-                  <button
-                    onClick={() => h.onDelete(p.id)}
-                    className="sv-btn sv-btn-outline"
-                    style={{ ...miniBtnStyle, borderColor: "#C94F3B", color: "#C94F3B" }}
-                  >
-                    <Trash2 size={10} /> Cancelar
-                  </button>
-                </>
+                <button
+                  onClick={() => h.onDelete(p.id)}
+                  className="sv-btn sv-btn-outline"
+                  style={{ ...miniBtnStyle, borderColor: "#C94F3B", color: "#C94F3B" }}
+                >
+                  <Trash2 size={10} /> Cancelar
+                </button>
               )}
+
             {p.zernio_post_id && (
               <a
                 href={`https://zernio.com/dashboard/posts/${p.zernio_post_id}`}

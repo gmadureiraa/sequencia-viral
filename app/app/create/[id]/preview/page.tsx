@@ -17,6 +17,7 @@ import { upsertUserCarousel } from "@/lib/carousel-storage";
 import CarouselFeedbackPanel from "@/components/app/carousel-feedback";
 import FeedbackModal from "@/components/app/FeedbackModal";
 import { ScheduleZernioModal } from "@/components/app/zernio/schedule-modal";
+import { PlannedPostModal } from "@/components/app/zernio/planned-post-modal";
 
 // Mesmo injector que o edit usa — garante que a fonte display escolhida
 // esteja disponível no momento do export PNG/PDF.
@@ -153,8 +154,12 @@ export default function PreviewPage(props: {
   // Zernio scheduling modal — admin only.
   const [zernioOpen, setZernioOpen] = useState(false);
   const isAdmin = isAdminEmail(profile?.email ?? user?.email);
-  // Zernio scheduling: liberado pra admin OU plano business (não só admin).
+  // Zernio scheduling (publicação real): admin OR plano Max.
   const canScheduleZernio = isAdmin || profile?.plan === "business";
+  // Calendário (planejamento manual sem Zernio): admin OR pro/Max.
+  const canPlanInCalendar =
+    isAdmin || profile?.plan === "pro" || profile?.plan === "business";
+  const [plannedModalOpenPreview, setPlannedModalOpenPreview] = useState(false);
   async function handleExportZip() {
     await exportZip(draft?.title || "carrossel");
     scheduleFeedbackModal();
@@ -808,6 +813,56 @@ export default function PreviewPage(props: {
             )}
           </div>
 
+          {/* Adicionar ao calendário (Pro) — planejamento manual sem Zernio */}
+          {!canScheduleZernio && canPlanInCalendar && draft?.id && (
+            <div
+              style={{
+                padding: 22,
+                background: "var(--sv-paper, #faf7f2)",
+                border: "1.5px solid var(--sv-ink)",
+                boxShadow: "3px 3px 0 0 var(--sv-ink)",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--sv-mono)",
+                  fontSize: 9.5,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  color: "var(--sv-ink)",
+                  marginBottom: 10,
+                  fontWeight: 700,
+                  opacity: 0.6,
+                }}
+              >
+                Nº 02 · Planejamento
+              </div>
+              <h4
+                className="sv-display"
+                style={{ fontSize: 22, letterSpacing: "-0.01em", marginBottom: 12 }}
+              >
+                Adicionar ao <em>calendário</em>.
+              </h4>
+              <p style={{ fontSize: 12, color: "var(--sv-soft)", marginBottom: 12 }}>
+                Marque uma data pra postar esse carrossel. Pra publicação
+                automática no IG/LinkedIn,{" "}
+                <a href="/app/plans" target="_blank" rel="noreferrer">
+                  upgrade pra Max
+                </a>
+                .
+              </p>
+              <button
+                type="button"
+                onClick={() => setPlannedModalOpenPreview(true)}
+                disabled={isExporting}
+                className="sv-btn sv-btn-primary"
+                style={{ width: "100%", padding: "11px 12px" }}
+              >
+                Adicionar ao calendário
+              </button>
+            </div>
+          )}
+
           {/* Zernio scheduler — admin + plano business */}
           {canScheduleZernio && draft?.id && (
             <div
@@ -1211,6 +1266,17 @@ export default function PreviewPage(props: {
           carouselId={draft.id}
           initialContent={caption || draft?.title || ""}
           getSlidePngs={captureSlidesAsDataUrls}
+        />
+      )}
+
+      {/* Planned post modal — pra plano Pro adicionar ao calendário sem Zernio. */}
+      {!canScheduleZernio && canPlanInCalendar && draft?.id && session && (
+        <PlannedPostModal
+          open={plannedModalOpenPreview}
+          onClose={() => setPlannedModalOpenPreview(false)}
+          session={session}
+          carouselId={draft.id}
+          initialContent={caption || draft?.title || ""}
         />
       )}
 

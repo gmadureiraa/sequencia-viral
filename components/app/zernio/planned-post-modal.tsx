@@ -32,6 +32,16 @@ export interface PlannedPostModalProps {
   /** Pré-fill: link com carrossel existente do SV. */
   carouselId?: string;
   initialContent?: string;
+  /**
+   * Modo edição: passa o ID da entry pra atualizar via PATCH em vez
+   * de criar nova via POST. Pré-preenche tudo.
+   */
+  editing?: {
+    id: string;
+    content: string;
+    scheduledFor: string;
+    platforms: string[];
+  };
 }
 
 export function PlannedPostModal({
@@ -42,11 +52,18 @@ export function PlannedPostModal({
   initialDate,
   carouselId,
   initialContent = "",
+  editing,
 }: PlannedPostModalProps) {
-  const [content, setContent] = useState(initialContent);
+  const isEditing = !!editing;
+  const [content, setContent] = useState(editing?.content ?? initialContent);
   const [scheduled, setScheduled] = useState(() => {
+    if (editing) {
+      // YYYY-MM-DDTHH:MM (sem segundos) pra <input type="datetime-local">
+      const d = new Date(editing.scheduledFor);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
     if (initialDate) {
-      // Se veio só YYYY-MM-DD, adiciona horário default 09:00
       if (/^\d{4}-\d{2}-\d{2}$/.test(initialDate)) return `${initialDate}T09:00`;
       return initialDate;
     }
@@ -55,13 +72,13 @@ export function PlannedPostModal({
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   });
   const [platforms, setPlatforms] = useState<Set<string>>(
-    new Set(["instagram"])
+    new Set(editing?.platforms ?? ["instagram"])
   );
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (open) setContent(initialContent);
-  }, [open, initialContent]);
+    if (open && !editing) setContent(initialContent);
+  }, [open, initialContent, editing]);
 
   function togglePlatform(p: string) {
     setPlatforms((prev) => {
@@ -83,20 +100,24 @@ export function PlannedPostModal({
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/zernio/planned-posts", {
-        method: "POST",
+      const url = isEditing
+        ? `/api/zernio/posts/${editing.id}`
+        : "/api/zernio/planned-posts";
+      const method = isEditing ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
         headers: jsonWithAuth(session),
         body: JSON.stringify({
           content: content.trim(),
           scheduledFor: `${scheduled}:00`,
           timezone: "America/Sao_Paulo",
           platforms: Array.from(platforms),
-          carouselId,
+          ...(carouselId && !isEditing ? { carouselId } : {}),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Falha");
-      toast.success("Adicionado ao calendário.");
+      toast.success(isEditing ? "Atualizado." : "Adicionado ao calendário.");
       onCreated?.();
       onClose();
     } catch (err) {
@@ -118,7 +139,11 @@ export function PlannedPostModal({
           <div className="flex items-center gap-2">
             <CalendarPlus size={18} />
             <h2 className="sv-display" style={{ fontSize: 22, margin: 0 }}>
-              Novo no <em>calendário</em>
+              {isEditing ? (
+                <>Editar <em>entrada</em></>
+              ) : (
+                <>Novo no <em>calendário</em></>
+              )}
             </h2>
           </div>
           <button onClick={onClose} aria-label="Fechar" style={closeBtnStyle}>
@@ -196,7 +221,7 @@ export function PlannedPostModal({
             ) : (
               <CalendarPlus size={13} />
             )}
-            Adicionar
+            {isEditing ? "Salvar" : "Adicionar"}
           </button>
         </footer>
       </div>

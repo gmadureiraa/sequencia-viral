@@ -63,7 +63,12 @@ interface PatchBody {
   scheduledFor?: string;
   timezone?: string;
   title?: string;
+  /** Pra entries 'planned' — Pro pode editar plataformas. Lista
+   *  ['instagram'] | ['linkedin'] | ['instagram', 'linkedin']. */
+  platforms?: string[];
 }
+
+const ALLOWED_PLATFORMS = new Set(["instagram", "linkedin"]);
 
 export async function PATCH(
   request: Request,
@@ -93,35 +98,47 @@ export async function PATCH(
     .eq("user_id", user.id)
     .maybeSingle();
   if (!row) return Response.json({ error: "Post não encontrado." }, { status: 404 });
-  if (!row.zernio_post_id)
-    return Response.json({ error: "Post sem zernio_post_id (estado inválido)." }, { status: 400 });
   if (row.status === "published" || row.status === "cancelled")
     return Response.json(
       { error: "Não dá pra editar post já publicado ou cancelado." },
       { status: 400 }
     );
 
-  try {
-    await updateZernioPost(row.zernio_post_id, {
-      content: body.content,
-      scheduledFor: body.scheduledFor,
-      timezone: body.timezone,
-      title: body.title,
-    });
-  } catch (err) {
-    if (err instanceof ZernioApiError) {
-      return Response.json(
-        { error: `Zernio: ${err.message}` },
-        { status: err.status >= 400 && err.status < 500 ? 400 : 502 }
-      );
+  // Se tem zernio_post_id, é post real agendado via Zernio — atualiza
+  // no Zernio também. Se NÃO tem (status='planned' ou similar), é só DB.
+  if (row.zernio_post_id) {
+    try {
+      await updateZernioPost(row.zernio_post_id, {
+        content: body.content,
+        scheduledFor: body.scheduledFor,
+        timezone: body.timezone,
+        title: body.title,
+      });
+    } catch (err) {
+      if (err instanceof ZernioApiError) {
+        return Response.json(
+          { error: `Zernio: ${err.message}` },
+          { status: err.status >= 400 && err.status < 500 ? 400 : 502 }
+        );
+      }
+      return Response.json({ error: "Falha ao atualizar no Zernio." }, { status: 500 });
     }
-    return Response.json({ error: "Falha ao atualizar no Zernio." }, { status: 500 });
   }
 
   const update: Record<string, unknown> = {};
   if (body.content !== undefined) update.content = body.content;
   if (body.scheduledFor !== undefined) update.scheduled_for = body.scheduledFor;
   if (body.timezone !== undefined) update.timezone = body.timezone;
+  if (body.platforms !== undefined && Array.isArray(body.platforms)) {
+    const valid = body.platforms.filter((p) => ALLOWED_PLATFORMS.has(p));
+    if (valid.length === 0) {
+      return Response.json(
+        { error: "Selecione pelo menos 1 plataforma válida." },
+        { status: 400 }
+      );
+    }
+    update.platforms = valid.map((p) => ({ platform: p, accountId: "" }));
+  }
   if (Object.keys(update).length > 0) {
     const { error } = await sb
       .from("zernio_scheduled_posts")

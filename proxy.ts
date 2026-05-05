@@ -133,7 +133,16 @@ export function proxy(request: NextRequest) {
   // futuro adicionar exceção aqui.
   if (pathname.startsWith("/app/admin")) {
     const email = getSupabaseSessionEmail(request);
-    if (!email || !ADMIN_EMAILS_LOWER.has(email)) {
+    const isAdmin = email !== null && ADMIN_EMAILS_LOWER.has(email);
+    // Log estruturado pra Vercel logs — facilita debug remoto sem expor
+    // dados sensíveis (só email + decision).
+    console.log("[edge-gate] admin check", {
+      pathname,
+      hasEmail: email !== null,
+      email,
+      isAdmin,
+    });
+    if (!isAdmin) {
       // Sem cookie: manda pro login. Com cookie mas não admin: manda /app.
       const target = email ? "/app" : "/app/login";
       const url = request.nextUrl.clone();
@@ -186,8 +195,8 @@ export function proxy(request: NextRequest) {
   // (sem isso a página trava em loop infinito). Prod mantém policy estrita.
   const isDev = process.env.NODE_ENV === "development";
   const scriptSrc = isDev
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com https://vercel.live https://www.googletagmanager.com https://www.google-analytics.com"
-    : "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://vercel.live https://www.googletagmanager.com https://www.google-analytics.com";
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com https://vercel.live https://www.googletagmanager.com https://www.google-analytics.com https://connect.facebook.net"
+    : "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://vercel.live https://www.googletagmanager.com https://www.google-analytics.com https://connect.facebook.net";
   response.headers.set(
     "Content-Security-Policy",
     [
@@ -196,7 +205,7 @@ export function proxy(request: NextRequest) {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://generativelanguage.googleapis.com https://google.serper.dev https://api.apify.com https://*.vercel-insights.com https://*.vercel-analytics.com https://vercel.live https://www.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://us.i.posthog.com https://us-assets.i.posthog.com",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://generativelanguage.googleapis.com https://google.serper.dev https://api.apify.com https://*.vercel-insights.com https://*.vercel-analytics.com https://vercel.live https://www.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://us.i.posthog.com https://us-assets.i.posthog.com https://connect.facebook.net https://*.facebook.com",
       "frame-src 'self' https://js.stripe.com https://vercel.live",
       "frame-ancestors 'none'",
       "base-uri 'self'",

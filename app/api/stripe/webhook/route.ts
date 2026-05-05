@@ -10,6 +10,7 @@ import type { PlanId } from "@/lib/pricing";
 import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { sendPaymentSuccess, sendPaymentFailed } from "@/lib/email/dispatch";
+import { fireResendEvent } from "@/lib/integrations/resend/events";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 
@@ -217,6 +218,15 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
             { email: recipientEmail, name: profileRow?.name || undefined },
             { planName: planMeta.name, carouselsPerMonth }
           );
+
+          // Lifecycle: dispara evento Resend pra Automations de upgrade.
+          await fireResendEvent("sv.upgraded", {
+            email: recipientEmail,
+            user_id: userId,
+            plan: planId,
+            amount_usd: stripePaymentAmountUsd(planId),
+            coupon: svCouponCode || null,
+          });
         }
       }
       break;
@@ -244,6 +254,21 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
           event: "subscription_cancelled",
           properties: { downgraded_to: "free" },
         });
+
+        // Lifecycle: dispara evento Resend pra Automation de cancel.
+        // Handler atual só tem userId, então buscamos o email do profile.
+        // Sem email, skip silencioso.
+        const { data: cancelProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("email")
+          .eq("id", userId)
+          .maybeSingle();
+        if (cancelProfile?.email) {
+          await fireResendEvent("sv.canceled", {
+            email: cancelProfile.email,
+            user_id: userId,
+          });
+        }
       }
       break;
     }
@@ -327,6 +352,19 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
           event: "subscription_updated",
           properties: { new_status: status, downgraded_to: "free" },
         });
+
+        // Lifecycle: downgrade pra free → trata como cancel.
+        const { data: downProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("email")
+          .eq("id", userId)
+          .maybeSingle();
+        if (downProfile?.email) {
+          await fireResendEvent("sv.canceled", {
+            email: downProfile.email,
+            user_id: userId,
+          });
+        }
       } else if (resolvedPlan) {
         const usageLimit = usageLimitForPaidPlan(resolvedPlan);
         const { error: upErr } = await supabaseAdmin
@@ -345,6 +383,20 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
           event: "subscription_updated",
           properties: { new_status: status, plan: resolvedPlan },
         });
+
+        // Lifecycle: upgrade/troca pra plano pago → fire upgrade event.
+        const { data: upProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("email")
+          .eq("id", userId)
+          .maybeSingle();
+        if (upProfile?.email) {
+          await fireResendEvent("sv.upgraded", {
+            email: upProfile.email,
+            user_id: userId,
+            plan: resolvedPlan,
+          });
+        }
       }
       break;
     }
@@ -425,6 +477,15 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
           portalUrl,
         }
       );
+
+      // Lifecycle: dispara evento Resend pra Automation de dunning.
+      await fireResendEvent("sv.payment.failed", {
+        email: profile.email,
+        user_id: profile.id,
+        plan: planId,
+        amount_usd: amountUsd,
+        attempt_count: invoice.attempt_count,
+      });
       break;
     }
   }

@@ -4,6 +4,7 @@ import {
 } from "@/lib/server/auth";
 import { sendWelcome } from "@/lib/email/dispatch";
 import { addContactToAudience } from "@/lib/integrations/resend/contacts";
+import { fireResendEvent } from "@/lib/integrations/resend/events";
 import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 
 export const maxDuration = 10;
@@ -63,6 +64,17 @@ export async function POST(request: Request) {
     sendWelcome({ email, name: profile?.name || undefined }),
     addContactToAudience({ email, name: profile?.name || undefined }),
   ]);
+
+  // Lifecycle: dispara evento Resend pra Automations de signup. Roda depois
+  // do addContactToAudience pra garantir que o contato existe na audience
+  // antes da Automation tentar referenciar.
+  await fireResendEvent("sv.signup", {
+    email,
+    user_id: user.id,
+    first_name: profile?.name || null,
+    source: "organic",
+    plan: "free",
+  });
 
   if (sentId) {
     const prev =

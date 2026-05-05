@@ -38,6 +38,7 @@ type Status =
 interface Post {
   id: string;
   zernio_post_id: string | null;
+  carousel_id: string | null;
   status: Status;
   content: string;
   scheduled_for: string | null;
@@ -75,6 +76,11 @@ export default function ZernioCalendarPage() {
   const [loading, setLoading] = useState(true);
   const [activePlatforms, setActivePlatforms] = useState<Set<string>>(
     new Set(["instagram", "linkedin"])
+  );
+  // Filtro por status — default mostra planejado, agendado, publicando,
+  // publicado. Falhou e cancelado escondidos por default (admin pode ligar).
+  const [activeStatuses, setActiveStatuses] = useState<Set<Status>>(
+    new Set(["planned", "scheduled", "publishing", "published"])
   );
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
@@ -118,10 +124,12 @@ export default function ZernioCalendarPage() {
 
   const filteredPosts = useMemo(
     () =>
-      posts.filter((p) =>
-        p.platforms.some((pl) => activePlatforms.has(pl.platform))
+      posts.filter(
+        (p) =>
+          p.platforms.some((pl) => activePlatforms.has(pl.platform)) &&
+          activeStatuses.has(p.status)
       ),
-    [posts, activePlatforms]
+    [posts, activePlatforms, activeStatuses]
   );
 
   const postsByDay = useMemo(() => {
@@ -487,6 +495,43 @@ export default function ZernioCalendarPage() {
         </div>
       </div>
 
+      {/* Filtros de STATUS */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {(
+          ["planned", "scheduled", "publishing", "published", "failed", "cancelled"] as Status[]
+        ).map((status) => {
+          const meta = STATUS_META[status];
+          const on = activeStatuses.has(status);
+          return (
+            <button
+              key={status}
+              onClick={() =>
+                setActiveStatuses((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(status)) next.delete(status);
+                  else next.add(status);
+                  return next;
+                })
+              }
+              style={{
+                ...statusPillStyle,
+                background: on ? meta.color : "var(--sv-white)",
+                color: on
+                  ? status === "publishing" || status === "scheduled"
+                    ? "var(--sv-paper)"
+                    : "var(--sv-ink)"
+                  : "var(--sv-muted, #888)",
+                borderColor: on ? "var(--sv-ink)" : "var(--sv-soft, #ccc)",
+                opacity: on ? 1 : 0.6,
+                boxShadow: on ? "2px 2px 0 0 var(--sv-ink)" : "none",
+              }}
+            >
+              {meta.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* GRID + SIDEBAR */}
       <div
         className="grid gap-5"
@@ -521,6 +566,13 @@ export default function ZernioCalendarPage() {
                       <button
                         key={`${wi}-${di}`}
                         onClick={() => setSelectedDay(iso)}
+                        onDoubleClick={() => {
+                          setSelectedDay(iso);
+                          setPlannedModalDate(iso);
+                          setEditingPlanned(null);
+                          setPlannedModalOpen(true);
+                        }}
+                        title="Click pra ver · Duplo click pra adicionar"
                         style={{
                           ...dayCellStyle,
                           background: isSelected
@@ -1001,6 +1053,16 @@ function renderPostCard(p: Post, h: PostCardHandlers): React.ReactNode {
                 </button>
               )}
 
+            {p.carousel_id && (
+              <a
+                href={`/app/create/${p.carousel_id}/preview`}
+                className="sv-btn sv-btn-outline"
+                style={miniBtnStyle}
+              >
+                <ExternalLink size={10} /> Ver carrossel
+              </a>
+            )}
+
             {p.zernio_post_id && (
               <a
                 href={`https://zernio.com/dashboard/posts/${p.zernio_post_id}`}
@@ -1145,6 +1207,20 @@ const platformPillStyle: React.CSSProperties = {
   cursor: "pointer",
   color: "var(--sv-ink)",
   transition: "transform 0.12s, box-shadow 0.12s",
+};
+
+const statusPillStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "5px 10px",
+  border: "1.5px solid",
+  fontFamily: "var(--sv-mono)",
+  fontSize: 9,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  fontWeight: 700,
+  cursor: "pointer",
+  transition: "transform 0.12s, box-shadow 0.12s, opacity 0.12s",
 };
 
 const dowHeaderStyle: React.CSSProperties = {

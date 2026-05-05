@@ -18,7 +18,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const gate = await requireAdminOrPlan(request);
+  // Pro pode editar/cancelar próprios posts planejados; Business + admin
+  // têm acesso completo (incluindo posts agendados via Zernio).
+  const gate = await requireAdminOrPlan(request, ["pro", "business"]);
   if (!gate.ok) return gate.response;
   const { user } = gate;
   const { id } = await params;
@@ -67,7 +69,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const gate = await requireAdminOrPlan(request);
+  // Pro pode editar/cancelar próprios posts planejados; Business + admin
+  // têm acesso completo (incluindo posts agendados via Zernio).
+  const gate = await requireAdminOrPlan(request, ["pro", "business"]);
   if (!gate.ok) return gate.response;
   const { user } = gate;
   const { id } = await params;

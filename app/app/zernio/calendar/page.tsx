@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   ArrowLeft,
   CalendarClock,
+  CalendarPlus,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -21,10 +22,12 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
+import { PlannedPostModal } from "@/components/app/zernio/planned-post-modal";
 // Layout (app/zernio/layout.tsx) já gateia admin OR business plan.
 
 type Status =
   | "draft"
+  | "planned"
   | "scheduled"
   | "publishing"
   | "published"
@@ -51,6 +54,7 @@ const STATUS_META: Record<
   { label: string; color: string; icon: typeof CheckCircle2 }
 > = {
   draft: { label: "Rascunho", color: "var(--sv-muted, #888)", icon: Clock },
+  planned: { label: "Planejado", color: "var(--sv-pink)", icon: CalendarPlus },
   scheduled: { label: "Agendado", color: "var(--sv-ink)", icon: CalendarClock },
   publishing: { label: "Publicando", color: "var(--sv-yellow)", icon: Loader2 },
   published: { label: "Publicado", color: "var(--sv-green)", icon: CheckCircle2 },
@@ -80,6 +84,8 @@ export default function ZernioCalendarPage() {
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
   const [reschedulingPostId, setReschedulingPostId] = useState<string | null>(null);
   const [newScheduledLocal, setNewScheduledLocal] = useState("");
+  const [plannedModalOpen, setPlannedModalOpen] = useState(false);
+  const [plannedModalDate, setPlannedModalDate] = useState<string | undefined>();
 
   const fetchAll = useCallback(async () => {
     if (!session) return;
@@ -288,14 +294,26 @@ export default function ZernioCalendarPage() {
             Tudo que tá programado pro Instagram + LinkedIn em um lugar só.
           </p>
         </div>
-        <button
-          onClick={fetchAll}
-          className="sv-btn sv-btn-outline"
-          disabled={loading}
-        >
-          <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
-          Atualizar
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setPlannedModalDate(selectedDay || undefined);
+              setPlannedModalOpen(true);
+            }}
+            className="sv-btn sv-btn-primary"
+          >
+            <CalendarPlus size={13} />
+            Adicionar
+          </button>
+          <button
+            onClick={fetchAll}
+            className="sv-btn sv-btn-outline"
+            disabled={loading}
+          >
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+            Atualizar
+          </button>
+        </div>
       </header>
 
       {/* QUICK-START — primeira vez (sem posts ainda) */}
@@ -341,19 +359,18 @@ export default function ZernioCalendarPage() {
                 &quot;Agendar nas redes&quot; no preview.
               </p>
               <div className="mt-3 flex gap-2 flex-wrap">
+                <button
+                  onClick={() => setPlannedModalOpen(true)}
+                  className="sv-btn sv-btn-primary"
+                >
+                  <CalendarPlus size={13} /> Adicionar ao calendário
+                </button>
                 <Link
                   href="/app/create/new"
-                  className="sv-btn sv-btn-primary"
-                  style={{ textDecoration: "none" }}
-                >
-                  Criar primeiro carrossel →
-                </Link>
-                <Link
-                  href="/app/zernio/autopilot"
                   className="sv-btn sv-btn-outline"
                   style={{ textDecoration: "none" }}
                 >
-                  Configurar Piloto Auto
+                  Criar carrossel
                 </Link>
               </div>
             </div>
@@ -581,6 +598,19 @@ export default function ZernioCalendarPage() {
           )}
         </aside>
       </div>
+
+      {/* Modal "Novo no calendário" — entrada planejada manual sem Zernio */}
+      {session && (
+        <PlannedPostModal
+          open={plannedModalOpen}
+          onClose={() => setPlannedModalOpen(false)}
+          session={session}
+          initialDate={plannedModalDate}
+          onCreated={() => {
+            fetchAll();
+          }}
+        />
+      )}
     </div>
   );
 }

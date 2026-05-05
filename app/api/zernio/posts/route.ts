@@ -52,7 +52,9 @@ interface CreatePostBody {
 const DEFAULT_TZ = "America/Sao_Paulo";
 
 export async function GET(request: Request) {
-  const gate = await requireAdminOrPlan(request);
+  // GET /posts: Pro pode ver (planning manual + posts agendados).
+  // Business escreve via Zernio. Free não tem acesso.
+  const gate = await requireAdminOrPlan(request, ["pro", "business"]);
   if (!gate.ok) return gate.response;
   const { user } = gate;
 

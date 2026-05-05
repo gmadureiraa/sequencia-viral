@@ -17,7 +17,8 @@ import { requireAdminOrPlan } from "@/lib/server/plan-gate";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const gate = await requireAdminOrPlan(request);
+  // Pro vê stats (planejamento manual). Business vê tudo. Free não.
+  const gate = await requireAdminOrPlan(request, ["pro", "business"]);
   if (!gate.ok) return gate.response;
   const { user } = gate;
 

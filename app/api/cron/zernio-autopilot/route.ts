@@ -1,91 +1,38 @@
 /**
  * GET /api/cron/zernio-autopilot
  *
- * Cron a cada 30min (Vercel) que dispara recipes ativos do Piloto Auto.
+ * Cron diário (Vercel Hobby) que processa 2 tipos de triggers:
  *
- * Pipeline pra cada recipe vencido (next_run_at <= NOW + buffer):
- *   1. Cria/upserta zernio_autopilot_runs (recipe_id, run_date) — UNIQUE
- *      garante idempotência se o cron rodar 2x no mesmo dia.
- *   2. Sorteia 1 tema da pool `themes[]`.
- *   3. Chama `runGeneration(...)` com tema + editorial_line como
- *      extraContext pra criar o carrossel.
- *   4. Persiste o carousel em `carousels` via upsertUserCarousel.
- *   5. RENDERIZA cada slide como PNG server-side via next/og.
- *   6. Sobe os PNGs no bucket `carousel-images` → URLs públicas.
- *   7. Cria post no Zernio com mediaUrls — IG/LinkedIn aceitam carrossel
- *      de até 10 imagens.
- *   8. Atualiza recipe.next_run_at = computeNextRunAt(...).
+ * 1. SCHEDULE: triggers cujo next_run_at está dentro das próximas 24h
+ *    (lookahead window). Cada um dispara processTrigger() e atualiza
+ *    next_run_at baseado em cadência (computeNextRunAt).
  *
- * Plataformas suportadas: instagram, linkedin (escopo definido pelo user).
- * Outras platforms são silenciosamente filtradas pra evitar enviar carrossel
- * pra rede que não suporta o formato.
+ * 2. RSS: triggers cujo rss_last_checked_at + check_interval expirou.
+ *    Fetch URL → parse RSS → compara guids com rss_processed_guids.
+ *    Pra cada item novo (até max_items_per_check), dispara processTrigger
+ *    com explicitTheme=item.title.
  *
- * Failure mode: erro num recipe NÃO bloqueia os outros — log + run.error +
- * pula próximo. Recipe.last_error fica visível na UI.
+ * Webhook triggers NÃO rodam aqui — disparo via /api/zernio/triggers/[id]/fire.
+ *
+ * Auth: cron-auth padrão (Vercel header / shared secret).
+ *
+ * Failure isolation: erro num trigger NÃO bloqueia os outros.
  */
 
-import { createHash } from "node:crypto";
 import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { cronForbidden, isValidCronRequest } from "@/lib/server/cron-auth";
 import { cronSkipped, isCronEnabled } from "@/lib/server/cron-flag";
-import { runGeneration, type Variation } from "@/lib/server/generate-carousel";
-import { upsertUserCarousel } from "@/lib/carousel-storage";
-import { loadBrandContextForUser } from "@/lib/server/brand-context";
 import {
-  createZernioPost,
-  ZernioApiError,
-  type ZernioPlatform,
-  type ZernioPostPlatformTarget,
-} from "@/lib/server/zernio";
-import { computeNextRunAt } from "@/app/api/zernio/autopilot/recipes/route";
-import type { DesignTemplateId } from "@/lib/carousel-templates";
-import {
-  renderSlideToPng,
-  type RenderSlideOptions,
-} from "@/lib/server/zernio-slide-renderer";
-
-/** Carrossel de IG aceita 2-10 mídias; LinkedIn aceita até ~9. Cap em 10. */
-const MAX_SLIDES_PER_POST = 10;
-
-/** Plataformas que aceitam carrossel-com-imagens via Zernio. */
-const CAROUSEL_PLATFORMS = new Set<ZernioPlatform>(["instagram", "linkedin"]);
+  processTrigger,
+  type Trigger,
+} from "@/lib/server/zernio-trigger-runner";
 
 export const runtime = "nodejs";
-export const maxDuration = 300; // 5min — geração + Zernio podem somar
+export const maxDuration = 300;
 
-export interface Recipe {
-  id: string;
-  user_id: string;
-  profile_id: string;
-  name: string;
-  is_active: boolean;
-  themes: string[];
-  editorial_line: string;
-  niche: string | null;
-  tone: string;
-  language: string;
-  design_template: string;
-  cadence_type: "daily" | "every_n_days" | "weekly_dow" | "specific_dates";
-  interval_days: number | null;
-  days_of_week: number[] | null;
-  specific_dates: string[] | null;
-  publish_hour: number;
-  publish_minute: number;
-  timezone: string;
-  target_account_ids: string[];
-  publish_mode: "scheduled" | "draft";
-  next_run_at: string | null;
-}
-
-// Lookahead window: disparar recipes cujo next_run_at é nas próximas 24h.
-// Vercel Hobby permite só cron diário, então o cron roda 1x e processa
-// TODOS os recipes do dia inteiro de uma vez. O scheduledFor que vai pro
-// Zernio é o horário correto (lido de next_run_at), então Zernio publica
-// no minuto certo mesmo com cron de madrugada.
-//
-// Se um dia subir pra Pro e voltar a cron */30min, dá pra reduzir esse buffer
-// de volta pra 10min sem mudança de lógica.
-const TRIGGER_BUFFER_MS = 24 * 60 * 60 * 1000;
+// 24h lookahead pra schedule (Hobby = cron diário; processa tudo do dia
+// de uma vez). scheduledFor enviado ao Zernio é o horário correto.
+const SCHEDULE_LOOKAHEAD_MS = 24 * 60 * 60 * 1000;
 
 export async function GET(request: Request) {
   if (!isValidCronRequest(request)) return cronForbidden();
@@ -94,38 +41,119 @@ export async function GET(request: Request) {
   const sb = createServiceRoleSupabaseClient();
   if (!sb) return Response.json({ error: "DB indisponível." }, { status: 503 });
 
-  const nowIso = new Date(Date.now() + TRIGGER_BUFFER_MS).toISOString();
-  const { data: recipes, error } = await sb
-    .from("zernio_autopilot_recipes")
+  const results: { triggerId: string; status: string; detail?: string }[] = [];
+
+  // ────────── 1. SCHEDULE TRIGGERS ──────────
+  const scheduleCutoff = new Date(Date.now() + SCHEDULE_LOOKAHEAD_MS).toISOString();
+  const { data: scheduleTriggers, error: sErr } = await sb
+    .from("zernio_autopilot_triggers")
     .select("*")
     .eq("is_active", true)
-    .lte("next_run_at", nowIso)
+    .eq("trigger_type", "schedule")
+    .lte("next_run_at", scheduleCutoff)
     .limit(50);
+  if (sErr) console.error("[cron-autopilot] schedule query err:", sErr);
 
-  if (error) {
-    console.error("[zernio-autopilot] query err:", error);
-    return Response.json({ error: error.message }, { status: 500 });
-  }
-
-  const results: { recipeId: string; status: string; detail?: string }[] = [];
-  for (const recipe of (recipes as Recipe[]) ?? []) {
+  for (const trigger of (scheduleTriggers as Trigger[]) ?? []) {
     try {
-      const r = await processRecipe(recipe);
-      results.push({ recipeId: recipe.id, status: r.status, detail: r.detail });
+      const r = await processTrigger({ trigger, firedBy: "cron" });
+      results.push({ triggerId: trigger.id, status: r.status, detail: r.detail });
+      // Avança next_run_at se sucesso
+      if (r.status === "scheduled") {
+        const next = computeNextRunAt(trigger);
+        await sb
+          .from("zernio_autopilot_triggers")
+          .update({ next_run_at: next.toISOString() })
+          .eq("id", trigger.id);
+      }
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
-      console.error(`[zernio-autopilot] recipe ${recipe.id} FAIL:`, err);
-      results.push({ recipeId: recipe.id, status: "fatal", detail });
-      // Marca last_error mas não desativa — admin decide.
+      results.push({ triggerId: trigger.id, status: "fatal", detail });
+      console.error(`[cron-autopilot] schedule ${trigger.id} FAIL:`, err);
+    }
+  }
+
+  // ────────── 2. RSS TRIGGERS ──────────
+  const { data: rssTriggers, error: rErr } = await sb
+    .from("zernio_autopilot_triggers")
+    .select("*")
+    .eq("is_active", true)
+    .eq("trigger_type", "rss")
+    .limit(50);
+  if (rErr) console.error("[cron-autopilot] rss query err:", rErr);
+
+  for (const trigger of (rssTriggers as Trigger[]) ?? []) {
+    try {
+      const lastChecked = trigger.rss_last_checked_at
+        ? new Date(trigger.rss_last_checked_at).getTime()
+        : 0;
+      const intervalMs = (trigger.rss_check_interval_minutes || 60) * 60 * 1000;
+      if (Date.now() - lastChecked < intervalMs) {
+        // Ainda dentro do interval — pula.
+        results.push({
+          triggerId: trigger.id,
+          status: "rss_skipped",
+          detail: "interval not elapsed",
+        });
+        continue;
+      }
+      const items = await fetchAndParseRss(trigger.rss_url!);
+      const seenGuids = new Set(trigger.rss_processed_guids ?? []);
+      const newItems = items.filter((it) => !seenGuids.has(it.guid));
+      const limited = newItems.slice(0, trigger.rss_max_items_per_check);
+
+      if (limited.length === 0) {
+        // Sem itens novos — só atualiza last_checked_at.
+        await sb
+          .from("zernio_autopilot_triggers")
+          .update({ rss_last_checked_at: new Date().toISOString() })
+          .eq("id", trigger.id);
+        results.push({
+          triggerId: trigger.id,
+          status: "rss_no_new",
+        });
+        continue;
+      }
+
+      // Dispara processTrigger pra cada novo item (sequencial pra não
+      // sobrecarregar Zernio API).
+      for (const item of limited) {
+        const r = await processTrigger({
+          trigger,
+          firedBy: "rss",
+          explicitTheme: item.title,
+          payload: { guid: item.guid, title: item.title, link: item.link },
+        });
+        results.push({
+          triggerId: trigger.id,
+          status: `rss_${r.status}`,
+          detail: r.detail,
+        });
+      }
+
+      // Atualiza processed_guids (mantém últimos 200 pra não crescer infinito)
+      const updatedGuids = [
+        ...limited.map((it) => it.guid),
+        ...(trigger.rss_processed_guids ?? []),
+      ].slice(0, 200);
       await sb
-        .from("zernio_autopilot_recipes")
-        .update({ last_error: detail.slice(0, 500), last_run_at: new Date().toISOString() })
-        .eq("id", recipe.id);
-      // Notifica Discord — fatal NO try/catch externo significa que o
-      // pipeline quebrou ANTES do markRunFailed dentro de processRecipe
-      // (ex: erro lendo brand_analysis, erro no upsert do run row, etc).
-      // Esses casos não têm run row, então notificamos direto.
-      await notifyDiscordOnce(recipe, detail);
+        .from("zernio_autopilot_triggers")
+        .update({
+          rss_last_checked_at: new Date().toISOString(),
+          rss_processed_guids: updatedGuids,
+        })
+        .eq("id", trigger.id);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      results.push({ triggerId: trigger.id, status: "rss_fatal", detail });
+      console.error(`[cron-autopilot] rss ${trigger.id} FAIL:`, err);
+      await sb
+        .from("zernio_autopilot_triggers")
+        .update({
+          last_error: detail.slice(0, 500),
+          rss_last_checked_at: new Date().toISOString(),
+        })
+        .eq("id", trigger.id);
     }
   }
 
@@ -137,428 +165,135 @@ export async function GET(request: Request) {
   });
 }
 
-export async function processRecipe(
-  recipe: Recipe
-): Promise<{ status: string; detail?: string }> {
-  const sb = createServiceRoleSupabaseClient();
-  if (!sb) throw new Error("DB indisponível");
+// ────────── computeNextRunAt (espelha v1 — mantém a mesma lógica) ──────────
 
-  const today = new Date();
-  const runDate = today.toISOString().slice(0, 10);
+function computeNextRunAt(trigger: Trigger): Date {
+  const now = new Date();
+  const tzOffsetMin = 180; // Sao_Paulo UTC-3
+  const tzMs = -1 * tzOffsetMin * 60 * 1000;
 
-  // 1. Cria/upserta run (idempotência via UNIQUE recipe_id+run_date)
-  const { data: runRow, error: runErr } = await sb
-    .from("zernio_autopilot_runs")
-    .upsert(
-      {
-        recipe_id: recipe.id,
-        user_id: recipe.user_id,
-        run_date: runDate,
-        status: "generating",
-      },
-      { onConflict: "recipe_id,run_date" }
-    )
-    .select("*")
-    .single();
-  if (runErr) throw new Error(`run upsert: ${runErr.message}`);
-  if (!runRow) throw new Error("run row null");
-
-  // Se já está scheduled, pula (cron rodou 2x no mesmo dia)
-  if (runRow.status === "scheduled") {
-    return { status: "skipped", detail: "já scheduled hoje" };
+  function nextOnDay(daysAhead: number): Date {
+    const d = new Date(now);
+    d.setUTCDate(d.getUTCDate() + daysAhead);
+    d.setUTCHours(trigger.publish_hour, trigger.publish_minute, 0, 0);
+    return new Date(d.getTime() - tzMs);
   }
 
-  // 2. Sorteia tema
-  const theme = recipe.themes[Math.floor(Math.random() * recipe.themes.length)];
-  await sb
-    .from("zernio_autopilot_runs")
-    .update({ theme_chosen: theme })
-    .eq("id", runRow.id);
-
-  // 3. Resolve contas target → mapeia pra platform+accountId externo
-  const { data: accountRows, error: aErr } = await sb
-    .from("zernio_accounts")
-    .select("id, zernio_account_id, platform, status")
-    .eq("user_id", recipe.user_id)
-    .eq("profile_id", recipe.profile_id)
-    .in("zernio_account_id", recipe.target_account_ids);
-  if (aErr) throw new Error(`accounts: ${aErr.message}`);
-  const validAccounts = (accountRows ?? []).filter((a) => a.status === "active");
-  if (validAccounts.length === 0) {
-    await markRunFailed(recipe, runRow.id, "Nenhuma conta active no profile.");
-    return { status: "no_accounts" };
+  if (trigger.cadence_type === "daily") {
+    let d = nextOnDay(0);
+    if (d.getTime() <= now.getTime()) d = nextOnDay(1);
+    return d;
   }
+  if (trigger.cadence_type === "every_n_days" && trigger.interval_days) {
+    let d = nextOnDay(0);
+    if (d.getTime() <= now.getTime()) d = nextOnDay(trigger.interval_days);
+    return d;
+  }
+  if (
+    trigger.cadence_type === "weekly_dow" &&
+    trigger.days_of_week &&
+    trigger.days_of_week.length > 0
+  ) {
+    const today = now.getUTCDay();
+    for (let i = 0; i < 8; i++) {
+      const dow = (today + i) % 7;
+      if (trigger.days_of_week.includes(dow)) {
+        const candidate = nextOnDay(i);
+        if (candidate.getTime() > now.getTime()) return candidate;
+      }
+    }
+    return nextOnDay(7);
+  }
+  if (
+    trigger.cadence_type === "specific_dates" &&
+    trigger.specific_dates &&
+    trigger.specific_dates.length > 0
+  ) {
+    const future = trigger.specific_dates
+      .map((s) => {
+        const [y, m, d] = s.split("-").map(Number);
+        const dt = new Date(
+          Date.UTC(y, m - 1, d, trigger.publish_hour, trigger.publish_minute)
+        );
+        return new Date(dt.getTime() - tzMs);
+      })
+      .filter((dt) => dt.getTime() > now.getTime())
+      .sort((a, b) => a.getTime() - b.getTime());
+    if (future.length > 0) return future[0];
+    const far = new Date(now);
+    far.setUTCFullYear(far.getUTCFullYear() + 1);
+    return far;
+  }
+  return new Date(now.getTime() + 60 * 60 * 1000);
+}
 
-  // 4. Carrega brand context do owner do recipe (voice DNA + content pillars
-  // + memory rules) pra carrossel autopilot soar igual aos manuais. Sem isso
-  // a geração ficava genérica.
-  const { brandContext, feedbackContext } = await loadBrandContextForUser(
-    sb,
-    recipe.user_id
-  );
+// ────────── RSS parsing (lightweight, sem deps) ──────────
 
-  const editorialAsContext = recipe.editorial_line
-    ? `LINHA EDITORIAL DO PROFILE: ${recipe.editorial_line}\n\nMantenha essa voz/ângulo em todos os slides.`
-    : undefined;
+interface RssItem {
+  guid: string;
+  title: string;
+  link?: string;
+}
 
-  const generation = await runGeneration({
-    topic: theme,
-    sourceType: "idea",
-    niche: recipe.niche || "marketing",
-    tone: recipe.tone,
-    language: recipe.language,
-    designTemplate: recipe.design_template as DesignTemplateId,
-    brandContext,
-    feedbackContext,
-    advanced: {
-      extraContext: editorialAsContext,
+/**
+ * Fetch + parse de RSS 2.0 / Atom mínimo. Não tenta cobrir 100% do spec —
+ * só extrai (guid OU link) + title de cada `<item>` ou `<entry>`.
+ *
+ * Retorna lista de items na ordem do feed (mais recente primeiro). O caller
+ * filtra por guid pra pegar só os novos.
+ */
+async function fetchAndParseRss(url: string): Promise<RssItem[]> {
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(10_000),
+    headers: {
+      "User-Agent": "SequenciaViral-AutopilotRSS/1.0",
+      Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
     },
   });
+  if (!res.ok) throw new Error(`RSS HTTP ${res.status}`);
+  const xml = await res.text();
 
-  if (!generation.variations?.length) {
-    await markRunFailed(recipe, runRow.id, "Generation devolveu 0 variations.");
-    return { status: "gen_failed" };
+  const items: RssItem[] = [];
+
+  // RSS 2.0 <item>
+  const itemRegex = /<item\b[^>]*>([\s\S]*?)<\/item>/gi;
+  let match;
+  while ((match = itemRegex.exec(xml)) !== null) {
+    const block = match[1];
+    const title = extractTag(block, "title") || "";
+    const guid = extractTag(block, "guid") || extractTag(block, "link") || title;
+    const link = extractTag(block, "link") || undefined;
+    if (title) items.push({ guid: guid.trim(), title: title.trim(), link });
   }
 
-  const variation = generation.variations[0];
-
-  // 5. Persiste carousel via helper canonical (mantém shape consistente
-  //    com carrosseis criados pelo path manual /api/generate).
-  let carouselId: string;
-  try {
-    const { row } = await upsertUserCarousel(sb, recipe.user_id, {
-      title: variation.title || theme.slice(0, 60),
-      slides: variation.slides,
-      slideStyle: "white",
-      variation: { title: variation.title, style: variation.style },
-      status: "draft",
-      designTemplate: recipe.design_template as DesignTemplateId,
-    });
-    carouselId = row.id;
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    await markRunFailed(recipe, runRow.id, `carousel insert: ${detail}`);
-    return { status: "carousel_failed", detail };
-  }
-
-  await sb
-    .from("zernio_autopilot_runs")
-    .update({ carousel_id: carouselId })
-    .eq("id", runRow.id);
-
-  // 6. Filtra contas pra IG/LinkedIn (carrossel de mídia). Outras plataformas
-  // são silenciosamente ignoradas — admin que quiser Twitter/Bluesky/etc usa
-  // agendamento manual no preview do carrossel.
-  const platforms: ZernioPostPlatformTarget[] = validAccounts
-    .filter((a) => CAROUSEL_PLATFORMS.has(a.platform as ZernioPlatform))
-    .map((a) => ({
-      platform: a.platform as ZernioPlatform,
-      accountId: a.zernio_account_id,
-    }));
-
-  if (platforms.length === 0) {
-    await markRunFailed(
-      recipe,
-      runRow.id,
-      "Recipe não tem conta IG/LinkedIn ativa. Conecte uma e tente de novo."
-    );
-    return { status: "no_carousel_accounts" };
-  }
-
-  // 7. Renderiza slides como PNG server-side via next/og + sobe pro Storage.
-  // Cap em 10 slides (limite IG carrossel; LinkedIn aceita até ~9).
-  const profileNameForFooter = await getProfileNameById(recipe.profile_id, recipe.user_id);
-  const renderableSlides = variation.slides.slice(0, MAX_SLIDES_PER_POST);
-
-  let mediaUrls: string[];
-  try {
-    mediaUrls = await renderAndUploadSlides({
-      userId: recipe.user_id,
-      carouselId,
-      slides: renderableSlides,
-      totalSlides: renderableSlides.length,
-      profileName: profileNameForFooter,
-    });
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    await markRunFailed(recipe, runRow.id, `render/upload: ${detail}`);
-    return { status: "render_failed", detail };
-  }
-
-  if (mediaUrls.length === 0) {
-    await markRunFailed(recipe, runRow.id, "Nenhuma imagem subida — render vazio.");
-    return { status: "no_media" };
-  }
-
-  // 8. Caption: usa heading + body do slide 1 como copy, com trim pra 2200
-  // (limite IG). LinkedIn aceita ~3000.
-  const content = buildCaption(variation);
-
-  const scheduledFor = recipe.next_run_at
-    ? recipe.next_run_at.slice(0, 19) // ISO sem TZ
-    : new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 19);
-
-  let zernioPost;
-  try {
-    zernioPost = await createZernioPost({
-      content,
-      mediaUrls,
-      timezone: recipe.publish_mode === "draft" ? undefined : recipe.timezone,
-      scheduledFor: recipe.publish_mode === "draft" ? undefined : scheduledFor,
-      platforms,
-    });
-  } catch (err) {
-    const detail =
-      err instanceof ZernioApiError
-        ? `Zernio ${err.status}: ${err.message}`
-        : err instanceof Error
-          ? err.message
-          : String(err);
-    await markRunFailed(recipe, runRow.id, detail);
-    return { status: "zernio_failed", detail };
-  }
-
-  // 7. Persiste scheduled_post local
-  const { data: schedRow } = await sb
-    .from("zernio_scheduled_posts")
-    .insert({
-      user_id: recipe.user_id,
-      profile_id: recipe.profile_id,
-      carousel_id: carouselId,
-      zernio_post_id: zernioPost._id,
-      status: recipe.publish_mode === "draft" ? "draft" : "scheduled",
-      content,
-      platforms,
-      scheduled_for: recipe.publish_mode === "draft" ? null : scheduledFor,
-      timezone: recipe.timezone,
-      source: "autopilot",
-      autopilot_run_id: runRow.id,
-      raw: zernioPost,
-    })
-    .select("id")
-    .single();
-
-  await sb
-    .from("zernio_autopilot_runs")
-    .update({
-      status: "scheduled",
-      scheduled_post_id: schedRow?.id ?? null,
-      finished_at: new Date().toISOString(),
-    })
-    .eq("id", runRow.id);
-
-  // 8. Avança next_run_at do recipe
-  const nextRun = computeNextRunAt({
-    cadenceType: recipe.cadence_type,
-    intervalDays: recipe.interval_days,
-    daysOfWeek: recipe.days_of_week,
-    specificDates: recipe.specific_dates,
-    publishHour: recipe.publish_hour,
-    publishMinute: recipe.publish_minute,
-    timezone: recipe.timezone,
-    fromDate: new Date(),
-  });
-  await sb
-    .from("zernio_autopilot_recipes")
-    .update({
-      last_run_at: new Date().toISOString(),
-      last_error: null,
-      next_run_at: nextRun.toISOString(),
-    })
-    .eq("id", recipe.id);
-
-  return { status: "scheduled" };
-}
-
-/**
- * Caption pra IG/LinkedIn — usa heading + body do slide 1 como copy,
- * concatenado com 1-2 frases dos slides do meio pra contexto. Cap em 2000
- * pra ficar dentro dos limites das duas plataformas (IG: 2200, LI: ~3000).
- */
-function buildCaption(variation: Variation): string {
-  const slide1 = variation.slides[0];
-  const heading = (slide1?.heading || variation.title || "").trim();
-  const body = (slide1?.body || "").trim();
-  const lead = heading && body ? `${heading}\n\n${body}` : heading || body;
-
-  // Linha-resumo do meio do carrossel (slides 2-4) pra dar contexto extra
-  // sem repetir tudo. Pula se o lead já está grande.
-  let extra = "";
-  if (lead.length < 800 && variation.slides.length > 1) {
-    const middle = variation.slides
-      .slice(1, 4)
-      .map((s) => (s.heading || "").trim())
-      .filter(Boolean)
-      .slice(0, 3);
-    if (middle.length > 0) {
-      extra = `\n\n— ${middle.join(" · ")}`;
+  // Atom <entry> (se for Atom em vez de RSS)
+  if (items.length === 0) {
+    const entryRegex = /<entry\b[^>]*>([\s\S]*?)<\/entry>/gi;
+    let m2;
+    while ((m2 = entryRegex.exec(xml)) !== null) {
+      const block = m2[1];
+      const title = extractTag(block, "title") || "";
+      const id = extractTag(block, "id") || "";
+      // Atom <link href="..."/>
+      const linkMatch = block.match(/<link[^>]*href="([^"]+)"/i);
+      const link = linkMatch ? linkMatch[1] : undefined;
+      const guid = id || link || title;
+      if (title) items.push({ guid: guid.trim(), title: title.trim(), link });
     }
   }
 
-  const full = `${lead}${extra}`.trim();
-  if (full.length <= 2000) return full;
-  return full.slice(0, 1997) + "...";
+  return items;
 }
 
-/**
- * Renderiza cada slide como PNG via next/og e sobe pro bucket
- * `carousel-images` em paths previsíveis. Devolve URLs públicas na ordem
- * dos slides (mediaUrls do Zernio respeita ordem).
- */
-async function renderAndUploadSlides(args: {
-  userId: string;
-  carouselId: string;
-  slides: Variation["slides"];
-  totalSlides: number;
-  profileName?: string;
-}): Promise<string[]> {
-  const sb = createServiceRoleSupabaseClient();
-  if (!sb) throw new Error("DB indisponível pro upload");
-
-  const BUCKET = "carousel-images";
-  const PREFIX = `zernio-autopilot/${args.userId}/${args.carouselId}`;
-
-  const urls: string[] = [];
-  // Sequencial — next/og em paralelo é pesado e Vercel pode cap memória.
-  // 10 slides × ~1s render = ~10s, dentro do maxDuration=300.
-  for (let i = 0; i < args.slides.length; i++) {
-    const slide = args.slides[i];
-    const slideNumber = i + 1;
-    const renderOpts: RenderSlideOptions = {
-      heading: (slide.heading || "").trim().slice(0, 240) || `Slide ${slideNumber}`,
-      body: (slide.body || "").trim().slice(0, 600),
-      imageUrl: slide.imageUrl || null,
-      slideNumber,
-      totalSlides: args.totalSlides,
-      variant: mapVariantForRenderer(slide.variant, slideNumber, args.totalSlides),
-      profileName: args.profileName,
-    };
-
-    let pngBuffer: ArrayBuffer;
-    try {
-      const response = renderSlideToPng(renderOpts);
-      pngBuffer = await response.arrayBuffer();
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      throw new Error(`render slide ${slideNumber}: ${detail}`);
-    }
-
-    // Hash determinístico do conteúdo pra path estável (rerruns sobrescrevem).
-    const hash = createHash("sha256")
-      .update(new Uint8Array(pngBuffer))
-      .digest("hex")
-      .slice(0, 12);
-    const path = `${PREFIX}/slide-${String(slideNumber).padStart(2, "0")}-${hash}.png`;
-
-    const { error: upErr } = await sb.storage
-      .from(BUCKET)
-      .upload(path, new Uint8Array(pngBuffer), {
-        contentType: "image/png",
-        upsert: true,
-        cacheControl: "31536000",
-      });
-    if (upErr && !upErr.message.toLowerCase().includes("already exists")) {
-      throw new Error(`upload slide ${slideNumber}: ${upErr.message}`);
-    }
-
-    const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(path);
-    if (!pub?.publicUrl) {
-      throw new Error(`publicUrl indisponível pro slide ${slideNumber}`);
-    }
-    urls.push(pub.publicUrl);
-  }
-  return urls;
-}
-
-function mapVariantForRenderer(
-  generated: string | undefined,
-  slideNumber: number,
-  totalSlides: number
-): RenderSlideOptions["variant"] {
-  if (slideNumber === 1) return "cover";
-  if (slideNumber === totalSlides) return "cta";
-  if (generated === "full-photo-bottom") return "full-photo-bottom";
-  if (generated === "text-only") return "text-only";
-  return "headline";
-}
-
-async function getProfileNameById(
-  profileId: string,
-  userId: string
-): Promise<string | undefined> {
-  const sb = createServiceRoleSupabaseClient();
-  if (!sb) return undefined;
-  const { data } = await sb
-    .from("zernio_profiles")
-    .select("name")
-    .eq("id", profileId)
-    .eq("user_id", userId)
-    .maybeSingle();
-  return data?.name;
-}
-
-async function markRunFailed(recipe: Recipe, runId: string, error: string) {
-  const sb = createServiceRoleSupabaseClient();
-  if (!sb) return;
-  await sb
-    .from("zernio_autopilot_runs")
-    .update({ status: "failed", error: error.slice(0, 500), finished_at: new Date().toISOString() })
-    .eq("id", runId);
-  await sb
-    .from("zernio_autopilot_recipes")
-    .update({ last_error: error.slice(0, 500), last_run_at: new Date().toISOString() })
-    .eq("id", recipe.id);
-
-  // Discord alert — best-effort, não bloqueia. Reusa DISCORD_WEBHOOK_URL do
-  // healthcheck (já configurado em prod). Cap 1 alerta por recipe por dia
-  // pra evitar floodar canal quando o mesmo recipe quebra repetidamente
-  // (idempotência via run_date — se já notificamos hoje, skip).
-  await notifyDiscordOnce(recipe, error);
-}
-
-/**
- * Manda 1 mensagem Discord por recipe-quebrado-por-dia. Idempotência leve:
- * usa zernio_autopilot_runs (recipe_id + run_date + status=failed) — se já
- * tem 1 run failed hoje pra esse recipe, presumimos que já notificamos.
- *
- * No-op se DISCORD_WEBHOOK_URL não setado (dev local).
- */
-async function notifyDiscordOnce(recipe: Recipe, error: string) {
-  const url = process.env.DISCORD_WEBHOOK_URL;
-  if (!url) return;
-
-  const sb = createServiceRoleSupabaseClient();
-  if (!sb) return;
-
-  const today = new Date().toISOString().slice(0, 10);
-  // Conta runs failed do recipe hoje. Esse mesmo run que acabou de ser marcado
-  // como failed conta — count >= 2 significa "já existia outro failed antes",
-  // então pulamos. count == 1 = é o primeiro do dia, notificamos.
-  const { count } = await sb
-    .from("zernio_autopilot_runs")
-    .select("id", { count: "exact", head: true })
-    .eq("recipe_id", recipe.id)
-    .eq("run_date", today)
-    .eq("status", "failed");
-
-  if ((count ?? 0) > 1) return; // já notificamos hoje
-
-  const content = [
-    `**Sequência Viral · Zernio Autopilot quebrou** 🤖`,
-    `Recipe: \`${recipe.name}\` (${recipe.id.slice(0, 8)})`,
-    `Profile: \`${recipe.profile_id.slice(0, 8)}\``,
-    `Erro: \`\`\`${error.slice(0, 800)}\`\`\``,
-    `Painel: <https://viral.kaleidos.com.br/app/admin/zernio/autopilot>`,
-  ].join("\n");
-
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ content }),
-      signal: AbortSignal.timeout(5_000),
-    });
-  } catch (err) {
-    console.error("[zernio-autopilot] Discord notify falhou:", err);
-  }
+function extractTag(block: string, tag: string): string | null {
+  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
+  const m = block.match(re);
+  if (!m) return null;
+  let value = m[1].trim();
+  // Strip CDATA
+  const cdataMatch = value.match(/^<!\[CDATA\[([\s\S]*?)\]\]>$/);
+  if (cdataMatch) value = cdataMatch[1].trim();
+  // Strip HTML tags básicos
+  value = value.replace(/<[^>]+>/g, "").trim();
+  return value || null;
 }

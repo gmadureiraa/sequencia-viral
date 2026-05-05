@@ -24,7 +24,6 @@ export default function ZernioConnectedPage() {
   const [status, setStatus] = useState<"syncing" | "done" | "error">("syncing");
   const [error, setError] = useState<string | null>(null);
 
-  const profileId = searchParams?.get("profileId");
   const platform = searchParams?.get("platform");
 
   useEffect(() => {
@@ -33,22 +32,24 @@ export default function ZernioConnectedPage() {
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (!session || !profileId) return;
+    if (!session) return;
 
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
-          `/api/zernio/accounts/sync?profileId=${encodeURIComponent(profileId)}`,
-          { method: "POST", headers: jsonWithAuth(session) }
-        );
+        // v2: sync sem profileId — sincroniza tudo do user. UI principal
+        // v2 não tem mais conceito de profile na tela, então redirect
+        // direto pra /app/admin/zernio.
+        const res = await fetch("/api/zernio/accounts/sync", {
+          method: "POST",
+          headers: jsonWithAuth(session),
+        });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Sync falhou.");
         if (cancelled) return;
         setStatus("done");
-        // Pequeno delay pro user ver "conectado" antes do redirect.
         setTimeout(() => {
-          if (!cancelled) router.replace(`/app/admin/zernio/${profileId}`);
+          if (!cancelled) router.replace("/app/admin/zernio");
         }, 1200);
       } catch (err) {
         if (cancelled) return;
@@ -60,7 +61,7 @@ export default function ZernioConnectedPage() {
     return () => {
       cancelled = true;
     };
-  }, [session, profileId, router]);
+  }, [session, router]);
 
   return (
     <div style={containerStyle}>
@@ -85,11 +86,8 @@ export default function ZernioConnectedPage() {
           <>
             <h2 style={{ ...h2Style, color: "#c2410c" }}>Falha no sync</h2>
             <p style={pStyle}>{error}</p>
-            <Link
-              href={profileId ? `/app/admin/zernio/${profileId}` : "/app/admin/zernio"}
-              style={linkStyle}
-            >
-              Voltar ao profile e tentar de novo
+            <Link href="/app/admin/zernio" style={linkStyle}>
+              Voltar e tentar de novo
             </Link>
           </>
         )}

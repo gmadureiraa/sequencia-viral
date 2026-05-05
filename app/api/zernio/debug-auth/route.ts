@@ -24,12 +24,17 @@ import { decodeJwtEmail, getSupabaseSessionEmail } from "@/proxy";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
+  // Production-safe: quando ZERNIO_DEBUG_TOKEN não setada, endpoint
+  // retorna 404 (oculto). Pra ativar troubleshoot temporário, setar a env
+  // var e mandar header `x-debug-token: <valor>`. Antes era "default
+  // público" — perigoso em prod (vazava cookies do user pra qualquer
+  // request).
   const debugToken = process.env.ZERNIO_DEBUG_TOKEN;
+  if (!debugToken) {
+    return new Response("not found", { status: 404 });
+  }
   const provided = request.headers.get("x-debug-token");
-  // Quando ZERNIO_DEBUG_TOKEN não setado, libera acesso público (usar só
-  // em troubleshooting curto — depois remover env var). Quando setado,
-  // exige bater com o header.
-  if (debugToken && provided !== debugToken) {
+  if (provided !== debugToken) {
     return new Response("not found", { status: 404 });
   }
 

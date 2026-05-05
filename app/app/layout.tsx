@@ -669,8 +669,12 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Admin acessando /app/admin nunca é forçado pra onboarding.
-    if (isAdminArea && isAdmin) return;
+    // Admin nunca é forçado pra onboarding em NENHUMA rota (não só /app/admin).
+    // Antes era `isAdminArea && isAdmin` mas isso fazia admin que não tinha
+    // onboarding_completed=true ser redirecionado de Roadmap/Início/Carrosséis
+    // pra /app/onboarding — bug visível pro Gabriel cuja conta foi criada
+    // antes do flow de onboarding existir.
+    if (isAdmin) return;
 
     if (
       profile &&

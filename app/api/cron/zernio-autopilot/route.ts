@@ -76,10 +76,15 @@ export interface Recipe {
   next_run_at: string | null;
 }
 
-// Buffer pra disparar recipes que estão "quase vencendo" (10min) — evita
-// drift de pequenas latências do cron Vercel + protege contra cron rodar
-// alguns minutos antes do horário planejado.
-const TRIGGER_BUFFER_MS = 10 * 60 * 1000;
+// Lookahead window: disparar recipes cujo next_run_at é nas próximas 24h.
+// Vercel Hobby permite só cron diário, então o cron roda 1x e processa
+// TODOS os recipes do dia inteiro de uma vez. O scheduledFor que vai pro
+// Zernio é o horário correto (lido de next_run_at), então Zernio publica
+// no minuto certo mesmo com cron de madrugada.
+//
+// Se um dia subir pra Pro e voltar a cron */30min, dá pra reduzir esse buffer
+// de volta pra 10min sem mudança de lógica.
+const TRIGGER_BUFFER_MS = 24 * 60 * 60 * 1000;
 
 export async function GET(request: Request) {
   if (!isValidCronRequest(request)) return cronForbidden();

@@ -45,6 +45,17 @@ function formatBrl(cents: number): string {
   }).format(v);
 }
 
+/**
+ * Cada conversão = 1 mês grátis (reward = 1× preço Pro mensal). totalCents/N
+ * conversões dá quantos meses acumulados.
+ */
+function formatProMonths(totalCents: number, conversionCount: number): string {
+  if (conversionCount <= 0) return "0 meses";
+  const months = conversionCount; // 1 conversão = 1 mês exatamente
+  void totalCents;
+  return months === 1 ? "1 mês grátis" : `${months} meses grátis`;
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
   try {
@@ -399,9 +410,9 @@ export default function ReferralsPage() {
           />
           <StatCard
             icon={<Wallet size={16} />}
-            label="Crédito acumulado"
-            value={formatBrl(me.totalCreditCents)}
-            hint="Abate na próxima fatura Stripe"
+            label="Meses grátis de Pro"
+            value={formatProMonths(me.totalCreditCents, me.conversionCount)}
+            hint={`= ${formatBrl(me.totalCreditCents)} em crédito Stripe (abate auto na próxima fatura)`}
             highlight
           />
         </div>
@@ -436,7 +447,7 @@ export default function ReferralsPage() {
               }}
             >
               Ainda sem indicações. Cola seu link em qualquer rede que você usa
-              — o primeiro amigo que entrar já vale R$ 25.
+              — cada amigo que assinar vale <strong>1 mês grátis de Pro</strong>.
             </p>
           </div>
         ) : (

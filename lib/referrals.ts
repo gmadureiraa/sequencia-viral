@@ -6,9 +6,9 @@
  *     O cupom em si vive no Stripe Dashboard como `promotion_code` e/ou na
  *     tabela `coupons` se quisermos amarrar local — aqui apenas registramos
  *     a indicacao. O desconto aplicado e responsabilidade do checkout flow.
- *   - Pro referrer (quem indicou): R$ 25,00 em customer.balance no Stripe
- *     quando o referido paga primeira fatura. Aplica automaticamente no
- *     proximo invoice. Acumula sem limite.
+ *   - Pro referrer (quem indicou): 1 mês grátis de Pro em customer.balance no
+ *     Stripe (= valor do Pro mensal) quando o referido paga primeira fatura.
+ *     Abate auto na próxima cobrança. Acumula sem limite.
  *
  * Todas as funcoes recebem o supabaseAdmin (service role) explicitamente
  * porque sao chamadas de webhooks/API routes que ja tem o client em scope.
@@ -18,9 +18,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
 import { fireResendEvent } from "@/lib/integrations/resend/events";
 import { sendReferralConverted } from "@/lib/email/dispatch";
+import { PLANS } from "@/lib/pricing";
 
-/** Recompensa fixa em centavos BRL pro referrer quando o referido paga. */
-export const REFERRAL_REWARD_CENTS = 2500; // R$ 25,00
+/**
+ * Recompensa = preço cheio de 1 mês do Pro. Importado direto de
+ * PLANS.pro.priceMonthly pra ficar sempre em sync. Quando o Pro mudar de
+ * preço, o reward acompanha automaticamente.
+ *
+ * UI mostra "1 mês grátis de Pro" — credit BRL é só o mecanismo Stripe.
+ */
+export const REFERRAL_REWARD_CENTS: number = PLANS.pro.priceMonthly;
+export const REFERRAL_REWARD_LABEL = "1 mês grátis de Pro" as const;
 
 /**
  * Gera codigo de referral baseado no nome.

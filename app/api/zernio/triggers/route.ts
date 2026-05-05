@@ -15,7 +15,8 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { requireAdmin, createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { requireAdminOrPlan } from "@/lib/server/plan-gate";
 import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
@@ -57,9 +58,9 @@ interface CreateTriggerBody {
 const ALLOWED_PLATFORMS = new Set(["instagram", "linkedin"]);
 
 export async function GET(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
-  const { user } = admin;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
 
   const sb = createServiceRoleSupabaseClient();
   if (!sb) return Response.json({ error: "DB indisponível." }, { status: 503 });
@@ -75,9 +76,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
-  const { user } = admin;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
 
   const limiter = await rateLimit({
     key: getRateLimitKey(request, "zernio-trigger-create", user.id),

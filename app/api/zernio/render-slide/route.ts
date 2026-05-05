@@ -15,7 +15,7 @@
  *   profileName   (string, optional)
  */
 
-import { requireAdmin } from "@/lib/server/auth";
+import { requireAdminOrPlan } from "@/lib/server/plan-gate";
 import {
   renderSlideToPng,
   type RenderSlideOptions,
@@ -24,8 +24,8 @@ import {
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
 
   const url = new URL(request.url);
   const heading = url.searchParams.get("heading") ?? "";

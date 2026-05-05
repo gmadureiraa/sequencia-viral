@@ -33,39 +33,39 @@ type NavItem = {
   tooltip?: { title: string; body: string };
 };
 
-const NAV_ITEMS: NavItem[] = [
+/**
+ * Sidebar nav split em 2 grupos:
+ *   - PRIMARY (topo): features principais — Início, Carrosséis,
+ *     Planejamento, Piloto Auto
+ *   - SECONDARY (rodapé, antes do user/plan card): Ajustes, Guia,
+ *     Indique e ganhe
+ *
+ * Planejamento — todos os planos podem ver (calendário de conteúdo).
+ * Piloto Auto — só plano Business consegue criar/editar; free/pro veem
+ *   página de upgrade (RequireBusiness wrapper).
+ */
+const PRIMARY_NAV: NavItem[] = [
   { href: "/app", label: "Início", icon: LayoutDashboard },
-  // 'Criar' removido — ja existe o botao 'Novo carrossel' flutuante acima do
-  // card de plano no bottom da sidebar. Mesma rota /app/create/new, redundante.
   { href: "/app/carousels", label: "Carrosséis", icon: FolderOpen },
-  // Galeria (/app/gallery) foi removida do app — a rota nao existe mais.
-  // O endpoint /api/gallery ainda pode existir como API interna (não é UI).
-  { href: "/app/help", label: "Guia", icon: BookOpen },
-  // Indique-e-Ganhe — programa de referral. Item de destaque (badge "Novo")
-  // pra incentivar adoção. R$ 25 por amigo que assinar, sem limite.
-  { href: "/app/settings/referrals", label: "Indique e ganhe", icon: Gift, badge: "Novo" },
-  { href: "/app/settings", label: "Ajustes", icon: Settings },
-  // Roadmap no rodape da nav — eh referencia estatica (lista de features
-  // futuras), nao precisa de destaque.
-  { href: "/app/roadmap", label: "Roadmap", icon: Map },
+  { href: "/app/zernio/calendar", label: "Planejamento", icon: CalendarClock },
+  { href: "/app/zernio/autopilot", label: "Piloto automático", icon: Rocket },
 ];
 
-/**
- * Itens "Planejamento" e "Piloto auto" — comportamento dependente de role:
- *   - Admin (isAdminEmail): vira link real pras rotas Zernio
- *   - Não-admin: fica disabled "Em breve" com tooltip explicativo
- *
- * Quando feature for liberada pra todos os planos, mover pro NAV_ITEMS
- * principal e remover essa lógica.
- */
-const PLANEJAMENTO_TOOLTIP = {
-  title: "Planejamento",
-  body: "Calendário de conteúdo pra organizar sua sequência e publicar direto no Instagram nos dias e horários certos.",
-};
-const PILOTO_TOOLTIP = {
-  title: "Piloto automático",
-  body: "A IA cuida de tudo sozinha: cria conteúdo no seu DNA e publica no seu Instagram sem você levantar um dedo.",
-};
+const SECONDARY_NAV: NavItem[] = [
+  { href: "/app/settings", label: "Ajustes", icon: Settings },
+  { href: "/app/help", label: "Guia", icon: BookOpen },
+  {
+    href: "/app/settings/referrals",
+    label: "Indique e ganhe",
+    icon: Gift,
+    badge: "Novo",
+  },
+];
+
+/** Roadmap fica em rodapé extra discreto. */
+const FOOTER_NAV: NavItem[] = [
+  { href: "/app/roadmap", label: "Roadmap", icon: Map },
+];
 
 import { isAdminEmail } from "@/lib/admin-emails";
 
@@ -413,54 +413,20 @@ function SidebarContent({
         Workspace
       </div>
 
-      {/* Nav — Planejamento/Piloto Auto:
-            · admin → links Zernio reais
-            · não-admin → disabled "Em breve"
-          Item Admin (painel completo) é exclusivo de admins. */}
+      {/* Nav — split em 2 grupos pra hierarquia visual.
+          PRIMARY (topo): features principais. SECONDARY (bottom): config/help.
+          Admin recebe item extra "Admin" no fim do PRIMARY. */}
       {(() => {
         const isAdmin = isAdminEmail(profile?.email);
-        const planejamentoItem: NavItem = isAdmin
-          ? {
-              href: "/app/admin/zernio/calendar",
-              label: "Planejamento",
-              icon: CalendarClock,
-            }
-          : {
-              href: "#",
-              label: "Planejamento",
-              icon: CalendarClock,
-              badge: "Em breve",
-              disabled: true,
-              tooltip: PLANEJAMENTO_TOOLTIP,
-            };
-        const pilotoItem: NavItem = isAdmin
-          ? {
-              href: "/app/admin/zernio/autopilot",
-              label: "Piloto auto",
-              icon: Rocket,
-            }
-          : {
-              href: "#",
-              label: "Piloto auto",
-              icon: Rocket,
-              badge: "Em breve",
-              disabled: true,
-              tooltip: PILOTO_TOOLTIP,
-            };
-        // Insere antes do Roadmap (último do NAV_ITEMS) — mantém ordem
-        // visual: Início, Carrosséis, Guia, Ajustes, Planejamento, Piloto, Roadmap, Admin?
-        const baseBeforeRoadmap = NAV_ITEMS.slice(0, NAV_ITEMS.length - 1);
-        const roadmapItem = NAV_ITEMS[NAV_ITEMS.length - 1];
-        const items: NavItem[] = [
-          ...baseBeforeRoadmap,
-          planejamentoItem,
-          pilotoItem,
-          roadmapItem,
+        const primary: NavItem[] = [
+          ...PRIMARY_NAV,
           ...(isAdmin ? [ADMIN_NAV_ITEM] : []),
         ];
-        return (
-          <nav className="flex flex-col gap-[2px]">
-            {items.map(({ href, label, icon: Icon, badge, disabled, tooltip }, idx) => {
+
+        function renderNavItem(
+          { href, label, icon: Icon, badge, disabled, tooltip }: NavItem,
+          idx: number
+        ): React.ReactNode {
           // Active match:
           //  - "/app" exato (senao /app/* sempre teria home ativo)
           //  - "/app/settings" exato (pra evitar /app/settings/referrals
@@ -560,13 +526,35 @@ function SidebarContent({
               {content}
             </Link>
           );
-        })}
-          </nav>
+        }
+
+        return (
+          <>
+            {/* PRIMARY group */}
+            <nav className="flex flex-col gap-[2px]">
+              {primary.map((it, i) => renderNavItem(it, i))}
+            </nav>
+
+            {/* Spacer empurra grupo secundário pro baixo */}
+            <div className="flex-1 min-h-[20px]" />
+
+            {/* SECONDARY group + section divider */}
+            <div
+              className="border-t pt-3 mb-2"
+              style={{ borderColor: "rgba(255,255,255,0.1)" }}
+            >
+              <nav className="flex flex-col gap-[2px]">
+                {SECONDARY_NAV.map((it, i) => renderNavItem(it, i + 100))}
+              </nav>
+            </div>
+
+            {/* FOOTER nav (Roadmap discreto) */}
+            <nav className="flex flex-col gap-[2px] mb-1">
+              {FOOTER_NAV.map((it, i) => renderNavItem(it, i + 200))}
+            </nav>
+          </>
         );
       })()}
-
-      {/* Spacer */}
-      <div className="flex-1 min-h-[20px]" />
 
       {/* Plan card + usage indicator (bar verde→amarelo→vermelho) */}
       <PlanCard profile={profile} planIsFree={planIsFree} onNavigate={onNavigate} />

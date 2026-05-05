@@ -10,7 +10,8 @@
  * redireciona pra `/app/admin/zernio/connected` que dispara sync.
  */
 
-import { requireAdmin, createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { requireAdminOrPlan } from "@/lib/server/plan-gate";
 import { ensureUserHasZernioProfile } from "@/lib/server/zernio-default-profile";
 import {
   getZernioConnectUrl,
@@ -42,9 +43,9 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ platform: string }> }
 ) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
-  const { user } = admin;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
 
   const { platform: platformRaw } = await params;
   const platform = platformRaw.toLowerCase() as ZernioPlatform;
@@ -85,7 +86,7 @@ export async function GET(
 
   const url = new URL(request.url);
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || url.origin).replace(/\/$/, "");
-  const redirectUrl = `${appUrl}/app/admin/zernio/connected?platform=${encodeURIComponent(platform)}`;
+  const redirectUrl = `${appUrl}/app/zernio/connected?platform=${encodeURIComponent(platform)}`;
 
   try {
     const { authUrl } = await getZernioConnectUrl({

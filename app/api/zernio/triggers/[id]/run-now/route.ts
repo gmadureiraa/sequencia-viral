@@ -7,7 +7,8 @@
  * Body opcional: { theme?: string } → override do tema sorteado.
  */
 
-import { requireAdmin, createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { requireAdminOrPlan } from "@/lib/server/plan-gate";
 import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import { processTrigger, type Trigger } from "@/lib/server/zernio-trigger-runner";
 
@@ -18,9 +19,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
-  const { user } = admin;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
   const { id } = await params;
 
   const limiter = await rateLimit({

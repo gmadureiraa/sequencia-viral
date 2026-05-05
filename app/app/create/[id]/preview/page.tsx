@@ -153,6 +153,8 @@ export default function PreviewPage(props: {
   // Zernio scheduling modal — admin only.
   const [zernioOpen, setZernioOpen] = useState(false);
   const isAdmin = isAdminEmail(profile?.email ?? user?.email);
+  // Zernio scheduling: liberado pra admin OU plano business (não só admin).
+  const canScheduleZernio = isAdmin || profile?.plan === "business";
   async function handleExportZip() {
     await exportZip(draft?.title || "carrossel");
     scheduleFeedbackModal();
@@ -806,8 +808,8 @@ export default function PreviewPage(props: {
             )}
           </div>
 
-          {/* Zernio scheduler (admin only) */}
-          {isAdmin && draft?.id && (
+          {/* Zernio scheduler — admin + plano business */}
+          {canScheduleZernio && draft?.id && (
             <div
               style={{
                 padding: 22,
@@ -828,7 +830,7 @@ export default function PreviewPage(props: {
                   opacity: 0.6,
                 }}
               >
-                Nº 02 · Zernio (admin)
+                Nº 02 · Publicar
               </div>
               <h4
                 className="sv-display"
@@ -837,9 +839,10 @@ export default function PreviewPage(props: {
                 Agendar nas <em>redes</em>.
               </h4>
               <p style={{ fontSize: 12, color: "var(--sv-soft)", marginBottom: 12 }}>
-                Posta em Twitter/IG/LinkedIn/etc. via Zernio. Configure profiles em{" "}
-                <a href="/app/admin/zernio" target="_blank" rel="noreferrer">
-                  /app/admin/zernio
+                Posta no Instagram + LinkedIn na data e hora que você quiser.
+                Configure suas redes em{" "}
+                <a href="/app/zernio" target="_blank" rel="noreferrer">
+                  /app/zernio
                 </a>
                 .
               </p>
@@ -1199,8 +1202,8 @@ export default function PreviewPage(props: {
         session={session}
       />
 
-      {/* Zernio scheduling modal — admin only. Acesso via card "Nº 02 · Zernio". */}
-      {isAdmin && draft?.id && session && (
+      {/* Zernio scheduling modal — admin + business. Acesso via card "Nº 02 · Publicar". */}
+      {canScheduleZernio && draft?.id && session && (
         <ScheduleZernioModal
           open={zernioOpen}
           onClose={() => setZernioOpen(false)}

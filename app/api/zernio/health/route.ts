@@ -12,14 +12,14 @@
  * Cache: 60s server-side (só queremos saber "tá vivo?", não precisa real-time).
  */
 
-import { requireAdmin } from "@/lib/server/auth";
+import { requireAdminOrPlan } from "@/lib/server/plan-gate";
 import { pingZernio } from "@/lib/server/zernio";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
 
   const result = await pingZernio();
   // 200 mesmo em erro — caller usa o campo `ok` pra decidir UX.

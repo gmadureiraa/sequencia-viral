@@ -368,7 +368,7 @@ export default function AdminPage() {
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href="/app/admin/zernio"
+            href="/app/zernio"
             className="sv-btn"
             style={{
               padding: "10px 14px",

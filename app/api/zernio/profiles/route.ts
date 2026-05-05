@@ -7,7 +7,8 @@
  * 1 profile por marca pra não misturar credenciais.
  */
 
-import { requireAdmin, createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { requireAdminOrPlan } from "@/lib/server/plan-gate";
 import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 import {
   createZernioProfile,
@@ -24,9 +25,9 @@ interface CreateProfileBody {
 }
 
 export async function GET(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
-  const { user } = admin;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
 
   const sb = createServiceRoleSupabaseClient();
   if (!sb) {
@@ -49,9 +50,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
-  const { user } = admin;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
 
   // Profile creation é caro (1 round-trip Zernio + 1 DB) — cap 30/h por admin
   // pra evitar runaway loops em UI bugada.

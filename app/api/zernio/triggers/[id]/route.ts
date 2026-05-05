@@ -3,7 +3,8 @@
  * DELETE /api/zernio/triggers/:id   → deleta
  */
 
-import { requireAdmin, createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { requireAdminOrPlan } from "@/lib/server/plan-gate";
 
 export const runtime = "nodejs";
 
@@ -36,9 +37,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
-  const { user } = admin;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
   const { id } = await params;
 
   let body: Record<string, unknown>;
@@ -76,9 +77,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
-  const { user } = admin;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
   const { id } = await params;
 
   const sb = createServiceRoleSupabaseClient();

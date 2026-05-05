@@ -18,7 +18,8 @@
  */
 
 import { createHash } from "node:crypto";
-import { requireAdmin, createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { requireAdminOrPlan } from "@/lib/server/plan-gate";
 import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
@@ -60,9 +61,9 @@ function extFromContentType(ct: string): string {
 }
 
 export async function POST(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
-  const { user } = admin;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
 
   // 30 uploads/h por admin — cada upload sobe N slides (1 carrossel completo).
   // Cap é defensivo contra loop bug; uso normal não bate nem perto.

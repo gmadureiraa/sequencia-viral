@@ -350,6 +350,34 @@ export default function ReferralsPage() {
                 <Share2 size={14} /> Compartilhar
               </button>
             </div>
+
+            {/* Share canais diretos — WhatsApp / X / E-mail */}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <ChannelButton
+                bg="#25D366"
+                label="WhatsApp"
+                href={`https://wa.me/?text=${encodeURIComponent(
+                  `Tô usando o Sequência Viral pra criar carrosséis com IA — usa meu link e ganha 30% off no primeiro mês: ${link}`
+                )}`}
+              />
+              <ChannelButton
+                bg="var(--sv-ink)"
+                fg="var(--sv-paper)"
+                label="X / Twitter"
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
+                  `Carrosséis com IA em ~60s — ${link}`
+                )}`}
+              />
+              <ChannelButton
+                bg="var(--sv-yellow)"
+                label="E-mail"
+                href={`mailto:?subject=${encodeURIComponent(
+                  "Sequência Viral — IA pra carrosséis"
+                )}&body=${encodeURIComponent(
+                  `Tô usando o Sequência Viral pra criar carrosséis com IA. Usa meu link e ganha 30% off no primeiro mês:\n\n${link}`
+                )}`}
+              />
+            </div>
           </div>
         )
       )}
@@ -618,5 +646,52 @@ function StatCard({
         {hint}
       </div>
     </div>
+  );
+}
+
+/**
+ * Botão de share direto pra um canal externo (WhatsApp / Twitter / E-mail).
+ * Cor de fundo + ícone definem o canal — manter consistência com a paleta SV.
+ */
+function ChannelButton({
+  href,
+  label,
+  bg,
+  fg = "var(--sv-ink)",
+}: {
+  href: string;
+  label: string;
+  bg: string;
+  fg?: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-2 px-4 py-2 transition-all"
+      style={{
+        background: bg,
+        color: fg,
+        border: "1.5px solid var(--sv-ink)",
+        boxShadow: "2px 2px 0 0 var(--sv-ink)",
+        fontFamily: "var(--sv-mono)",
+        fontSize: 10.5,
+        letterSpacing: "0.14em",
+        textTransform: "uppercase",
+        fontWeight: 700,
+        textDecoration: "none",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = "translate(-1px, -1px)";
+        e.currentTarget.style.boxShadow = "4px 4px 0 0 var(--sv-ink)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = "translate(0, 0)";
+        e.currentTarget.style.boxShadow = "2px 2px 0 0 var(--sv-ink)";
+      }}
+    >
+      {label}
+    </a>
   );
 }

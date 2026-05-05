@@ -6,7 +6,8 @@
  * GET    /api/zernio/profiles/:id → retorna 1 profile + suas contas conectadas.
  */
 
-import { requireAdmin, createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
+import { requireAdminOrPlan } from "@/lib/server/plan-gate";
 import {
   deleteZernioProfile,
   ZernioApiError,
@@ -18,9 +19,9 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
-  const { user } = admin;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
   const { id } = await params;
 
   const sb = createServiceRoleSupabaseClient();
@@ -50,9 +51,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const admin = await requireAdmin(request);
-  if (!admin.ok) return admin.response;
-  const { user } = admin;
+  const gate = await requireAdminOrPlan(request);
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
   const { id } = await params;
 
   const sb = createServiceRoleSupabaseClient();

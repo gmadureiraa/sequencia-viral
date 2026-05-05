@@ -11,6 +11,13 @@ import {
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { trackLead } from "./meta-pixel";
+import {
+  captureReferralFromUrl,
+  getStoredReferralCode,
+  trackReferral,
+  markReferralTracked,
+  wasReferralTracked,
+} from "./referral-client";
 export interface BrandAnalysis {
   detected_niche: string[];
   tone_detected: string;
@@ -121,6 +128,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Initialize auth — somente sessão Supabase; sem modo convidado.
   useEffect(() => {
     clearLegacyGuestStorage();
+    // Captura ?ref= da URL antes de qualquer outra coisa — TTL 30 dias no
+    // localStorage. Funciona mesmo sem sessao (visitante anonimo na landing).
+    captureReferralFromUrl();
 
     if (!supabase) {
       console.warn(
@@ -184,6 +194,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }).catch(() => {
             /* ignora */
           });
+
+          // Programa Indique-e-Ganhe: se tem ref code no localStorage e
+          // ainda nao foi trackeado, registra a indicacao agora. Tipicamente
+          // dispara so na primeira vez que o user loga apos signup vindo de
+          // ?ref=. Idempotente no backend, mas evitamos chamar se ja foi.
+          try {
+            const refCode = getStoredReferralCode();
+            if (refCode && !wasReferralTracked() && s.access_token) {
+              void trackReferral(s.access_token, refCode).then((ok) => {
+                if (ok) markReferralTracked();
+              });
+            }
+          } catch {
+            /* ignora — referral e fire-and-forget */
+          }
 
           // Meta Pixel `Lead` — só dispara em SIGNUP, não em login. Usa
           // localStorage flag por user.id pra não duplicar entre sessões.

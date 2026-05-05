@@ -37,14 +37,37 @@ export async function POST(request: Request) {
       );
     }
 
-    const { planId, email, bump, couponCode, interval } =
+    const { planId, email, bump, couponCode, interval, referralCode } =
       (await request.json()) as {
         planId?: string;
         email?: string;
         bump?: boolean;
         couponCode?: string;
         interval?: "month" | "year";
+        referralCode?: string;
       };
+
+    // Programa Indique-e-Ganhe — se o user tem ref code no localStorage e
+    // ja fez signup, registra a indicacao agora (tem referrer + referred user).
+    // Idempotente, nao duplica se ja existir. Nao bloqueia o checkout em
+    // qualquer falha — apenas loga.
+    const trimmedReferralCode = (referralCode || "").trim();
+    if (trimmedReferralCode) {
+      try {
+        const admin = createServiceRoleSupabaseClient();
+        if (admin) {
+          const { recordReferralSignup } = await import("@/lib/referrals");
+          await recordReferralSignup({
+            referralCode: trimmedReferralCode,
+            referredEmail: user.email || email || "",
+            referredUserId: user.id,
+            supabaseAdmin: admin,
+          });
+        }
+      } catch (err) {
+        console.warn("[checkout] recordReferralSignup falhou (nao bloqueia):", err);
+      }
+    }
 
     if (!planId || !PLANS[planId as PlanId]) {
       return Response.json({ error: "Invalid plan" }, { status: 400 });
@@ -165,23 +188,17 @@ export async function POST(request: Request) {
         interval: billingInterval,
         bump: includeBump ? "autopublish" : "none",
         ...(appliedCouponMeta ? { svCouponCode: appliedCouponMeta.code } : {}),
+        ...(trimmedReferralCode ? { referralCode: trimmedReferralCode } : {}),
       },
-      subscription_data: appliedCouponMeta
-        ? {
-            metadata: {
-              userId: user.id,
-              planId,
-              interval: billingInterval,
-              svCouponCode: appliedCouponMeta.code,
-            },
-          }
-        : {
-            metadata: {
-              userId: user.id,
-              planId,
-              interval: billingInterval,
-            },
-          },
+      subscription_data: {
+        metadata: {
+          userId: user.id,
+          planId,
+          interval: billingInterval,
+          ...(appliedCouponMeta ? { svCouponCode: appliedCouponMeta.code } : {}),
+          ...(trimmedReferralCode ? { referralCode: trimmedReferralCode } : {}),
+        },
+      },
       line_items: lineItems,
       success_url: `${ALLOWED_ORIGINS.includes(request.headers.get("origin") || "") ? request.headers.get("origin") : DEFAULT_ORIGIN}/app/settings?payment=success&plan=${planId}${includeBump ? "&bump=1" : ""}`,
       cancel_url: `${ALLOWED_ORIGINS.includes(request.headers.get("origin") || "") ? request.headers.get("origin") : DEFAULT_ORIGIN}/app/checkout?plan=${planId}&payment=cancelled`,

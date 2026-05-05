@@ -19,6 +19,7 @@ import {
   Shield,
   CalendarClock,
   Rocket,
+  Gift,
 } from "lucide-react";
 import Link from "next/link";
 import { Toaster } from "@/components/ui/sonner";
@@ -40,6 +41,9 @@ const NAV_ITEMS: NavItem[] = [
   // Galeria (/app/gallery) foi removida do app — a rota nao existe mais.
   // O endpoint /api/gallery ainda pode existir como API interna (não é UI).
   { href: "/app/help", label: "Guia", icon: BookOpen },
+  // Indique-e-Ganhe — programa de referral. Item de destaque (badge "Novo")
+  // pra incentivar adoção. R$ 25 por amigo que assinar, sem limite.
+  { href: "/app/settings/referrals", label: "Indique e ganhe", icon: Gift, badge: "Novo" },
   { href: "/app/settings", label: "Ajustes", icon: Settings },
   // Roadmap no rodape da nav — eh referencia estatica (lista de features
   // futuras), nao precisa de destaque.
@@ -457,9 +461,20 @@ function SidebarContent({
         return (
           <nav className="flex flex-col gap-[2px]">
             {items.map(({ href, label, icon: Icon, badge, disabled, tooltip }, idx) => {
+          // Active match:
+          //  - "/app" exato (senao /app/* sempre teria home ativo)
+          //  - "/app/settings" exato (pra evitar /app/settings/referrals
+          //    iluminar tambem o item Ajustes — tem rota irmã)
+          //  - resto: startsWith
           const active =
             !disabled &&
-            (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
+            (href === "/app"
+              ? pathname === "/app"
+              : href === "/app/settings"
+                ? pathname === "/app/settings" ||
+                  (pathname.startsWith("/app/settings/") &&
+                    !pathname.startsWith("/app/settings/referrals"))
+                : pathname.startsWith(href));
           const commonStyle = {
             fontFamily: "var(--sv-mono)",
             fontSize: "10.5px",

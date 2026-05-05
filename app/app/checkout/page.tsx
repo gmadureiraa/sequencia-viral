@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { PLANS } from "@/lib/pricing";
+import { getStoredReferralCode } from "@/lib/referral-client";
 import posthog from "posthog-js";
 
 type PlanKey = "pro" | "business";
@@ -228,6 +229,9 @@ function CheckoutContent() {
           email: user?.email || profile?.email || "",
           bump,
           couponCode: appliedCoupon?.code || undefined,
+          // Programa Indique-e-Ganhe: ref code do localStorage capturado
+          // quando o user veio de ?ref=... TTL 30 dias. Backend valida.
+          referralCode: getStoredReferralCode() || undefined,
         }),
       });
       const data = await res.json();

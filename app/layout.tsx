@@ -9,6 +9,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { LANDING_FAQ } from "@/lib/landing-faq";
 import { MetaPixel } from "@/components/MetaPixel";
+import { ReferralCapture } from "@/components/ReferralCapture";
 import "./globals.css";
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
@@ -181,6 +182,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen font-[family-name:var(--font-sans)]">
         <MetaPixel pixelId="1315597820451507" />
+        <ReferralCapture />
         {children}
         <Analytics />
         <SpeedInsights />

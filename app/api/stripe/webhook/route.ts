@@ -11,6 +11,7 @@ import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { sendPaymentSuccess, sendPaymentFailed } from "@/lib/email/dispatch";
 import { fireResendEvent } from "@/lib/integrations/resend/events";
+import { applyReferralReward } from "@/lib/referrals";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 
@@ -118,7 +119,12 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as {
-        metadata?: { userId?: string; planId?: string; svCouponCode?: string };
+        metadata?: {
+          userId?: string;
+          planId?: string;
+          svCouponCode?: string;
+          referralCode?: string;
+        };
         subscription?: string;
         customer?: string;
         customer_email?: string;
@@ -128,6 +134,7 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
       const userId = session.metadata?.userId;
       const planId = session.metadata?.planId;
       const svCouponCode = session.metadata?.svCouponCode;
+      const referralCode = session.metadata?.referralCode;
       const customerId = typeof session.customer === "string" ? session.customer : null;
       const subscriptionId =
         typeof session.subscription === "string" ? session.subscription : null;
@@ -201,6 +208,32 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
             }
           } catch (e) {
             console.warn("[stripe webhook] falha ao contabilizar cupom:", e);
+          }
+        }
+
+        // Programa Indique-e-Ganhe — se a session veio com referralCode,
+        // marca como converted, aplica R$ 25 de credito Stripe no balance
+        // do referrer e dispara email transacional. Idempotente
+        // (reward_applied flag) e silencioso em qualquer falha pra nao
+        // quebrar o webhook. Mesmo sem referralCode na metadata, tenta
+        // aplicar pelo referredUserId — cobre o caso onde o user fez
+        // signup com codigo (ja existe linha pending/signup) mas o
+        // checkout foi sem o code passado adiante.
+        if (referralCode || userId) {
+          try {
+            const result = await applyReferralReward({
+              referredUserId: userId,
+              stripeSessionId: session.id,
+              supabaseAdmin,
+            });
+            if (!result.ok && result.reason && result.reason !== "no_referral") {
+              console.warn(
+                "[stripe webhook] applyReferralReward nao aplicado:",
+                result.reason
+              );
+            }
+          } catch (err) {
+            console.error("[stripe webhook] applyReferralReward exception:", err);
           }
         }
 

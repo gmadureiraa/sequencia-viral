@@ -124,33 +124,26 @@ const ADMIN_EMAILS_LOWER = new Set(ADMIN_EMAILS.map((e) => e.toLowerCase()));
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Edge gate: /app/admin/* só pra admin. Validação real (JWT + revogação)
-  // continua em cada API route via requireAdmin — esse middleware só corta
-  // página antes de renderizar pra não-admin (zero flash + reduz superfície
-  // de informação vazada).
+  // Edge gate de /app/admin/* foi REMOVIDO em 05/05.
   //
-  // /app/admin/login etc. não existem hoje, mas se virarem público no
-  // futuro adicionar exceção aqui.
-  if (pathname.startsWith("/app/admin")) {
-    const email = getSupabaseSessionEmail(request);
-    const isAdmin = email !== null && ADMIN_EMAILS_LOWER.has(email);
-    // Log estruturado pra Vercel logs — facilita debug remoto sem expor
-    // dados sensíveis (só email + decision).
-    console.log("[edge-gate] admin check", {
-      pathname,
-      hasEmail: email !== null,
-      email,
-      isAdmin,
-    });
-    if (!isAdmin) {
-      // Sem cookie: manda pro login. Com cookie mas não admin: manda /app.
-      const target = email ? "/app" : "/app/login";
-      const url = request.nextUrl.clone();
-      url.pathname = target;
-      url.search = "";
-      return NextResponse.redirect(url);
-    }
-  }
+  // Razão: SV usa @supabase/supabase-js direto (createClient) que persiste
+  // sessão em LOCALSTORAGE (default), não em cookie. lib/supabase.ts tem
+  // comentário explícito proibindo trocar storage porque invalida sessões
+  // existentes de todos os users. Como localStorage não viaja pro server,
+  // edge middleware nunca enxerga a sessão e redirecionava TODO mundo
+  // (incluindo admin) → bug "pisca e volta pra Início".
+  //
+  // Defesa em profundidade preservada:
+  //  1. Layout client guard (app/app/admin/layout.tsx): bloqueia render
+  //     dos children até auth resolver, redireciona se não-admin.
+  //  2. Backend requireAdmin (lib/server/auth.ts): valida JWT real em
+  //     todas as rotas /api/zernio/* e /api/admin/* — source of truth.
+  //  3. Sidebar conditional: links Planejamento/Piloto Auto só aparecem
+  //     pra admin.
+  //
+  // Pra ter gate server-side real no futuro: migrar pra @supabase/ssr
+  // (createBrowserClient + createServerClient) que persiste em cookie.
+  // Refatoração não-trivial — fica como evolução.
 
   // Audit P1: handler dedicado pra OPTIONS preflight. Antes,
   // preflight era roteado pra rota real e podia falhar antes de

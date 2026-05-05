@@ -17,6 +17,7 @@ import { OnboardingFirstCaseEmail } from "./templates/onboarding-first-case";
 import { OnboardingWhyUpgradeEmail } from "./templates/onboarding-why-upgrade";
 import { PaymentFailedEmail } from "./templates/payment-failed";
 import { LastChanceCouponEmail } from "./templates/last-chance-coupon";
+import { ReferralConvertedEmail } from "./templates/referral-converted";
 
 import { APP_URL } from "@/lib/app-url";
 
@@ -170,6 +171,27 @@ export async function sendLastChanceCoupon(
       couponCode: args.couponCode,
     }),
     tags: [PROJECT_TAG, ENV_TAG, lifecycleTag("last-chance-coupon")],
+  });
+}
+
+/**
+ * Programa Indique-e-Ganhe — referrer ganha credito quando o referido paga.
+ * Disparado direto no webhook Stripe (instantaneo, nao depende de Automation).
+ */
+export async function sendReferralConverted(
+  user: Recipient,
+  args: { rewardCents: number; totalCreditCents: number }
+) {
+  return sendEmail({
+    to: user.email,
+    subject: "Você acabou de ganhar R$ 25 em crédito",
+    react: ReferralConvertedEmail({
+      name: user.name,
+      rewardCents: args.rewardCents,
+      totalCreditCents: args.totalCreditCents,
+      appUrl: APP_URL,
+    }),
+    tags: [PROJECT_TAG, ENV_TAG, lifecycleTag("referral-converted")],
   });
 }
 

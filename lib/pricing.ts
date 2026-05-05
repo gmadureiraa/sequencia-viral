@@ -10,29 +10,34 @@
  * env vars com os novos IDs antes de abrir checkout em prod.
  *
  * Precos BRL:
- *   Creator:  R$ 49,90/mes  (anchor: R$ 99,90)  — preço de lançamento
- *   Pro:      R$ 97,90/mes  (anchor: R$ 199,90) — preço de lançamento
+ *   Pro: R$ 49,90/mes  (anchor: R$ 99,90)  — preço de lançamento (DB key 'pro')
+ *   Max: R$ 97,90/mes  (anchor: R$ 199,90) — preço de lançamento (DB key 'business')
  * Anual: sempre -20% sobre mensal × 12.
  */
 
 export const PLAN_CURRENCY = "brl" as const;
 
 /**
- * Estrutura 3 planos: Free / Creator / Pro.
+ * Estrutura 3 planos: Free / Pro / Max.
  *
  * Migracao 2026-04-22: removido plano "Agência" (business). IDs no banco
  * permanecem 'pro' e 'business' pra nao quebrar users legados — mas o
- * DISPLAY NAME mudou:
- *   - DB key 'pro'      → mostrado como "Creator" (entry pago)
- *   - DB key 'business' → mostrado como "Pro" (top tier)
+ * DISPLAY NAME mudou (e migrou de novo em 2026-05-05 pra padronizar com
+ * Radar Viral e Reels Viral):
+ *   - DB key 'pro'      → mostrado como "Pro" (entry pago, antes "Creator")
+ *   - DB key 'business' → mostrado como "Max" (top tier, antes "Pro")
  *   - DB key 'free'     → inalterado
+ *
+ * Padronização cross-app (5 mai/2026): 3 apps virais usam free/pro/max.
+ * DB keys SV continuam 'pro'/'business' por legado — nunca renomeadas pra
+ * não quebrar subs ativos no Stripe.
  *
  * Novo preço-alvo pos-promo alinhado com a economia real (imagens Imagen
  * sao o driver de custo, ~$0.04/imagem, 50% dos slides tem imagem).
  */
 export const PLANS = {
   pro: {
-    name: "Creator",
+    name: "Pro",
     priceMonthly: 4990, // R$ 49,90 em centavos BRL (preço de lançamento)
     priceAnnual: 47904, // R$ 479,04/ano (20% off sobre 49,90×12=598,80)
     priceAnchor: 9990, // R$ 99,90 preco riscado (anchor visual)
@@ -53,7 +58,7 @@ export const PLANS = {
     ],
   },
   business: {
-    name: "Pro",
+    name: "Max",
     priceMonthly: 9790, // R$ 97,90 em centavos BRL (preço de lançamento)
     priceAnnual: 93984, // R$ 939,84/ano (20% off sobre 97,90×12=1174,80)
     priceAnchor: 19990, // R$ 199,90 preco riscado (anchor visual)

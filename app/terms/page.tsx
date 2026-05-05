@@ -58,8 +58,8 @@ export default function TermsPage() {
         <Section title="4. Planos, cobrança e cancelamento">
           <ul className="list-disc space-y-2 pl-5">
             <li>
-              Planos vigentes: Grátis, Creator (R$ 49,90/mês de lançamento,
-              anchor R$ 99,90) e Pro (R$ 97,90/mês de lançamento, anchor
+              Planos vigentes: Grátis, Pro (R$ 49,90/mês de lançamento,
+              anchor R$ 99,90) e Max (R$ 97,90/mês de lançamento, anchor
               R$ 199,90). Preços visíveis na{" "}
               <Link href="/#pricing" className="underline">
                 página de pricing
@@ -72,11 +72,11 @@ export default function TermsPage() {
               painel em 2 cliques.
             </li>
             <li>
-              Cancelamento no plano <b>Pro</b>: fazemos rateio proporcional dos
+              Cancelamento no plano <b>Max</b>: fazemos rateio proporcional dos
               dias não utilizados dentro do ciclo vigente.
             </li>
             <li>
-              Cancelamento no plano <b>Creator</b>: o mês em curso segue ativo
+              Cancelamento no plano <b>Pro</b>: o mês em curso segue ativo
               até o próximo ciclo, depois não renova.
             </li>
             <li>

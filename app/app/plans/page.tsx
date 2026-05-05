@@ -31,14 +31,14 @@ const FREE_FEATURES = [
   "Template Thread (X) padrão",
 ];
 
-const CREATOR_FEATURES = PLANS.pro.features.slice(0, 7);
-// Pro features construidas manualmente pra enfatizar 'Tudo que Creator tem' +
+const PRO_FEATURES = PLANS.pro.features.slice(0, 7);
+// Max features construidas manualmente pra enfatizar 'Tudo que Pro tem' +
 // diferenciais reais (acesso antecipado, agendamento, suporte prioritario).
 // Nao puxamos de PLANS.business.features — aquele e mais detalhado e repetia
-// coisas do Creator.
-const PRO_FEATURES = [
+// coisas do Pro.
+const MAX_FEATURES = [
   "30 carrosséis/mês",
-  "Tudo que o Creator tem",
+  "Tudo que o Pro tem",
   "Acesso antecipado a novos templates",
   "Agendamento + publicação automática (em breve)",
   "Export PNG + PDF",
@@ -50,13 +50,13 @@ function buildCards(interval: Interval): PlanCard[] {
 
   // Valores vem de lib/pricing.ts em centavos BRL. Mensal-equivalente do
   // anual = priceAnnual / 12 (ex: 47040/12 = 3920 = R$ 39,20).
-  const creatorMonthly = PLANS.pro.priceMonthly; // 4900
-  const creatorAnnualTotal = PLANS.pro.priceAnnual; // 47040
-  const creatorAnnualMonthlyEquiv = Math.round(creatorAnnualTotal / 12);
-
-  const proMonthly = PLANS.business.priceMonthly; // 9700
-  const proAnnualTotal = PLANS.business.priceAnnual; // 93120
+  const proMonthly = PLANS.pro.priceMonthly; // 4900 (DB key 'pro' = display "Pro")
+  const proAnnualTotal = PLANS.pro.priceAnnual; // 47040
   const proAnnualMonthlyEquiv = Math.round(proAnnualTotal / 12);
+
+  const maxMonthly = PLANS.business.priceMonthly; // 9700 (DB key 'business' = display "Max")
+  const maxAnnualTotal = PLANS.business.priceAnnual; // 93120
+  const maxAnnualMonthlyEquiv = Math.round(maxAnnualTotal / 12);
 
   return [
     {
@@ -73,25 +73,7 @@ function buildCards(interval: Interval): PlanCard[] {
     {
       id: "pro",
       number: "02",
-      name: PLANS.pro.name, // "Creator"
-      price: annual
-        ? formatBrl(creatorAnnualMonthlyEquiv)
-        : formatBrl(creatorMonthly),
-      priceNote: annual
-        ? `por mês · total anual ${formatBrl(creatorAnnualTotal)}`
-        : "por mês · preço de lançamento",
-      tagline: annual
-        ? "Pra quem posta toda semana — 20% off no anual."
-        : "Pra quem posta toda semana.",
-      features: CREATOR_FEATURES,
-      ctaLabel: annual ? `Assinar ${PLANS.pro.name} anual` : `Assinar ${PLANS.pro.name}`,
-      ctaHref: `/app/checkout?plan=pro${annual ? "&interval=year" : ""}`,
-      highlight: true,
-    },
-    {
-      id: "business",
-      number: "03",
-      name: PLANS.business.name, // "Pro"
+      name: PLANS.pro.name, // "Pro"
       price: annual
         ? formatBrl(proAnnualMonthlyEquiv)
         : formatBrl(proMonthly),
@@ -99,9 +81,27 @@ function buildCards(interval: Interval): PlanCard[] {
         ? `por mês · total anual ${formatBrl(proAnnualTotal)}`
         : "por mês · preço de lançamento",
       tagline: annual
+        ? "Pra quem posta toda semana — 20% off no anual."
+        : "Pra quem posta toda semana.",
+      features: PRO_FEATURES,
+      ctaLabel: annual ? `Assinar ${PLANS.pro.name} anual` : `Assinar ${PLANS.pro.name}`,
+      ctaHref: `/app/checkout?plan=pro${annual ? "&interval=year" : ""}`,
+      highlight: true,
+    },
+    {
+      id: "business",
+      number: "03",
+      name: PLANS.business.name, // "Max"
+      price: annual
+        ? formatBrl(maxAnnualMonthlyEquiv)
+        : formatBrl(maxMonthly),
+      priceNote: annual
+        ? `por mês · total anual ${formatBrl(maxAnnualTotal)}`
+        : "por mês · preço de lançamento",
+      tagline: annual
         ? "Pra quem posta todo dia — 20% off no anual."
         : "Pra quem posta todo dia.",
-      features: PRO_FEATURES,
+      features: MAX_FEATURES,
       ctaLabel: annual
         ? `Assinar ${PLANS.business.name} anual`
         : `Assinar ${PLANS.business.name}`,
@@ -121,15 +121,15 @@ const FAQ = [
   },
   {
     q: "Tem plano anual?",
-    a: "Sim. O anual dá 20% de desconto vs mensal (Creator sai R$ 39,20/mês cobrado anual, Pro R$ 77,60/mês). Cancele quando quiser, reembolso se cancelar no mês que assinou.",
+    a: "Sim. O anual dá 20% de desconto vs mensal (Pro sai R$ 39,20/mês cobrado anual, Max R$ 77,60/mês). Cancele quando quiser, reembolso se cancelar no mês que assinou.",
   },
   {
     q: "O preço é em real?",
     a: "Sim. Cobrado em BRL via Stripe, direto no cartão brasileiro. Sem spread cambial, sem IOF de fatura internacional.",
   },
   {
-    q: "Qual a diferença entre Creator e Pro?",
-    a: "Creator é pra quem publica 2-3× por semana (10 carrosséis/mês). Pro é pra quem publica todo dia (30 carrosséis/mês + suporte prioritário). Ambos geram carrosséis de até 12 slides.",
+    q: "Qual a diferença entre Pro e Max?",
+    a: "Pro é pra quem publica 2-3× por semana (10 carrosséis/mês). Max é pra quem publica todo dia (30 carrosséis/mês + suporte prioritário). Ambos geram carrosséis de até 12 slides.",
   },
 ];
 

@@ -160,7 +160,7 @@ export async function POST(request: Request) {
           ? { product: stripeProductId }
           : {
               product_data: {
-                name: `Sequência Viral ${plan.name}${billingInterval === "year" ? " (anual)" : ""}`,
+                name: `Sequência Viral — ${plan.name}${billingInterval === "year" ? " (anual)" : ""} by Kaleidos Digital`,
                 description: plan.features.join(" · "),
               },
             }),

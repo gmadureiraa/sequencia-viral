@@ -18,6 +18,7 @@
  */
 
 import { ADMIN_EMAILS } from "@/lib/admin-emails";
+import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { decodeJwtEmail, getSupabaseSessionEmail } from "@/proxy";
 
 export const runtime = "nodejs";
@@ -117,6 +118,48 @@ export async function GET(request: Request) {
     jwtParseAttempt.error = err instanceof Error ? err.message : String(err);
   }
 
+  // Lookup do profile do DB pra ver onboarding_completed, plan, etc.
+  // Roadmap/Início bloqueados sugerem onboarding_completed=false (o
+  // OnboardingGuard global redireciona pra /app/onboarding).
+  let profileDiagnostic: Record<string, unknown> | null = null;
+  if (email) {
+    const sb = createServiceRoleSupabaseClient();
+    if (sb) {
+      const { data: authUser } = await sb.auth.admin
+        .listUsers({ page: 1, perPage: 200 })
+        .then((res) => ({
+          data: res.data?.users?.find(
+            (u) => u.email?.toLowerCase().trim() === email.toLowerCase().trim()
+          ),
+        }));
+      if (authUser) {
+        const { data: profile } = await sb
+          .from("profiles")
+          .select("id, email, name, plan, onboarding_completed, usage_count, usage_limit, created_at")
+          .eq("id", authUser.id)
+          .maybeSingle();
+        profileDiagnostic = {
+          authUser: {
+            id: authUser.id,
+            email: authUser.email,
+            createdAt: authUser.created_at,
+            lastSignInAt: authUser.last_sign_in_at,
+            emailConfirmedAt: authUser.email_confirmed_at,
+          },
+          profileRow: profile,
+          profileExists: !!profile,
+          onboardingCompleted: profile?.onboarding_completed ?? false,
+        };
+      } else {
+        profileDiagnostic = {
+          error: "auth user não encontrado pra esse email",
+        };
+      }
+    } else {
+      profileDiagnostic = { error: "service role client indisponível" };
+    }
+  }
+
   return Response.json(
     {
       veredict: {
@@ -132,6 +175,7 @@ export async function GET(request: Request) {
         sbAuthTokenCookies: sbCookies,
       },
       parseDiagnostic: jwtParseAttempt,
+      profileDiagnostic,
       requestPath: new URL(request.url).pathname,
     },
     { headers: { "Cache-Control": "no-store" } }

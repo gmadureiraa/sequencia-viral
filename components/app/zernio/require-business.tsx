@@ -65,7 +65,7 @@ export function RequireBusiness({
           <Sparkles size={24} color="var(--sv-ink)" />
         </div>
         <span className="sv-eyebrow">
-          <span className="sv-dot" /> Plano Business
+          <span className="sv-dot" /> Plano Max
         </span>
         <h2
           className="sv-display mt-3"
@@ -86,7 +86,7 @@ export function RequireBusiness({
           }}
         >
           {description ??
-            "Disponível só pro plano Business. Conecte Instagram + LinkedIn, agende posts e configure piloto automático com gatilhos."}
+            "Disponível só pro plano Max. Conecte Instagram + LinkedIn, agende posts e configure piloto automático com gatilhos."}
         </p>
         <Link
           href="/app/plans"

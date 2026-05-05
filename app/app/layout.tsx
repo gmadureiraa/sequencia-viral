@@ -80,7 +80,7 @@ function planShortLabel(plan: string | undefined): string {
   const p = plan ?? "free";
   if (p === "free") return "Grátis";
   if (p === "pro") return "Pro";
-  if (p === "business") return "Business";
+  if (p === "business") return "Max";
   return p;
 }
 
@@ -251,7 +251,7 @@ function PlanCard({
             fontWeight: 700,
           }}
         >
-          → Subir pra Business
+          → Subir pra Max
         </Link>
       )}
     </div>

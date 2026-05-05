@@ -31,6 +31,7 @@ import { jsonWithAuth } from "@/lib/api-auth-headers";
 import posthog from "posthog-js";
 import { trackSubscribe } from "@/lib/meta-pixel";
 import { PlatformConnectCards } from "@/components/app/zernio/platform-connect-cards";
+import { isAdminEmail } from "@/lib/admin-emails";
 
 function isPaidPlanParam(id: string): id is PlanId {
   return id === "pro" || id === "business";
@@ -1545,7 +1546,9 @@ function SettingsPageContent() {
               title="Publicar nas redes"
               subtitle="Conecte Instagram + LinkedIn pra postar carrosséis automaticamente. Carrosséis criados aqui podem ser agendados direto pra essas contas."
             >
-              {profile?.plan === "business" ? (
+              {/* Admin sempre passa (isAdminEmail) ou plano Max (DB key 'business'). */}
+              {profile?.plan === "business" ||
+              isAdminEmail(profile?.email ?? null) ? (
                 session ? (
                   <PlatformConnectCards session={session} size="md" />
                 ) : (
@@ -1585,7 +1588,7 @@ function SettingsPageContent() {
                     >
                       Conecte Instagram + LinkedIn e agende carrosséis pra
                       publicação automática. Disponível só pro plano{" "}
-                      <strong>Business</strong>.
+                      <strong>Max</strong>.
                     </p>
                     <Link
                       href="/app/plans"

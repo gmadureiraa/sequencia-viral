@@ -74,7 +74,7 @@ export async function requireAdminOrPlan(
       response: Response.json(
         {
           error:
-            "Esse recurso é exclusivo do plano Business. Faça upgrade em /app/plans.",
+            "Esse recurso é exclusivo do plano Max. Faça upgrade em /app/plans.",
           code: "plan_required",
           requiredPlans: allowedPlans,
           currentPlan: plan,

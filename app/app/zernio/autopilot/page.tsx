@@ -471,7 +471,7 @@ export default function ZernioAutopilotPage() {
   return (
     <RequireBusiness
       feature="Piloto Auto"
-      description="Configure gatilhos (tempo, RSS, webhook) que geram carrossel + postam sozinho. Disponível só pro plano Business."
+      description="Configure gatilhos (tempo, RSS, webhook) que geram carrossel + postam sozinho. Disponível só pro plano Max."
     >
     <div
       className="mx-auto px-6 py-8 lg:px-10 lg:py-12"

@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabase";
 import { upsertUserCarousel } from "@/lib/carousel-storage";
 import CarouselFeedbackPanel from "@/components/app/carousel-feedback";
 import FeedbackModal from "@/components/app/FeedbackModal";
+import { ScheduleZernioModal } from "@/components/app/zernio/schedule-modal";
 
 // Mesmo injector que o edit usa — garante que a fonte display escolhida
 // esteja disponível no momento do export PNG/PDF.
@@ -148,6 +149,10 @@ export default function PreviewPage(props: {
   function scheduleFeedbackModal() {
     setTimeout(() => setFeedbackOpen(true), 800);
   }
+
+  // Zernio scheduling modal — admin only.
+  const [zernioOpen, setZernioOpen] = useState(false);
+  const isAdmin = isAdminEmail(profile?.email ?? user?.email);
   async function handleExportZip() {
     await exportZip(draft?.title || "carrossel");
     scheduleFeedbackModal();
@@ -188,7 +193,7 @@ export default function PreviewPage(props: {
   // de hosts não-CORS via /api/img-proxy (que exige Bearer). Sem isso,
   // toPng falhava em slides com imagens de Serper/news/blogs (canvas
   // tainted) e o .zip vinha incompleto — bug do "4/16 slides".
-  const { exportRefs, exportPng, exportPdf, exportZip, isExporting, progress } =
+  const { exportRefs, exportPng, exportPdf, exportZip, captureSlidesAsDataUrls, isExporting, progress } =
     useExport(slides.length, {
       showWatermark,
       slideMediaUrls,
@@ -801,6 +806,67 @@ export default function PreviewPage(props: {
             )}
           </div>
 
+          {/* Zernio scheduler (admin only) */}
+          {isAdmin && draft?.id && (
+            <div
+              style={{
+                padding: 22,
+                background: "var(--sv-paper, #faf7f2)",
+                border: "1.5px solid var(--sv-ink)",
+                boxShadow: "3px 3px 0 0 var(--sv-ink)",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--sv-mono)",
+                  fontSize: 9.5,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  color: "var(--sv-ink)",
+                  marginBottom: 10,
+                  fontWeight: 700,
+                  opacity: 0.6,
+                }}
+              >
+                Nº 02 · Zernio (admin)
+              </div>
+              <h4
+                className="sv-display"
+                style={{ fontSize: 22, letterSpacing: "-0.01em", marginBottom: 12 }}
+              >
+                Agendar nas <em>redes</em>.
+              </h4>
+              <p style={{ fontSize: 12, color: "var(--sv-soft)", marginBottom: 12 }}>
+                Posta em Twitter/IG/LinkedIn/etc. via Zernio. Configure profiles em{" "}
+                <a href="/app/admin/zernio" target="_blank" rel="noreferrer">
+                  /app/admin/zernio
+                </a>
+                .
+              </p>
+              <button
+                type="button"
+                onClick={() => setZernioOpen(true)}
+                disabled={isExporting}
+                style={{
+                  width: "100%",
+                  padding: "11px 12px",
+                  border: "1.5px solid var(--sv-ink)",
+                  background: "var(--sv-ink)",
+                  color: "var(--sv-paper)",
+                  fontFamily: "var(--sv-mono)",
+                  fontSize: 10,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  cursor: isExporting ? "wait" : "pointer",
+                  fontWeight: 700,
+                  opacity: isExporting ? 0.6 : 1,
+                }}
+              >
+                Abrir agendamento
+              </button>
+            </div>
+          )}
+
           {/* Legenda */}
           <div
             style={{
@@ -1132,6 +1198,18 @@ export default function PreviewPage(props: {
         carouselId={draft?.id ?? null}
         session={session}
       />
+
+      {/* Zernio scheduling modal — admin only. Acesso via card "Nº 02 · Zernio". */}
+      {isAdmin && draft?.id && session && (
+        <ScheduleZernioModal
+          open={zernioOpen}
+          onClose={() => setZernioOpen(false)}
+          session={session}
+          carouselId={draft.id}
+          initialContent={caption || draft?.title || ""}
+          getSlidePngs={captureSlidesAsDataUrls}
+        />
+      )}
 
       {/* Export render hidden container: 1080×1350 full scale.
            Mudança 2026-04-22: top:-99999/left:-99999/opacity:0 causava webkit

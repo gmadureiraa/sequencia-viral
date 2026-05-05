@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { ADMIN_EMAILS } from "./lib/admin-emails";
 
 const ALLOWED_ORIGINS = new Set([
   "https://viral.kaleidos.com.br",
@@ -11,6 +12,70 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 
 /**
+ * Decodifica payload JWT sem validar assinatura — pra gate de UX no edge,
+ * onde validação completa via Supabase fetch adicionaria latência em todo
+ * request. Backend continua validando JWT real em cada /api/* via
+ * lib/server/auth.ts::requireAuthenticatedUser (faz `auth.getUser(token)`
+ * server-side, rejeita revogados/banidos).
+ *
+ * Tradeoff explícito: edge gate é defesa em profundidade (não principal),
+ * fácil de bypassar editando JWT, mas backend pega tudo. Vale pelo zero
+ * latência adicional + UX (página `/app/admin/*` nunca renderiza pra
+ * não-admin nem mesmo brevemente).
+ */
+export function decodeJwtEmail(token: string): string | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    // Base64url → base64 pra atob
+    const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(padded + "=".repeat((4 - (padded.length % 4)) % 4));
+    const payload = JSON.parse(json) as { email?: string; exp?: number };
+    if (typeof payload.email !== "string") return null;
+    // Token expirado → trata como inválido
+    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
+    return payload.email.toLowerCase().trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lê cookie de sessão Supabase. O nome do cookie depende do project ref
+ * — formato `sb-<projectRef>-auth-token`. Pegamos qualquer cookie que
+ * comece com `sb-` e termine em `-auth-token`. Valor é JSON com access_token.
+ */
+export function getSupabaseSessionEmail(request: NextRequest): string | null {
+  // Itera cookies pra achar o sb-*-auth-token (project ref muda por env).
+  for (const cookie of request.cookies.getAll()) {
+    if (!cookie.name.startsWith("sb-") || !cookie.name.endsWith("-auth-token")) {
+      continue;
+    }
+    try {
+      // Cookie value pode ser JSON puro OU base64-encoded prefixed com `base64-`.
+      let raw = cookie.value;
+      if (raw.startsWith("base64-")) {
+        raw = atob(raw.slice("base64-".length));
+      }
+      // Supabase recente armazena array [access_token, refresh_token, ...]
+      // OU objeto { access_token, ... }. Detecta os dois formatos.
+      const parsed = JSON.parse(raw);
+      const accessToken: string | undefined = Array.isArray(parsed)
+        ? parsed[0]
+        : parsed?.access_token;
+      if (!accessToken) continue;
+      const email = decodeJwtEmail(accessToken);
+      if (email) return email;
+    } catch {
+      // Cookie corrompido ou formato desconhecido — pula.
+    }
+  }
+  return null;
+}
+
+const ADMIN_EMAILS_LOWER = new Set(ADMIN_EMAILS.map((e) => e.toLowerCase()));
+
+/**
  * Next 16 renomeou `middleware.ts` para `proxy.ts` (nome atual da
  * convenção de arquivo). API é a mesma — exportar uma função `proxy`
  * (ou default) que recebe `NextRequest` e devolve `NextResponse`. O
@@ -20,6 +85,25 @@ const ALLOWED_ORIGINS = new Set([
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Edge gate: /app/admin/* só pra admin. Validação real (JWT + revogação)
+  // continua em cada API route via requireAdmin — esse middleware só corta
+  // página antes de renderizar pra não-admin (zero flash + reduz superfície
+  // de informação vazada).
+  //
+  // /app/admin/login etc. não existem hoje, mas se virarem público no
+  // futuro adicionar exceção aqui.
+  if (pathname.startsWith("/app/admin")) {
+    const email = getSupabaseSessionEmail(request);
+    if (!email || !ADMIN_EMAILS_LOWER.has(email)) {
+      // Sem cookie: manda pro login. Com cookie mas não admin: manda /app.
+      const target = email ? "/app" : "/app/login";
+      const url = request.nextUrl.clone();
+      url.pathname = target;
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+  }
 
   // Audit P1: handler dedicado pra OPTIONS preflight. Antes,
   // preflight era roteado pra rota real e podia falhar antes de

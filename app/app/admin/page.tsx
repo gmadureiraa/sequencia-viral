@@ -368,6 +368,27 @@ export default function AdminPage() {
         </div>
         <div className="flex items-center gap-2">
           <Link
+            href="/app/admin/zernio"
+            className="sv-btn"
+            style={{
+              padding: "10px 14px",
+              fontSize: 10.5,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: "var(--sv-ink)",
+              color: "var(--sv-paper)",
+              border: "1.5px solid var(--sv-ink)",
+              fontFamily: "var(--sv-mono)",
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              fontWeight: 700,
+            }}
+          >
+            Zernio →
+          </Link>
+          <Link
             href="/app/admin/regras"
             className="sv-btn sv-btn-outline"
             style={{

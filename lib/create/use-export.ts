@@ -59,7 +59,8 @@ function isPublicCorsHostExport(host: string): boolean {
 /**
  * Pré-busca imagens de hosts não-CORS via /api/img-proxy (com Bearer)
  * e converte pra blob URL same-origin. Substitui src dos `<img>` dentro
- * dos refs. Devolve lista de blob URLs criadas pra revoke depois.
+ * dos refs. Devolve lista de blob URLs criadas pra revoke depois +
+ * índices dos slides cujas imagens falharam (1-based) pra caller toastar.
  *
  * Isso é a chave pra .zip de 16 slides exportar 16 (e não 4) — quando
  * Serper devolve imagens de news/blog/stock sites sem CORS, `<img
@@ -72,8 +73,8 @@ async function prefetchImagesAsBlobs(
   count: number,
   getAuthHeaders?: () => HeadersInit,
   onProgress?: (msg: string) => void
-): Promise<string[]> {
-  if (typeof window === "undefined") return [];
+): Promise<{ blobUrls: string[]; failedSlideIndexes: number[] }> {
+  if (typeof window === "undefined") return { blobUrls: [], failedSlideIndexes: [] };
 
   // Mapa: src ORIGINAL no DOM (pode ser /api/img-proxy?url=... OU URL
   // cross-origin direta) → URL externa real (decodificada). Necessário
@@ -128,43 +129,78 @@ async function prefetchImagesAsBlobs(
     });
   }
 
-  if (externalUrlBySrc.size === 0) return [];
+  if (externalUrlBySrc.size === 0) return { blobUrls: [], failedSlideIndexes: [] };
   onProgress?.(`Pré-carregando ${externalUrlBySrc.size} imagem(ns)...`);
 
   const headers = getAuthHeaders?.() ?? {};
   const blobMap = new Map<string, string>();
   const createdBlobs: string[] = [];
+  const failedSrcs = new Set<string>();
 
   // Fetch único por src ORIGINAL — múltiplos slides com mesma URL
   // compartilham a chave do Map e fazem só 1 fetch.
+  //
+  // 05/05 hardening (slides 1/3/6 saindo em branco no .zip): timeout 10s
+  // era apertado pra Vercel proxy + Imagen/GCS lento. Subi pra 30s e
+  // adicionei 1 retry com backoff pra cobrir 502/503 transiente. Quando
+  // ainda assim falhar, marcamos o slide como "sem imagem" pra o caller
+  // toastar — mas NÃO deixamos o src `/api/img-proxy` no `<img>` porque
+  // o browser fetcha sem Bearer e o proxy retorna 401 → html-to-image
+  // captura placeholder transparente sem avisar.
+  async function fetchWithRetry(externalUrl: string): Promise<Blob | null> {
+    const proxyUrl = `/api/img-proxy?url=${encodeURIComponent(externalUrl)}`;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(proxyUrl, {
+          headers,
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (res.ok) return await res.blob();
+        // 4xx (auth, validation) é fatal — não retenta. 5xx + 0 (network)
+        // tenta de novo.
+        const status = res.status;
+        if (status >= 400 && status < 500) {
+          console.warn(`[export] prefetch HTTP ${status} (fatal): ${externalUrl}`);
+          return null;
+        }
+        console.warn(
+          `[export] prefetch HTTP ${status} attempt=${attempt + 1}: ${externalUrl}`
+        );
+      } catch (err) {
+        console.warn(
+          `[export] prefetch attempt=${attempt + 1} failed:`,
+          externalUrl,
+          err
+        );
+      }
+      // Backoff curto antes do retry — proxy upstream costuma se
+      // recuperar em 1-2s.
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 1500));
+    }
+    return null;
+  }
+
   await Promise.all(
     Array.from(externalUrlBySrc.entries()).map(
       async ([originalSrc, externalUrl]) => {
-        try {
-          const proxyUrl = `/api/img-proxy?url=${encodeURIComponent(externalUrl)}`;
-          const res = await fetch(proxyUrl, {
-            headers,
-            signal: AbortSignal.timeout(10_000),
-          });
-          if (!res.ok) {
-            console.warn(
-              `[export] prefetch HTTP ${res.status}: ${externalUrl}`
-            );
-            return;
-          }
-          const blob = await res.blob();
-          const blobUrl = URL.createObjectURL(blob);
-          blobMap.set(originalSrc, blobUrl);
-          createdBlobs.push(blobUrl);
-        } catch (err) {
-          console.warn("[export] prefetch failed:", externalUrl, err);
+        const blob = await fetchWithRetry(externalUrl);
+        if (!blob) {
+          failedSrcs.add(originalSrc);
+          return;
         }
+        const blobUrl = URL.createObjectURL(blob);
+        blobMap.set(originalSrc, blobUrl);
+        createdBlobs.push(blobUrl);
       }
     )
   );
 
-  // Substitui src no DOM (chave = src original do `<img>`, não a URL
-  // externa decodificada).
+  // Substitui src no DOM. Pra src que prefetchou OK → blob URL.
+  // Pra src que falhou → REMOVE o src (vira `<img>` quebrada) em vez de
+  // deixar `/api/img-proxy` que vai 401 e capturar placeholder
+  // transparente sem indicação. Assim html-to-image usa o
+  // imagePlaceholder configurado no toPng.
+  const failedSlideIndexes = new Set<number>();
   for (let i = 0; i < count; i++) {
     const el = refs.current[i];
     if (!el) continue;
@@ -177,11 +213,16 @@ async function prefetchImagesAsBlobs(
         // Remove crossOrigin pra blob URL — atributo não tem efeito em
         // same-origin e em alguns webkit força reload desnecessário.
         img.removeAttribute("crossorigin");
+      } else if (failedSrcs.has(src)) {
+        // Imagem cujo prefetch falhou: marca slide como "sem imagem" pro
+        // caller exibir warning. NÃO mexe no src — o `imagePlaceholder`
+        // do toPng cuida do canvas final.
+        failedSlideIndexes.add(i + 1);
       }
     });
   }
 
-  return createdBlobs;
+  return { blobUrls: createdBlobs, failedSlideIndexes: Array.from(failedSlideIndexes).sort((a, b) => a - b) };
 }
 
 async function waitForImagesInElement(el: HTMLElement): Promise<void> {
@@ -349,6 +390,11 @@ export function useExport(
   // captura (ex: dentro do loop) pode invalidar a img antes do toPng do
   // próximo slide ler ela em batch.
   const blobUrlsRef = useRef<string[]>([]);
+  // Slides cuja imagem falhou no prefetch — populado por waitRender, lido
+  // por exportPng/Pdf/Zip pra avisar o user que algumas imagens saíram em
+  // branco (em vez de mentir "X slides exportados" quando na verdade
+  // algumas vieram com placeholder transparente).
+  const imageFailedSlidesRef = useRef<number[]>([]);
 
   const cleanupBlobs = useCallback(() => {
     for (const u of blobUrlsRef.current) {
@@ -389,12 +435,14 @@ export function useExport(
     // Pré-busca imagens de hosts não-CORS via /api/img-proxy autenticado
     // e troca src pra blob URL same-origin. Sem isso, toPng falha em
     // slides com imagens de Serper/news/blog (canvas tainted).
-    blobUrlsRef.current = await prefetchImagesAsBlobs(
+    const prefetchResult = await prefetchImagesAsBlobs(
       exportRefs,
       totalSlides,
       getAuthHeaders,
       setProgress
     );
+    blobUrlsRef.current = prefetchResult.blobUrls;
+    imageFailedSlidesRef.current = prefetchResult.failedSlideIndexes;
     // Aguarda os <img> com src trocado pra blob: dispararem load.
     await Promise.all(
       exportRefs.current.slice(0, totalSlides).map(async (node) => {
@@ -431,11 +479,16 @@ export function useExport(
           failed.push(i + 1);
         }
       }
+      const imageFails = imageFailedSlidesRef.current;
       if (exported === 0) {
         toast.error("Nenhum slide capturado. Tente de novo.");
       } else if (failed.length > 0) {
         toast.error(
           `Só ${exported}/${totalSlides} slides exportaram. Faltaram: ${failed.join(", ")}. Recarregue e tente de novo.`
+        );
+      } else if (imageFails.length > 0) {
+        toast.warning(
+          `${exported} slides exportados, mas slide(s) ${imageFails.join(", ")} saíram SEM imagem (fonte não respondeu). Tenta de novo em 1 min.`
         );
       } else {
         toast.success(`${exported} slides exportados.`);
@@ -494,7 +547,14 @@ export function useExport(
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        toast.success(`PDF com ${added} slides baixado.`);
+        const imageFails = imageFailedSlidesRef.current;
+        if (imageFails.length > 0) {
+          toast.warning(
+            `PDF com ${added} slides baixado, mas slide(s) ${imageFails.join(", ")} saíram SEM imagem. Tenta de novo em 1 min.`
+          );
+        } else {
+          toast.success(`PDF com ${added} slides baixado.`);
+        }
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : typeof err === "string" ? err : "";
@@ -593,7 +653,14 @@ export function useExport(
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        toast.success(`.zip com ${added} slides baixado.`);
+        const imageFails = imageFailedSlidesRef.current;
+        if (imageFails.length > 0) {
+          toast.warning(
+            `.zip com ${added} slides baixado, mas slide(s) ${imageFails.join(", ")} saíram SEM imagem (fonte não respondeu). Tenta de novo em 1 min.`
+          );
+        } else {
+          toast.success(`.zip com ${added} slides baixado.`);
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "";
         console.error("Export ZIP error:", err);
@@ -607,11 +674,43 @@ export function useExport(
     [totalSlides, waitRender, captureSlideAsPng, slideMediaUrls, cleanupBlobs]
   );
 
+  // Captura todos os slides como dataUrls PNG sem fazer download. Usado
+  // pelo agendamento Zernio (admin) — após gerar dataUrls, o modal sobe
+  // pro Supabase Storage via /api/zernio/upload-slides e usa as URLs como
+  // mediaUrls no POST /api/zernio/posts. Reaproveita waitRender + prefetch
+  // pro mesmo path de robustez do export PNG normal.
+  const captureSlidesAsDataUrls = useCallback(async (): Promise<
+    { index: number; dataUrl: string }[]
+  > => {
+    setIsExporting(true);
+    setProgress("Preparando slides...");
+    try {
+      await waitRender();
+      const out: { index: number; dataUrl: string }[] = [];
+      for (let i = 0; i < totalSlides; i++) {
+        setProgress(`Capturando slide ${i + 1}/${totalSlides}...`);
+        try {
+          const dataUrl = await captureSlideAsPng(i);
+          out.push({ index: i + 1, dataUrl });
+        } catch (err) {
+          console.error(`[capture-as-dataurls] slide ${i + 1} falhou:`, err);
+          // Continua — caller decide se aborta ou segue com slides parciais.
+        }
+      }
+      return out;
+    } finally {
+      cleanupBlobs();
+      setProgress("");
+      setIsExporting(false);
+    }
+  }, [totalSlides, waitRender, captureSlideAsPng, cleanupBlobs]);
+
   return {
     exportRefs,
     exportPng,
     exportPdf,
     exportZip,
+    captureSlidesAsDataUrls,
     isExporting,
     progress,
   };

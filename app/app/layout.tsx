@@ -41,33 +41,27 @@ const NAV_ITEMS: NavItem[] = [
   // O endpoint /api/gallery ainda pode existir como API interna (não é UI).
   { href: "/app/help", label: "Guia", icon: BookOpen },
   { href: "/app/settings", label: "Ajustes", icon: Settings },
-  // Em breve — itens disabled.
-  {
-    href: "#",
-    label: "Planejamento",
-    icon: CalendarClock,
-    badge: "Em breve",
-    disabled: true,
-    tooltip: {
-      title: "Planejamento",
-      body: "Calendário de conteúdo pra organizar sua sequência e publicar direto no Instagram nos dias e horários certos.",
-    },
-  },
-  {
-    href: "#",
-    label: "Piloto auto",
-    icon: Rocket,
-    badge: "Em breve",
-    disabled: true,
-    tooltip: {
-      title: "Piloto automático",
-      body: "A IA cuida de tudo sozinha: cria conteúdo no seu DNA e publica no seu Instagram sem você levantar um dedo.",
-    },
-  },
-  // Roadmap no rodape da nav, abaixo dos 'Em breve' — eh referencia
-  // estatica (lista de features futuras), nao precisa de destaque.
+  // Roadmap no rodape da nav — eh referencia estatica (lista de features
+  // futuras), nao precisa de destaque.
   { href: "/app/roadmap", label: "Roadmap", icon: Map },
 ];
+
+/**
+ * Itens "Planejamento" e "Piloto auto" — comportamento dependente de role:
+ *   - Admin (isAdminEmail): vira link real pras rotas Zernio
+ *   - Não-admin: fica disabled "Em breve" com tooltip explicativo
+ *
+ * Quando feature for liberada pra todos os planos, mover pro NAV_ITEMS
+ * principal e remover essa lógica.
+ */
+const PLANEJAMENTO_TOOLTIP = {
+  title: "Planejamento",
+  body: "Calendário de conteúdo pra organizar sua sequência e publicar direto no Instagram nos dias e horários certos.",
+};
+const PILOTO_TOOLTIP = {
+  title: "Piloto automático",
+  body: "A IA cuida de tudo sozinha: cria conteúdo no seu DNA e publica no seu Instagram sem você levantar um dedo.",
+};
 
 import { isAdminEmail } from "@/lib/admin-emails";
 
@@ -415,10 +409,51 @@ function SidebarContent({
         Workspace
       </div>
 
-      {/* Nav — inclui entrada Admin só pra emails autorizados. */}
+      {/* Nav — Planejamento/Piloto Auto:
+            · admin → links Zernio reais
+            · não-admin → disabled "Em breve"
+          Item Admin (painel completo) é exclusivo de admins. */}
       {(() => {
         const isAdmin = isAdminEmail(profile?.email);
-        const items = isAdmin ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS;
+        const planejamentoItem: NavItem = isAdmin
+          ? {
+              href: "/app/admin/zernio/calendar",
+              label: "Planejamento",
+              icon: CalendarClock,
+            }
+          : {
+              href: "#",
+              label: "Planejamento",
+              icon: CalendarClock,
+              badge: "Em breve",
+              disabled: true,
+              tooltip: PLANEJAMENTO_TOOLTIP,
+            };
+        const pilotoItem: NavItem = isAdmin
+          ? {
+              href: "/app/admin/zernio/autopilot",
+              label: "Piloto auto",
+              icon: Rocket,
+            }
+          : {
+              href: "#",
+              label: "Piloto auto",
+              icon: Rocket,
+              badge: "Em breve",
+              disabled: true,
+              tooltip: PILOTO_TOOLTIP,
+            };
+        // Insere antes do Roadmap (último do NAV_ITEMS) — mantém ordem
+        // visual: Início, Carrosséis, Guia, Ajustes, Planejamento, Piloto, Roadmap, Admin?
+        const baseBeforeRoadmap = NAV_ITEMS.slice(0, NAV_ITEMS.length - 1);
+        const roadmapItem = NAV_ITEMS[NAV_ITEMS.length - 1];
+        const items: NavItem[] = [
+          ...baseBeforeRoadmap,
+          planejamentoItem,
+          pilotoItem,
+          roadmapItem,
+          ...(isAdmin ? [ADMIN_NAV_ITEM] : []),
+        ];
         return (
           <nav className="flex flex-col gap-[2px]">
             {items.map(({ href, label, icon: Icon, badge, disabled, tooltip }, idx) => {

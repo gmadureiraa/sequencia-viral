@@ -1,5 +1,6 @@
 import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { cronForbidden, isValidCronRequest } from "@/lib/server/cron-auth";
+import { cronSkipped, isCronEnabled } from "@/lib/server/cron-flag";
 import {
   sendOnboardingHowItWorks,
   sendOnboardingFirstCase,
@@ -42,6 +43,7 @@ const STEPS: Step[] = [
 
 export async function GET(request: Request) {
   if (!isValidCronRequest(request)) return cronForbidden();
+  if (!isCronEnabled("onboarding-drip")) return cronSkipped("onboarding-drip");
 
   const sb = createServiceRoleSupabaseClient();
   if (!sb) return Response.json({ error: "no supabase" }, { status: 503 });

@@ -1,5 +1,6 @@
 import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { cronForbidden, isValidCronRequest } from "@/lib/server/cron-auth";
+import { cronSkipped, isCronEnabled } from "@/lib/server/cron-flag";
 
 export const maxDuration = 30;
 
@@ -125,6 +126,7 @@ async function alertDiscord(downChecks: CheckResult[]): Promise<void> {
 
 export async function GET(request: Request) {
   if (!isValidCronRequest(request)) return cronForbidden();
+  if (!isCronEnabled("healthcheck")) return cronSkipped("healthcheck");
 
   const results = await Promise.all([
     checkSupabase(),

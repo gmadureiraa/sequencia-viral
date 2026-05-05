@@ -1,5 +1,6 @@
 import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { cronForbidden, isValidCronRequest } from "@/lib/server/cron-auth";
+import { cronSkipped, isCronEnabled } from "@/lib/server/cron-flag";
 import { sendReEngagement } from "@/lib/email/dispatch";
 
 export const maxDuration = 60;
@@ -14,6 +15,7 @@ export const maxDuration = 60;
  */
 export async function GET(request: Request) {
   if (!isValidCronRequest(request)) return cronForbidden();
+  if (!isCronEnabled("re-engagement")) return cronSkipped("re-engagement");
 
   const sb = createServiceRoleSupabaseClient();
   if (!sb) return Response.json({ error: "no supabase" }, { status: 503 });

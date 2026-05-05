@@ -1,5 +1,6 @@
 import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { cronForbidden, isValidCronRequest } from "@/lib/server/cron-auth";
+import { cronSkipped, isCronEnabled } from "@/lib/server/cron-flag";
 import { sendLastChanceCoupon } from "@/lib/email/dispatch";
 
 export const maxDuration = 60;
@@ -20,6 +21,7 @@ const COUPON_CODE = "VIRAL50";
  */
 export async function GET(request: Request) {
   if (!isValidCronRequest(request)) return cronForbidden();
+  if (!isCronEnabled("last-chance-coupon")) return cronSkipped("last-chance-coupon");
 
   const sb = createServiceRoleSupabaseClient();
   if (!sb) return Response.json({ error: "no supabase" }, { status: 503 });

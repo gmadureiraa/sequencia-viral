@@ -27,6 +27,7 @@
 import { createHash } from "node:crypto";
 import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { cronForbidden, isValidCronRequest } from "@/lib/server/cron-auth";
+import { cronSkipped, isCronEnabled } from "@/lib/server/cron-flag";
 import { runGeneration, type Variation } from "@/lib/server/generate-carousel";
 import { upsertUserCarousel } from "@/lib/carousel-storage";
 import { loadBrandContextForUser } from "@/lib/server/brand-context";
@@ -88,6 +89,7 @@ const TRIGGER_BUFFER_MS = 24 * 60 * 60 * 1000;
 
 export async function GET(request: Request) {
   if (!isValidCronRequest(request)) return cronForbidden();
+  if (!isCronEnabled("zernio-autopilot")) return cronSkipped("zernio-autopilot");
 
   const sb = createServiceRoleSupabaseClient();
   if (!sb) return Response.json({ error: "DB indisponível." }, { status: 503 });

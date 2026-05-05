@@ -76,6 +76,7 @@ const TEMPLATE_DESC: Record<TemplateId, string> = {
   blank: "Editorial educativo · serif Playfair + sans · cada slide um layout",
   bohdan: "Design-forward · B&W contraste alto · serif italic lime · handwritten",
   "paper-mono": "Confessional · cream paper-grain · sans bold + mono · B&W halftone (ref: tobi.the.og)",
+  madureira: "Futurista simples · capa IA dominante · navy + accent verde · slides com quadrado 1:1",
 };
 
 const TEMPLATE_NAME_OVERRIDE: Partial<Record<TemplateId, string>> = {

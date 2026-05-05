@@ -13,7 +13,8 @@ export type TemplateId =
   | "ambitious"
   | "blank"
   | "bohdan"
-  | "paper-mono";
+  | "paper-mono"
+  | "madureira";
 
 export type SlideVariantName =
   | "cover"

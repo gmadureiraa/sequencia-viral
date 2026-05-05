@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
+import type { TemplateId } from "@/components/app/templates/types";
 
 /**
  * Hook pra buscar, trocar e fazer upload de imagens dos slides. Lógica
@@ -18,15 +19,7 @@ export interface RefetchImageInput {
   contextHeading?: string;
   contextBody?: string;
   /** Template visual do carrossel — determina style guide do prompt Imagen. */
-  designTemplate?:
-    | "manifesto"
-    | "futurista"
-    | "autoral"
-    | "twitter"
-    | "ambitious"
-    | "blank"
-    | "bohdan"
-    | "paper-mono";
+  designTemplate?: TemplateId;
   /** Se true, ativa pipeline 2-pass (cover-scene → Imagen) com composição cinematográfica. */
   isCover?: boolean;
   /**

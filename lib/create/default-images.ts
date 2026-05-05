@@ -152,6 +152,9 @@ const POOLS: Record<TemplateId, string[]> = {
   blank: BLANK,
   bohdan: BOHDAN,
   "paper-mono": PAPER_MONO,
+  // Madureira reaproveita pool do Futurista — paleta navy + accent verde
+  // gera prompts com o mesmo style guide cinematográfico.
+  madureira: FUTURISTA,
 };
 
 /**

@@ -12,6 +12,7 @@ const VALID_IDS: TemplateId[] = [
   "blank",
   "bohdan",
   "paper-mono",
+  "madureira",
 ];
 
 type SearchParams = Promise<{ id?: string; full?: string; style?: string }>;

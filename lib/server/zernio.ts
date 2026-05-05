@@ -17,7 +17,11 @@
  * Doc: https://docs.zernio.com
  */
 
-const ZERNIO_BASE_URL = "https://zernio.com/api/v1";
+// IMPORTANTE: NÃO incluir `/v1` aqui — paths já começam com `/v1/...`. Antes
+// era `https://zernio.com/api/v1` + path `/v1/profiles` = URL duplicada
+// `/api/v1/v1/profiles` que retornava HTML 404 (homepage Zernio). Bug
+// descoberto quando user clicou Conectar Instagram.
+const ZERNIO_BASE_URL = "https://zernio.com/api";
 
 // ============================================================
 // Tipos do Zernio (subset que SV usa)

@@ -132,6 +132,7 @@ export default function ZernioAutopilotPage() {
   const [openRunsFor, setOpenRunsFor] = useState<string | null>(null);
   const [runsByTrigger, setRunsByTrigger] = useState<Record<string, Run[]>>({});
   const [loadingRunsFor, setLoadingRunsFor] = useState<string | null>(null);
+  const [hasConnectedAccount, setHasConnectedAccount] = useState(true);
 
   const fetchTriggers = useCallback(async () => {
     if (!session) return;
@@ -153,6 +154,32 @@ export default function ZernioAutopilotPage() {
   useEffect(() => {
     if (session) fetchTriggers();
   }, [session, fetchTriggers]);
+
+  // Detecta se user tem pelo menos 1 conta IG ou LinkedIn ativa.
+  // Se não tiver, mostra prompt no topo guiando pra Ajustes.
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/zernio/accounts", {
+          headers: jsonWithAuth(session),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const active = (data.accounts || []).filter(
+          (a: { platform: string; status: string }) =>
+            ["instagram", "linkedin"].includes(a.platform) && a.status === "active"
+        );
+        if (!cancelled) setHasConnectedAccount(active.length > 0);
+      } catch {
+        // silent
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
 
   function resetForm() {
     setEditingId(null);
@@ -499,6 +526,57 @@ export default function ZernioAutopilotPage() {
           Atualizar
         </button>
       </header>
+
+      {/* AVISO: sem conta conectada — Piloto Auto não consegue postar */}
+      {!hasConnectedAccount && (
+        <section
+          className="sv-card mb-6 p-5 flex items-start gap-3 flex-wrap"
+          style={{ background: "var(--sv-yellow)" }}
+        >
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "var(--sv-ink)",
+              color: "var(--sv-paper)",
+              border: "1.5px solid var(--sv-ink)",
+            }}
+          >
+            <Rocket size={18} />
+          </div>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <h3
+              className="sv-display"
+              style={{ fontSize: 18, lineHeight: 1.05, margin: 0 }}
+            >
+              Conecte uma rede primeiro.
+            </h3>
+            <p
+              style={{
+                fontSize: 12.5,
+                color: "var(--sv-ink)",
+                marginTop: 4,
+                lineHeight: 1.4,
+              }}
+            >
+              Pra Piloto Auto postar carrosséis, você precisa ter Instagram
+              ou LinkedIn conectado. Sem conta ativa, os gatilhos rodam mas não
+              têm onde publicar.
+            </p>
+          </div>
+          <Link
+            href="/app/settings?tab=social"
+            className="sv-btn sv-btn-ink"
+            style={{ textDecoration: "none", flexShrink: 0 }}
+          >
+            Conectar agora →
+          </Link>
+        </section>
+      )}
 
       {/* TIPOS DE GATILHO */}
       {!showForm && (

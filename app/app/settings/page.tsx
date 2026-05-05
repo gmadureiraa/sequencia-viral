@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
 import posthog from "posthog-js";
 import { trackSubscribe } from "@/lib/meta-pixel";
+import { PlatformConnectCards } from "@/components/app/zernio/platform-connect-cards";
 
 function isPaidPlanParam(id: string): id is PlanId {
   return id === "pro" || id === "business";
@@ -182,7 +183,14 @@ function SettingsPageContent() {
   const searchParams = useSearchParams();
   const { profile, updateProfile, signOut, session, refreshProfile } =
     useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>("profile");
+  // Tab inicial: lê ?tab= da URL pra deeplinks (ex: /app/settings?tab=social)
+  // funcionarem direto. Ignora se valor não está no enum TabId.
+  const initialTab = (() => {
+    const t = searchParams?.get("tab");
+    const valid = ["profile", "branding", "social", "voice", "plan", "security"];
+    return valid.includes(t || "") ? (t as TabId) : "profile";
+  })();
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -1531,45 +1539,20 @@ function SettingsPageContent() {
           {/* ========== REDES ========== */}
           {activeTab === "social" && (
             <>
-            {/* Publicação automática via Zernio (business+) */}
+            {/* Publicação automática via Zernio (business+) — conecta INLINE.
+                Free/pro veem prompt de upgrade. */}
             <Section
-              title="Publicar automaticamente"
-              subtitle="Conecte Instagram + LinkedIn pra agendar carrosséis direto da página de cada post."
+              title="Publicar nas redes"
+              subtitle="Conecte Instagram + LinkedIn pra postar carrosséis automaticamente. Carrosséis criados aqui podem ser agendados direto pra essas contas."
             >
               {profile?.plan === "business" ? (
-                <Link
-                  href="/app/zernio"
-                  className="sv-card flex items-center gap-4 p-5"
-                  style={{ textDecoration: "none", color: "var(--sv-ink)" }}
-                >
-                  <div
-                    className="flex h-12 w-12 shrink-0 items-center justify-center"
-                    style={{
-                      background: "var(--sv-green)",
-                      border: "1.5px solid var(--sv-ink)",
-                      boxShadow: "2px 2px 0 0 var(--sv-ink)",
-                    }}
-                  >
-                    <Instagram size={20} />
+                session ? (
+                  <PlatformConnectCards session={session} size="md" />
+                ) : (
+                  <div style={{ fontSize: 13, color: "var(--sv-muted)" }}>
+                    Carregando...
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div
-                      className="sv-display"
-                      style={{ fontSize: 20, lineHeight: 1.05 }}
-                    >
-                      Conectar redes →
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12.5,
-                        color: "var(--sv-muted, #555)",
-                        marginTop: 2,
-                      }}
-                    >
-                      Instagram + LinkedIn · agendamento + Piloto Auto
-                    </div>
-                  </div>
-                </Link>
+                )
               ) : (
                 <div
                   className="sv-card flex items-start gap-4 p-5"

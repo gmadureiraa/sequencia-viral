@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
 import { RequireBusiness } from "@/components/app/zernio/require-business";
+import { PlatformConnectCards } from "@/components/app/zernio/platform-connect-cards";
 
 type AccountStatus = "active" | "disconnected" | "needs_reauth";
 
@@ -264,151 +265,9 @@ export default function ZernioAdminV2Page() {
         </section>
       )}
 
-      {/* CARDS DE PLATAFORMA */}
-      <section
-        className="grid gap-5 mb-8"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}
-      >
-        {FOCUS_PLATFORMS.map((platform) => {
-          const account = accountByPlatform(platform);
-          const isConnected = !!account;
-          const Icon = platform === "instagram" ? Instagram : Linkedin;
-          const accent = PLATFORM_COLORS[platform];
-          const fallbackUsername = (account?.handle ??
-            account?.display_name ??
-            "—") as string;
-          return (
-            <article
-              key={platform}
-              className="sv-card"
-              style={{
-                padding: 24,
-                background: isConnected ? accent : "var(--sv-white)",
-              }}
-            >
-              <div className="flex items-center gap-4 mb-4">
-                <div
-                  style={{
-                    ...platformIconWrap,
-                    background: isConnected ? "var(--sv-ink)" : "var(--sv-paper)",
-                    color: isConnected ? "var(--sv-paper)" : "var(--sv-ink)",
-                  }}
-                >
-                  <Icon size={22} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <h3
-                    className="sv-display"
-                    style={{ fontSize: 28, lineHeight: 1.04, margin: 0 }}
-                  >
-                    {platform === "instagram" ? "Instagram" : "LinkedIn"}
-                  </h3>
-                  {isConnected ? (
-                    <div style={statusGoodStyle}>
-                      <CheckCircle2 size={11} />
-                      <strong>@{fallbackUsername}</strong>
-                    </div>
-                  ) : (
-                    <div style={statusOffStyle}>
-                      <Plug size={11} /> Não conectado
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {isConnected ? (
-                <div className="flex flex-col gap-2">
-                  <div style={metaLineStyle}>
-                    Conectado em{" "}
-                    {new Date(account!.connected_at).toLocaleDateString("pt-BR")}
-                  </div>
-                  <button
-                    onClick={() => onConnect(platform)}
-                    className="sv-btn sv-btn-outline"
-                    disabled={connecting === platform}
-                    style={{ width: "100%" }}
-                  >
-                    {connecting === platform ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <RefreshCw size={12} />
-                    )}
-                    Reconectar
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => onConnect(platform)}
-                  className="sv-btn sv-btn-ink"
-                  disabled={connecting === platform}
-                  style={{ width: "100%", padding: "12px 16px" }}
-                >
-                  {connecting === platform ? (
-                    <Loader2 size={13} className="animate-spin" />
-                  ) : (
-                    <Plug size={13} />
-                  )}
-                  Conectar {platform === "instagram" ? "Instagram" : "LinkedIn"}
-                </button>
-              )}
-
-              {accounts.filter(
-                (a) => a.platform === platform && a.status !== "active"
-              ).length > 0 && (
-                <details style={{ marginTop: 14 }}>
-                  <summary
-                    style={{
-                      cursor: "pointer",
-                      fontFamily: "var(--sv-mono)",
-                      fontSize: 9.5,
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.14em",
-                      color: "var(--sv-muted, #555)",
-                    }}
-                  >
-                    Histórico (
-                    {
-                      accounts.filter(
-                        (a) => a.platform === platform && a.status !== "active"
-                      ).length
-                    }
-                    )
-                  </summary>
-                  <ul
-                    style={{
-                      margin: "8px 0 0",
-                      padding: 0,
-                      listStyle: "none",
-                    }}
-                  >
-                    {accounts
-                      .filter(
-                        (a) => a.platform === platform && a.status !== "active"
-                      )
-                      .map((a) => (
-                        <li key={a.id} style={historyItemStyle}>
-                          <Unplug size={10} />
-                          <span>@{a.handle ?? "—"}</span>
-                          <span
-                            style={{
-                              color: "var(--sv-muted, #888)",
-                              fontSize: 9,
-                              fontFamily: "var(--sv-mono)",
-                              letterSpacing: "0.1em",
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            ({a.status})
-                          </span>
-                        </li>
-                      ))}
-                  </ul>
-                </details>
-              )}
-            </article>
-          );
-        })}
+      {/* CARDS DE PLATAFORMA — reusa componente também usado em /app/settings */}
+      <section className="mb-8">
+        {session && <PlatformConnectCards session={session} size="lg" onChange={fetchAll} />}
       </section>
 
       {/* AÇÕES SECUNDÁRIAS */}

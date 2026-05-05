@@ -298,6 +298,69 @@ export default function ZernioCalendarPage() {
         </button>
       </header>
 
+      {/* QUICK-START — primeira vez (sem posts ainda) */}
+      {!loading && posts.length === 0 && (
+        <section
+          className="sv-card mb-6 p-6"
+          style={{ background: "var(--sv-paper)" }}
+        >
+          <div className="flex items-start gap-4 flex-wrap">
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "var(--sv-green)",
+                border: "1.5px solid var(--sv-ink)",
+                boxShadow: "2px 2px 0 0 var(--sv-ink)",
+              }}
+            >
+              <CalendarClock size={26} color="var(--sv-ink)" />
+            </div>
+            <div style={{ flex: 1, minWidth: 280 }}>
+              <h2
+                className="sv-display"
+                style={{ fontSize: 26, lineHeight: 1.04, margin: 0 }}
+              >
+                Calendário <em>vazio</em>.
+              </h2>
+              <p
+                className="mt-2"
+                style={{
+                  color: "var(--sv-muted, #555)",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  maxWidth: 540,
+                }}
+              >
+                Quando você agendar um carrossel ou ativar o Piloto Auto, ele
+                aparece aqui. Comece criando um carrossel e clicando em
+                &quot;Agendar nas redes&quot; no preview.
+              </p>
+              <div className="mt-3 flex gap-2 flex-wrap">
+                <Link
+                  href="/app/create/new"
+                  className="sv-btn sv-btn-primary"
+                  style={{ textDecoration: "none" }}
+                >
+                  Criar primeiro carrossel →
+                </Link>
+                <Link
+                  href="/app/zernio/autopilot"
+                  className="sv-btn sv-btn-outline"
+                  style={{ textDecoration: "none" }}
+                >
+                  Configurar Piloto Auto
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* KPI STRIP */}
       <section
         className="grid gap-3 mb-6"

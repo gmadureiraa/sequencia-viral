@@ -18,6 +18,7 @@ import {
   Rocket,
   Rss,
   Save,
+  Sparkles,
   Trash2,
   Webhook,
 } from "lucide-react";
@@ -133,6 +134,7 @@ export default function ZernioAutopilotPage() {
   const [runsByTrigger, setRunsByTrigger] = useState<Record<string, Run[]>>({});
   const [loadingRunsFor, setLoadingRunsFor] = useState<string | null>(null);
   const [hasConnectedAccount, setHasConnectedAccount] = useState(true);
+  const [suggestingThemes, setSuggestingThemes] = useState(false);
 
   const fetchTriggers = useCallback(async () => {
     if (!session) return;
@@ -157,29 +159,39 @@ export default function ZernioAutopilotPage() {
 
   // Detecta se user tem pelo menos 1 conta IG ou LinkedIn ativa.
   // Se não tiver, mostra prompt no topo guiando pra Ajustes.
+  // Re-checa em focus + visibility (user volta da aba do OAuth do Zernio).
+  const checkConnectedAccount = useCallback(async () => {
+    if (!session) return;
+    try {
+      const res = await fetch("/api/zernio/accounts", {
+        headers: jsonWithAuth(session),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const active = (data.accounts || []).filter(
+        (a: { platform: string; status: string }) =>
+          ["instagram", "linkedin"].includes(a.platform) && a.status === "active"
+      );
+      setHasConnectedAccount(active.length > 0);
+    } catch {
+      // silent — mantém estado anterior
+    }
+  }, [session]);
+
   useEffect(() => {
     if (!session) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/zernio/accounts", {
-          headers: jsonWithAuth(session),
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        const active = (data.accounts || []).filter(
-          (a: { platform: string; status: string }) =>
-            ["instagram", "linkedin"].includes(a.platform) && a.status === "active"
-        );
-        if (!cancelled) setHasConnectedAccount(active.length > 0);
-      } catch {
-        // silent
-      }
-    })();
-    return () => {
-      cancelled = true;
+    checkConnectedAccount();
+    const onFocus = () => checkConnectedAccount();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") checkConnectedAccount();
     };
-  }, [session]);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [session, checkConnectedAccount]);
 
   function resetForm() {
     setEditingId(null);
@@ -230,6 +242,47 @@ export default function ZernioAutopilotPage() {
       });
     }, 50);
   }
+
+  const onSuggestThemes = useCallback(async () => {
+    if (!session) return;
+    if (suggestingThemes) return;
+    setSuggestingThemes(true);
+    try {
+      const existingThemes = fThemes
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const res = await fetch("/api/zernio/triggers/suggest-themes", {
+        method: "POST",
+        headers: jsonWithAuth(session),
+        body: JSON.stringify({
+          niche: fNiche.trim() || undefined,
+          editorialLine: fEditorial.trim() || undefined,
+          existingThemes,
+          count: 15,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao gerar temas.");
+      const suggested = (data.themes ?? []) as string[];
+      if (suggested.length === 0) {
+        toast.warning("IA não devolveu temas. Tenta de novo em alguns segundos.");
+        return;
+      }
+      // Append, dedupe case-insensitive contra o que já tem.
+      const lowerExisting = new Set(existingThemes.map((t) => t.toLowerCase()));
+      const novos = suggested.filter((t) => !lowerExisting.has(t.toLowerCase()));
+      const merged = [...existingThemes, ...novos].join("\n");
+      setFThemes(merged);
+      toast.success(
+        `${novos.length} tema${novos.length === 1 ? "" : "s"} novo${novos.length === 1 ? "" : "s"} adicionado${novos.length === 1 ? "" : "s"}.`
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar temas.");
+    } finally {
+      setSuggestingThemes(false);
+    }
+  }, [session, suggestingThemes, fThemes, fNiche, fEditorial]);
 
   const onSubmit = useCallback(async () => {
     if (!session) return;
@@ -553,7 +606,7 @@ export default function ZernioAutopilotPage() {
               className="sv-display"
               style={{ fontSize: 18, lineHeight: 1.05, margin: 0 }}
             >
-              Conecte uma rede primeiro.
+              Sem rede conectada? Use modo rascunho.
             </h3>
             <p
               style={{
@@ -563,18 +616,43 @@ export default function ZernioAutopilotPage() {
                 lineHeight: 1.4,
               }}
             >
-              Pra Piloto Auto postar carrosséis, você precisa ter Instagram
-              ou LinkedIn conectado. Sem conta ativa, os gatilhos rodam mas não
-              têm onde publicar.
+              Sem Instagram ou LinkedIn conectado, os gatilhos ainda rodam em
+              modo <strong>&ldquo;Salvar rascunho&rdquo;</strong> — geram o
+              carrossel e salvam pra você revisar / postar manualmente. Pra
+              agendar e publicar automático, conecte uma rede.
             </p>
           </div>
-          <Link
-            href="/app/settings?tab=social"
-            className="sv-btn sv-btn-ink"
-            style={{ textDecoration: "none", flexShrink: 0 }}
-          >
-            Conectar agora →
-          </Link>
+          <div className="flex gap-2 flex-wrap" style={{ flexShrink: 0 }}>
+            <button
+              onClick={async () => {
+                if (!session) return;
+                try {
+                  const res = await fetch("/api/zernio/accounts/sync", {
+                    method: "POST",
+                    headers: jsonWithAuth(session),
+                  });
+                  if (!res.ok)
+                    throw new Error((await res.json()).error || "Falha");
+                  await checkConnectedAccount();
+                  toast.success("Sincronizado.");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Erro");
+                }
+              }}
+              className="sv-btn sv-btn-outline"
+              style={{ flexShrink: 0 }}
+              title="Reverifica contas conectadas no Zernio"
+            >
+              <RefreshCw size={13} /> Sincronizar
+            </button>
+            <Link
+              href="/app/settings?tab=social"
+              className="sv-btn sv-btn-ink"
+              style={{ textDecoration: "none", flexShrink: 0 }}
+            >
+              Conectar agora →
+            </Link>
+          </div>
         </section>
       )}
 
@@ -717,13 +795,35 @@ export default function ZernioAutopilotPage() {
               />
             </Field>
 
-            <Field
-              label={
-                fType === "rss"
-                  ? "Temas fallback (opcional — se RSS estiver vazio, sorteia daqui)"
-                  : "Temas (1 por linha — IA sorteia um a cada disparo)"
-              }
-            >
+            <div style={{ flex: 1 }}>
+              <div
+                className="flex items-center justify-between flex-wrap gap-2"
+                style={{ marginBottom: 6 }}
+              >
+                <Label>
+                  {fType === "rss"
+                    ? "Temas fallback (opcional — se RSS estiver vazio, sorteia daqui)"
+                    : "Temas (1 por linha)"}
+                </Label>
+                <button
+                  type="button"
+                  onClick={onSuggestThemes}
+                  disabled={suggestingThemes}
+                  style={{
+                    ...suggestBtnStyle,
+                    opacity: suggestingThemes ? 0.6 : 1,
+                    cursor: suggestingThemes ? "wait" : "pointer",
+                  }}
+                  title="Gera 15 sugestões de temas baseado no seu nicho + linha editorial"
+                >
+                  {suggestingThemes ? (
+                    <Loader2 size={11} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={11} />
+                  )}
+                  {suggestingThemes ? "Gerando…" : "Gerar 15 ideias"}
+                </button>
+              </div>
               <textarea
                 value={fThemes}
                 onChange={(e) => setFThemes(e.target.value)}
@@ -737,7 +837,21 @@ export default function ZernioAutopilotPage() {
                   fontFamily: "var(--sv-sans)",
                 }}
               />
-            </Field>
+              <p
+                style={{
+                  fontFamily: "var(--sv-sans)",
+                  fontSize: 11,
+                  color: "var(--sv-muted, #6b6b6b)",
+                  marginTop: 6,
+                  lineHeight: 1.45,
+                }}
+              >
+                Temas servem como <strong>direcionamento</strong>. A IA sorteia
+                um a cada disparo e desenvolve em copy completo. Não precisam
+                ser títulos finais nem manchetes — escreva o ângulo / ideia que
+                você defenderia.
+              </p>
+            </div>
 
             <Field label="Linha editorial / voz (opcional)">
               <textarea
@@ -1614,4 +1728,20 @@ const miniBtnSquareStyle: React.CSSProperties = {
   color: "var(--sv-ink)",
   border: "1.5px solid var(--sv-ink)",
   cursor: "pointer",
+};
+
+const suggestBtnStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  padding: "5px 10px",
+  background: "var(--sv-yellow, #F5C518)",
+  color: "var(--sv-ink)",
+  border: "1.5px solid var(--sv-ink)",
+  fontFamily: "var(--sv-mono)",
+  fontSize: 9.5,
+  fontWeight: 700,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  boxShadow: "2px 2px 0 0 var(--sv-ink)",
 };

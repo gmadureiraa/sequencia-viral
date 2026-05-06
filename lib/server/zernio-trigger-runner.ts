@@ -142,6 +142,8 @@ export async function processTrigger(
     return { status: "no_platforms", runId };
   }
 
+  const isDraftMode = trigger.publish_mode === "draft";
+
   const { data: accountRows } = await sb
     .from("zernio_accounts")
     .select("zernio_account_id, platform, status, raw")
@@ -154,14 +156,32 @@ export async function processTrigger(
     accountId: a.zernio_account_id,
   }));
 
-  if (platforms.length === 0) {
+  // RASCUNHO não precisa de conta Zernio conectada — só salva carrossel +
+  // entry no scheduled_posts pra user revisar na timeline. Quando user
+  // promover pra "scheduled", aí valida conta. Bug fix 2026-05-06: trigger
+  // RSS em modo draft estava falhando "Sem contas active" mesmo só gerando
+  // rascunho. Regra do produto: Pro/Free pode planejar/rascunhar sem Zernio,
+  // só Max em auto-publish (publish_now/scheduled) precisa de conta.
+  if (platforms.length === 0 && !isDraftMode) {
     await markRunFailed(
       runId,
       trigger.id,
-      `Sem contas active nas plataformas alvo (${targetPlatforms.join(", ")}). Conecte na tela inicial.`
+      `Sem contas active nas plataformas alvo (${targetPlatforms.join(", ")}). Conecte na tela inicial ou troque o trigger pra modo "Salvar rascunho".`
     );
     return { status: "no_accounts", runId };
   }
+
+  // Em draft sem conta conectada, ainda precisamos das plataformas alvo
+  // declarativas pro registro do scheduled_post (mesmo sem accountId real).
+  // Usamos um placeholder pra rastreabilidade — quando user conectar e
+  // promover, o accountId real entra no momento do agendamento.
+  const platformsForRecord: ZernioPostPlatformTarget[] =
+    platforms.length > 0
+      ? platforms
+      : targetPlatforms.map((p) => ({
+          platform: p as ZernioPlatform,
+          accountId: "",
+        }));
 
   // 4. Brand context
   const { brandContext, feedbackContext } = await loadBrandContextForUser(
@@ -245,28 +265,35 @@ export async function processTrigger(
       : new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 19);
   }
 
-  let zernioPost;
-  try {
-    zernioPost = await createZernioPost({
-      content,
-      mediaUrls,
-      timezone: !isDraft ? trigger.timezone : undefined,
-      scheduledFor,
-      publishNow: isPublishNow ? true : undefined,
-      platforms,
-    });
-  } catch (err) {
-    const detail =
-      err instanceof ZernioApiError
-        ? `Zernio ${err.status}: ${err.message}`
-        : err instanceof Error
-          ? err.message
-          : String(err);
-    await markRunFailed(runId, trigger.id, detail);
-    return { status: "zernio_failed", detail, runId };
+  // DRAFT mode: não chama Zernio API. Só persiste local com status=draft
+  // pra user revisar / promover depois. Não precisa de conta Zernio.
+  let zernioPost: { _id: string } & Record<string, unknown> = {
+    _id: `local-draft-${runId}`,
+  };
+  if (!isDraft) {
+    try {
+      zernioPost = await createZernioPost({
+        content,
+        mediaUrls,
+        timezone: trigger.timezone,
+        scheduledFor,
+        publishNow: isPublishNow ? true : undefined,
+        platforms,
+      });
+    } catch (err) {
+      const detail =
+        err instanceof ZernioApiError
+          ? `Zernio ${err.status}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      await markRunFailed(runId, trigger.id, detail);
+      return { status: "zernio_failed", detail, runId };
+    }
   }
 
-  // 9. Persiste scheduled_post
+  // 9. Persiste scheduled_post. Em modo draft, zernio_post_id fica null
+  // (a coluna aceita null). raw guarda info útil pro debug.
   const { data: schedRow } = await sb
     .from("zernio_scheduled_posts")
     .insert({
@@ -274,14 +301,14 @@ export async function processTrigger(
       // profile_id: pega o profile do user (auto-criado). Buscamos rapidamente.
       profile_id: await resolveProfileId(trigger.user_id),
       carousel_id: carouselId,
-      zernio_post_id: zernioPost._id,
+      zernio_post_id: isDraft ? null : zernioPost._id,
       status: isDraft ? "draft" : isPublishNow ? "publishing" : "scheduled",
       content,
-      platforms,
+      platforms: platformsForRecord,
       scheduled_for: !isPublishNow && !isDraft ? scheduledFor : null,
       timezone: trigger.timezone,
       source: "autopilot",
-      raw: zernioPost,
+      raw: isDraft ? { mode: "local-draft", media_urls: mediaUrls } : zernioPost,
     })
     .select("id")
     .single();

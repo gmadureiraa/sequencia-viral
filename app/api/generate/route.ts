@@ -208,6 +208,13 @@ interface AdvancedGenerationOptions {
   uploadedImageUrls?: string[];
   /** Framework narrativo do Content Machine 5.4. Default: escada automática. */
   contentFramework?: ContentFramework;
+  /**
+   * Override do modelo writer. Default 2026-05-06: gemini-2.5-flash (velocidade
+   * 3x maior, qualidade ~equivalente). Setar `gemini-2.5-pro` ativa modo
+   * "qualidade max" — útil pra textos longos/complexos. Toggle no editor
+   * avançado (futuro).
+   */
+  model?: "gemini-2.5-pro" | "gemini-2.5-flash";
 }
 
 type GenerationMode = "writer" | "layout-only";
@@ -1514,14 +1521,17 @@ Se ignorar, o carrossel fica shallow e generico — não é o que o criador quer
     // estética cinematográfica). Flash dá conta com qualidade equivalente
     // e corta ~25-40s do tempo total (Pro 40s → Flash 15s). Decisão
     // 2026-04-28 após user reportar 90s na geração.
-    const modelId =
-      effectiveMode === "layout-only"
-        ? "gemini-2.5-flash"
-        : sourceType === "instagram"
-          ? "gemini-2.5-flash"
-          : designTemplateNormalized === "twitter"
-            ? "gemini-2.5-flash"
-            : "gemini-2.5-pro";
+    // 2026-05-06: Flash como default global. Pro ficava 30-45s pra
+    // ~1800 tokens em prompts "idea-only" — 3-4x mais lento que Flash com
+    // qualidade textual ~10% inferior em casos extremos só. User pediu
+    // velocidade explicitamente. Pro só entra via toggle avançado
+    // (advanced.model="gemini-2.5-pro") — futuro: expor no editor.
+    const advancedModel =
+      typeof advanced?.model === "string" &&
+      advanced.model === "gemini-2.5-pro"
+        ? "gemini-2.5-pro"
+        : null;
+    const modelId = advancedModel ?? "gemini-2.5-flash";
     // Thinking budget calibrado (writer): 8000 dá raciocínio pra estrutura
     // 3-atos + escolher dados específicos. Antes era 12000 mas gastava ~10s
     // extras sem ganho visível de qualidade (thoughtsTokens P50 ~2200, bem

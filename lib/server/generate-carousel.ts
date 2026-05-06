@@ -192,28 +192,60 @@ function parseBriefingOverrides(topic: string): {
 }
 
 /**
- * Lista banida de keywords genéricas no imageQuery. Se bater qualquer uma,
- * rejeita e força fallback.
+ * Lista banida de keywords corporate-stock genéricas. Sinaliza queries
+ * suspeitas, mas não rejeita automaticamente — o gate real é a densidade
+ * de termos visuais concretos (substantivos físicos, ações, sujeitos).
+ *
+ * Histórico: até 2026-05-06 qualquer ocorrência dessas palavras (mesmo
+ * dentro de query rica como "person typing laptop, lightbulb idea, growth")
+ * disparava reject + fallback genérico → capa que não combinava com
+ * tema. Logs do dia mostraram 7+ rejeições legítimas em 1 carrossel.
+ *
+ * Fix: agora a query é rejeitada APENAS se for puramente genérica —
+ * ratio de palavras banidas vs total > 50% E sem termos visuais concretos.
  */
 const BANNED_IMAGE_KEYWORDS = [
   "strategy",
   "innovation",
   "growth",
-  "ai",
   "future",
   "success",
   "business",
-  "digital",
   "mindset",
   "impact",
   "transformation",
   "leadership",
   "teamwork",
   "collaboration",
-  "technology",
   "synergy",
   "professional",
   "corporate",
+];
+
+/**
+ * Termos VISUAIS CONCRETOS — substantivos físicos, ambientes, ações.
+ * Se a query tem qualquer um desses, é provável que descreva uma cena
+ * concreta e não uma abstração corporate. Não-exhaustivo, é guardrail
+ * positivo.
+ */
+const VISUAL_CONCRETE_HINTS = [
+  // Pessoas + ações
+  "person", "people", "man", "woman", "hands", "face", "eyes",
+  "typing", "writing", "reading", "looking", "thinking", "working",
+  "walking", "running", "sitting", "smiling",
+  // Objetos físicos
+  "laptop", "phone", "screen", "book", "paper", "notebook", "pen",
+  "coffee", "table", "chair", "desk", "window", "door", "wall",
+  "clock", "timer", "chart", "graph", "diagram", "card", "envelope",
+  "lightbulb", "sign", "poster",
+  // Ambiente / cena
+  "office", "kitchen", "bedroom", "studio", "city", "street", "park",
+  "forest", "mountain", "beach", "ocean", "sky", "sunlight", "shadow",
+  "rain", "snow", "fog",
+  // Cinema / fotografia
+  "close-up", "closeup", "portrait", "wide", "macro", "overhead",
+  "cinematic", "documentary", "candid", "polaroid", "vintage",
+  "minimalist", "abstract",
 ];
 
 export function validateImageQuery(q: string): {
@@ -223,14 +255,38 @@ export function validateImageQuery(q: string): {
   if (!q || typeof q !== "string") return { ok: false, reason: "empty" };
   const trimmed = q.trim();
   if (trimmed.length < 4) return { ok: false, reason: "too_short" };
-  const words = trimmed.split(/\s+/).filter(Boolean);
+  const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
   if (words.length < 4) return { ok: false, reason: "few_words" };
   const lower = trimmed.toLowerCase();
+
+  // Conta hits de banned keywords (palavra inteira, evita "ai" em "aim")
+  let bannedHits = 0;
+  let firstBanned: string | null = null;
   for (const bad of BANNED_IMAGE_KEYWORDS) {
-    // Regex de palavra inteira pra não pegar "ai" dentro de "aim"
     const re = new RegExp(`(^|[^a-z])${bad}([^a-z]|$)`, "i");
     if (re.test(lower)) {
-      return { ok: false, reason: `banned:${bad}` };
+      bannedHits++;
+      if (!firstBanned) firstBanned = bad;
+    }
+  }
+
+  // Conta hints visuais concretos
+  let visualHits = 0;
+  for (const hint of VISUAL_CONCRETE_HINTS) {
+    const re = new RegExp(`(^|[^a-z])${hint}([^a-z]|$)`, "i");
+    if (re.test(lower)) visualHits++;
+  }
+
+  // Heurística: rejeita SÓ quando é majoritariamente genérica
+  // - banned > 0 + ZERO termo visual concreto + ratio banned/total > 0.4
+  //   (ex: "future of business success" = 100% genérico, rejeita)
+  // - banned > 0 + algum termo visual = passa (ex: "person typing laptop,
+  //   lightbulb idea, growth" = "growth" banida mas tem "person", "typing",
+  //   "laptop", "lightbulb")
+  if (bannedHits > 0 && visualHits === 0) {
+    const ratio = bannedHits / words.length;
+    if (ratio > 0.4) {
+      return { ok: false, reason: `banned:${firstBanned}` };
     }
   }
   return { ok: true };

@@ -23,6 +23,9 @@ export interface UserProfileResult {
 /**
  * Garante que o user tem 1 profile Zernio. Cria se não existir. Idempotente.
  */
+/** Profile criado pelo planned-posts placeholder pattern. NÃO existe no Zernio. */
+const PLACEHOLDER_PROFILE_PATTERN = /^local-/;
+
 export async function ensureUserHasZernioProfile(
   sb: SupabaseClient,
   user: User
@@ -38,10 +41,26 @@ export async function ensureUserHasZernioProfile(
     .maybeSingle();
 
   if (existing) {
-    return {
-      localId: existing.id,
-      zernioProfileId: existing.zernio_profile_id,
-    };
+    // Bug fix 2026-05-06: profile placeholder (criado pelo /api/zernio/planned-posts
+    // quando user Pro adicionou entrada no calendário sem nunca ter conectado
+    // Zernio) tem zernio_profile_id="local-XXX" — fake, não existe no Zernio.
+    // Se passarmos esse ID adiante (connect, list accounts), tudo quebra:
+    // - getZernioConnectUrl envia profileId inválido ao Zernio
+    // - sync nunca persiste contas porque externalToLocal não tem mapeamento
+    // - settings/autopilot/calendar mostram "sem contas" mesmo após OAuth ok
+    //
+    // Fix: se for placeholder, arquiva e cai no path de criação real.
+    if (!PLACEHOLDER_PROFILE_PATTERN.test(existing.zernio_profile_id)) {
+      return {
+        localId: existing.id,
+        zernioProfileId: existing.zernio_profile_id,
+      };
+    }
+    // Arquiva placeholder pra continuar pra criação do real
+    await sb
+      .from("zernio_profiles")
+      .update({ archived_at: new Date().toISOString() })
+      .eq("id", existing.id);
   }
 
   // 2. Cria no Zernio API

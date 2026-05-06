@@ -110,8 +110,18 @@ export function ScheduleZernioModal({
         const data = await res.json();
         if (cancelled) return;
         if (!res.ok) throw new Error(data.error || "Falha");
-        setProfiles(data.profiles || []);
-        if (data.profiles?.length === 1) setProfileId(data.profiles[0].id);
+        // Filtra profiles placeholder (`zernio_profile_id` começa com "local-")
+        // — esses só existem pra satisfazer FK em planejamento Pro sem Zernio
+        // conectado, não devem ser oferecidos como destino de publicação real.
+        type ProfileWithExtId = ZernioProfileLite & {
+          zernio_profile_id?: string;
+        };
+        const real: ZernioProfileLite[] = (data.profiles || []).filter(
+          (p: ProfileWithExtId) =>
+            !p.zernio_profile_id || !/^local-/.test(p.zernio_profile_id)
+        );
+        setProfiles(real);
+        if (real.length === 1) setProfileId(real[0].id);
       } catch (err) {
         if (!cancelled) toast.error(err instanceof Error ? err.message : "Erro");
       } finally {
@@ -145,7 +155,18 @@ export function ScheduleZernioModal({
           (a: ZernioAccountLite) => a.status === "active"
         );
         setAccounts(active);
-        setSelectedAccountIds(new Set());
+        // UX 2026-05-06: auto-seleciona contas primárias (IG/LinkedIn) ativas.
+        // User raramente quer postar só em 1 quando tem ambas conectadas.
+        // Antes: setSelectedAccountIds(new Set()) — forçava clique e gerava
+        // toast "Selecione ao menos 1 conta" pra quem só tinha 1 plataforma.
+        const autoSelect = new Set<string>(
+          active
+            .filter((a: ZernioAccountLite) =>
+              PRIMARY_PLATFORMS.has(a.platform)
+            )
+            .map((a: ZernioAccountLite) => a.id)
+        );
+        setSelectedAccountIds(autoSelect);
       } catch (err) {
         if (!cancelled) toast.error(err instanceof Error ? err.message : "Erro");
       } finally {
@@ -178,7 +199,15 @@ export function ScheduleZernioModal({
 
   const onSubmit = useCallback(async () => {
     if (!profileId) return toast.error("Escolhe um profile.");
-    if (selectedAccountIds.size === 0) return toast.error("Selecione ao menos 1 conta.");
+    if (selectedAccountIds.size === 0) {
+      // Erro com hint claro: se user não tem conta conectada, sugere
+      // adicionar como planejado em vez de tentar agendar real.
+      return toast.error(
+        accounts.length === 0
+          ? "Nenhuma conta conectada via Zernio. Conecte em Ajustes → Zernio ou use 'Adicionar ao calendário' (Planejado)."
+          : "Marque qual(is) conta(s) você quer publicar (checkbox)."
+      );
+    }
     if (content.trim().length === 0) return toast.error("Caption vazia.");
     if (mode === "schedule" && !scheduledLocal)
       return toast.error("Defina data/hora pra agendar.");
@@ -270,7 +299,29 @@ export function ScheduleZernioModal({
     <div style={overlayStyle} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div style={modalStyle}>
         <header style={modalHeaderStyle}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Agendar via Zernio</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+              Agendar via Zernio
+            </h2>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                fontFamily: "var(--sv-mono)",
+                fontSize: 8.5,
+                fontWeight: 700,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                padding: "2px 6px",
+                background: "var(--sv-ink)",
+                color: "var(--sv-paper)",
+                border: "1px solid var(--sv-ink)",
+              }}
+              title="Esse modal publica de verdade na rede social. Pra só marcar data sem publicar, use 'Adicionar ao calendário'."
+            >
+              Publica auto
+            </span>
+          </div>
           <button onClick={onClose} style={btnIconStyle} aria-label="Fechar">
             <X size={16} />
           </button>
@@ -312,12 +363,32 @@ export function ScheduleZernioModal({
               {loadingAccounts ? (
                 <Loader2 className="animate-spin" size={14} />
               ) : accounts.length === 0 ? (
-                <p style={{ fontSize: 12, color: "var(--sv-soft)" }}>
-                  Sem contas conectadas. Conecte primeiro em{" "}
-                  <a href={`/app/admin/zernio/${profileId}`} target="_blank" rel="noreferrer">
-                    Profile →
+                <div
+                  style={{
+                    padding: 12,
+                    border: "1.5px solid #f59e0b",
+                    background: "rgba(252, 165, 41, 0.10)",
+                    fontSize: 12,
+                    color: "#7a2a1a",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <strong style={{ display: "block", marginBottom: 4 }}>
+                    Nenhuma conta conectada via Zernio.
+                  </strong>
+                  Conecte Instagram/LinkedIn em{" "}
+                  <a
+                    href="/app/zernio"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ textDecoration: "underline" }}
+                  >
+                    Ajustes → Zernio
                   </a>
-                </p>
+                  . Enquanto isso, use{" "}
+                  <strong>&quot;Adicionar ao calendário&quot;</strong> pra só
+                  marcar data sem publicar.
+                </div>
               ) : (
                 <>
                   {/* Primary: IG + LinkedIn */}

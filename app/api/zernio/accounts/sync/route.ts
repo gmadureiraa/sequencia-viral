@@ -96,12 +96,33 @@ export async function POST(request: Request) {
   // Filtra só contas que pertencem a profiles do nosso DB. Defesa contra
   // contas órfãs (profile no Zernio que não está no DB) e contra leak entre
   // tenants (se 1 key Zernio mostrar coisas de outras keys, descartamos).
+  //
+  // Fallback 2026-05-06: se o user só tem 1 profile não-placeholder no DB,
+  // mas o Zernio retorna conta atrelada a um profile_id que NÃO está no DB,
+  // assume que pertence ao único profile do user (caso de mismatch causado
+  // pelo bug do placeholder antigo). Sem esse fallback, contas existentes
+  // pré-fix nunca aparecem.
+  const realProfiles = (allProfiles ?? []).filter(
+    (p) => !/^local-/.test(p.zernio_profile_id)
+  );
+  const fallbackLocalProfileId =
+    realProfiles.length === 1 ? realProfiles[0].id : null;
+
   const seenZernioIds = new Set<string>();
   let upserted = 0;
   for (const acc of zernioAccounts) {
     const externalProfileId = (acc.profileId as string | undefined) ?? null;
     if (!externalProfileId) continue;
-    const localProfileId = externalToLocal.get(externalProfileId);
+    let localProfileId = externalToLocal.get(externalProfileId);
+    if (!localProfileId && fallbackLocalProfileId) {
+      // Mismatch: provavelmente conta criada quando profile local era
+      // placeholder. Atrela ao profile real único do user.
+      localProfileId = fallbackLocalProfileId;
+      console.info(
+        "[zernio/accounts/sync] reattaching account to user real profile (mismatch fallback)",
+        { externalProfileId, fallbackLocalProfileId, accountId: acc._id }
+      );
+    }
     if (!localProfileId) continue;
 
     const handle = (acc.username as string | undefined) ?? null;

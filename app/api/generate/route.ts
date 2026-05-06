@@ -1547,14 +1547,22 @@ Se ignorar, o carrossel fica shallow e generico — não é o que o criador quer
     // velocidade extra vs 8000 sem regressão de qualidade observada.
     // Decisão 28/04 pós-audit: user reportou geração 80+s, principal
     // gargalo era thinking + brandContext inflado.
+    // 2026-05-06: Default mudou pra Flash. Flash precisa de menos
+    // thinking pra mesma qualidade — gemini-2.5-flash thoughtsTokens
+    // P50 ~800 (vs Pro ~2200). 4000 cobre P99 de Flash com folga,
+    // 8000 era excesso herdado da config Pro. Pro mantém 8000 quando
+    // user opt-in via advanced.model.
+    const isPro = modelId === "gemini-2.5-pro";
     const thinkingBudget =
       effectiveMode === "layout-only"
         ? 2000
         : sourceType === "instagram"
-          ? 6000
+          ? 4000
           : designTemplateNormalized === "twitter"
-            ? 4000
-            : 8000;
+            ? 3000
+            : isPro
+              ? 8000
+              : 4000;
     // (28/04) maxOutputTokens VOLTOU pra 10000 em todos os casos — corte
     // pra 6000 no Twitter estava causando MAX_TOKENS truncate e o user
     // recebia "modelo devolveu resposta inválida". Otimização de
@@ -1784,6 +1792,108 @@ Regras:
         }
       }
 
+      // 2026-05-06: salvage step antes de Zod. Em vez de retry total
+      // (~30s extras) quando o modelo cospe campos extras ou tipos
+      // levemente errados, normalizamos o JSON aqui. Casos cobertos:
+      //   - heading vazio → preenche com "Slide N"
+      //   - body como array (modelo às vezes faz isso) → join "\n"
+      //   - imageQuery como objeto → string vazia
+      //   - slides truncados (1 slide só) → expande pra 2 (capa+CTA)
+      //   - title vazio → primeiro heading da variation
+      // Issues que ainda resistem aqui caem pra retry. Issues estruturais
+      // sérios (variations não é array, etc.) nem chegam aqui.
+      function coerceVariations(input: unknown): unknown {
+        if (!input || typeof input !== "object") return input;
+        const obj = input as Record<string, unknown>;
+        if (!Array.isArray(obj.variations)) return input;
+        obj.variations = obj.variations.map(
+          (v: unknown): unknown => {
+            if (!v || typeof v !== "object") return v;
+            const variation = v as Record<string, unknown>;
+            // body coerce: array → join, número → string
+            if (Array.isArray(variation.slides)) {
+              variation.slides = variation.slides.map(
+                (s: unknown): unknown => {
+                  if (!s || typeof s !== "object") return s;
+                  const slide = s as Record<string, unknown>;
+                  // heading vazio: preenche
+                  if (
+                    !slide.heading ||
+                    (typeof slide.heading === "string" &&
+                      slide.heading.trim().length === 0)
+                  ) {
+                    slide.heading = "...";
+                  }
+                  // body coerce
+                  if (Array.isArray(slide.body)) {
+                    slide.body = (slide.body as unknown[])
+                      .filter((x) => typeof x === "string")
+                      .join("\n");
+                  } else if (
+                    slide.body !== undefined &&
+                    typeof slide.body !== "string"
+                  ) {
+                    slide.body = String(slide.body);
+                  }
+                  // imageQuery coerce
+                  if (
+                    slide.imageQuery !== undefined &&
+                    typeof slide.imageQuery !== "string"
+                  ) {
+                    slide.imageQuery = "";
+                  }
+                  // variant coerce
+                  if (
+                    slide.variant !== undefined &&
+                    typeof slide.variant !== "string"
+                  ) {
+                    slide.variant = String(slide.variant);
+                  }
+                  return slide;
+                },
+              );
+              // expand pra 2 slides se vier 1 só
+              if ((variation.slides as unknown[]).length === 1) {
+                (variation.slides as unknown[]).push({
+                  heading: "Salva esse",
+                  body: "",
+                  variant: "cta",
+                });
+              }
+            }
+            // title vazio: pega primeiro heading
+            if (
+              !variation.title ||
+              (typeof variation.title === "string" &&
+                variation.title.trim().length === 0)
+            ) {
+              const firstHeading = Array.isArray(variation.slides)
+                ? ((variation.slides[0] as Record<string, unknown>)
+                    ?.heading as string | undefined)
+                : undefined;
+              variation.title = firstHeading?.slice(0, 200) || "Variação";
+            }
+            // style/ctaType coerce não-string → undefined (eram enum,
+            // agora aceitam qualquer string mas obj/array continua quebrar)
+            if (
+              variation.style !== undefined &&
+              typeof variation.style !== "string"
+            ) {
+              variation.style = undefined;
+            }
+            if (
+              variation.ctaType !== undefined &&
+              typeof variation.ctaType !== "string"
+            ) {
+              variation.ctaType = undefined;
+            }
+            return variation;
+          },
+        );
+        return obj;
+      }
+      parsed = coerceVariations(parsed);
+
       // Zod schema validation (P0-2 do audit). Antes só checávamos
       // `Array.isArray(variations)` — heading vazio, body absurdo, variant
       // inválido passavam direto e o normalize tampava o buraco. Agora se
@@ -1889,13 +1999,19 @@ Regras:
     let actualModelUsed: string = modelId;
     let attempt = await runWriterAttempt(false);
     if (!attempt.ok && attempt.retryable) {
-      console.warn("[generate] attempt 1 falhou, tentando strict retry:", {
-        userId: user.id,
-        sourceType,
-        sourceUrl: sourceUrl?.slice(0, 200),
-        reason: attempt.reason,
-        details: attempt.details,
-      });
+      // JSON.stringify pra forçar serialização profunda — antes Node.js
+      // imprimia "[Object]" pros schemaIssues, escondendo qual campo
+      // realmente falhou (heading vazio? body grande? variant ruim?).
+      console.warn(
+        `[generate] attempt 1 falhou (modelId=${modelId}), tentando strict retry: ` +
+          JSON.stringify({
+            userId: user.id,
+            sourceType,
+            sourceUrl: sourceUrl?.slice(0, 200),
+            reason: attempt.reason,
+            details: attempt.details,
+          }),
+      );
       wasRetried = true;
       actualModelUsed = "gemini-2.5-flash";
       attempt = await runWriterAttempt(true);

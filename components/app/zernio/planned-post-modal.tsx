@@ -1,7 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { CalendarPlus, Instagram, Linkedin, Loader2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  CalendarPlus,
+  Check,
+  Instagram,
+  Linkedin,
+  Loader2,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { Session } from "@supabase/supabase-js";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
@@ -9,18 +17,30 @@ import { jsonWithAuth } from "@/lib/api-auth-headers";
 /**
  * Modal "Novo no calendário" — cria entrada planejada manual.
  *
- * Plano Pro pode usar pra organizar conteúdo sem conectar Zernio.
- * Plano Max também pode (status 'planned' depois pode ser promovido pra
- * 'scheduled' no Zernio quando user decidir publicar de verdade).
+ * 2 modos visíveis pra user:
+ *   1. PLANEJADO (default) — só marca data, NÃO publica. Disponível pra
+ *      Pro + Max. Status DB = 'planned'.
+ *   2. AGENDAR PUBLICAÇÃO AUTO — só Max + conta IG/LinkedIn conectada via
+ *      Zernio. Status DB = 'scheduled'. Cria post real na Zernio API.
  *
- * Não envolve Zernio API — é só um marker no DB. Se carouselId está
- * presente, vincula com um carrossel existente do SV.
+ * O bug histórico era confundir os dois: o modal pedia conta conectada
+ * pra simplesmente adicionar entrada manual. Agora o modo "planejado"
+ * NÃO precisa de conta — basta plataforma. A "conta" só é exigida no
+ * modo "agendar auto".
  */
 
 const PLATFORM_COLORS: Record<string, string> = {
   instagram: "var(--sv-pink, #D262B2)",
   linkedin: "var(--sv-yellow, #F5C518)",
 };
+
+interface AccountLite {
+  id: string;
+  platform: string;
+  handle: string | null;
+  display_name: string | null;
+  status: string;
+}
 
 export interface PlannedPostModalProps {
   open: boolean;
@@ -42,6 +62,11 @@ export interface PlannedPostModalProps {
     scheduledFor: string;
     platforms: string[];
   };
+  /**
+   * Plano do user. Default 'pro' — habilita planejamento. 'business'
+   * habilita também o modo "agendar auto" (Zernio real).
+   */
+  userPlan?: "free" | "pro" | "business";
 }
 
 export function PlannedPostModal({
@@ -53,12 +78,14 @@ export function PlannedPostModal({
   carouselId,
   initialContent = "",
   editing,
+  userPlan = "pro",
 }: PlannedPostModalProps) {
   const isEditing = !!editing;
+  const canScheduleAuto = userPlan === "business";
+
   const [content, setContent] = useState(editing?.content ?? initialContent);
   const [scheduled, setScheduled] = useState(() => {
     if (editing) {
-      // YYYY-MM-DDTHH:MM (sem segundos) pra <input type="datetime-local">
       const d = new Date(editing.scheduledFor);
       const pad = (n: number) => String(n).padStart(2, "0");
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -74,11 +101,47 @@ export function PlannedPostModal({
   const [platforms, setPlatforms] = useState<Set<string>>(
     new Set(editing?.platforms ?? ["instagram"])
   );
+  // Modo: 'planned' (sem Zernio) | 'auto' (Zernio real). Default 'planned'.
+  // Edição não troca de modo.
+  const [mode, setMode] = useState<"planned" | "auto">("planned");
   const [submitting, setSubmitting] = useState(false);
+  const [accounts, setAccounts] = useState<AccountLite[] | null>(null);
 
   useEffect(() => {
     if (open && !editing) setContent(initialContent);
   }, [open, initialContent, editing]);
+
+  // Carrega contas conectadas pra mostrar quem vai receber. Só serve pra
+  // exibição (modo 'planned' ignora; modo 'auto' valida no backend).
+  useEffect(() => {
+    if (!open || !session) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/zernio/accounts", {
+          headers: jsonWithAuth(session),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setAccounts(data.accounts ?? []);
+      } catch {
+        if (!cancelled) setAccounts([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, session]);
+
+  // Contas active por plataforma — mostra quem vai postar.
+  const activeAccountsByPlatform = useMemo(() => {
+    const map: Record<string, AccountLite[]> = {};
+    for (const a of accounts ?? []) {
+      if (a.status !== "active") continue;
+      (map[a.platform] ??= []).push(a);
+    }
+    return map;
+  }, [accounts]);
 
   function togglePlatform(p: string) {
     setPlatforms((prev) => {
@@ -95,15 +158,32 @@ export function PlannedPostModal({
       return;
     }
     if (platforms.size === 0) {
-      toast.error("Escolha pelo menos 1 plataforma.");
+      toast.error("Escolha pelo menos 1 plataforma (Instagram ou LinkedIn).");
       return;
     }
+
+    // Validação extra do modo 'auto': precisa de conta active na plataforma.
+    if (!isEditing && mode === "auto") {
+      const missing = Array.from(platforms).filter(
+        (p) => !(activeAccountsByPlatform[p]?.length > 0)
+      );
+      if (missing.length > 0) {
+        toast.error(
+          `Pra publicar automaticamente, conecte ${missing.join(" + ")} em Ajustes → Zernio. Por enquanto, salve como Planejado.`
+        );
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const url = isEditing
         ? `/api/zernio/posts/${editing.id}`
-        : "/api/zernio/planned-posts";
+        : mode === "auto"
+          ? "/api/zernio/planned-posts/promote-direct"
+          : "/api/zernio/planned-posts";
       const method = isEditing ? "PATCH" : "POST";
+
       const res = await fetch(url, {
         method,
         headers: jsonWithAuth(session),
@@ -117,7 +197,13 @@ export function PlannedPostModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Falha");
-      toast.success(isEditing ? "Atualizado." : "Adicionado ao calendário.");
+      toast.success(
+        isEditing
+          ? "Atualizado."
+          : mode === "auto"
+            ? "Agendado pra publicar automaticamente."
+            : "Adicionado ao calendário."
+      );
       onCreated?.();
       onClose();
     } catch (err) {
@@ -151,11 +237,66 @@ export function PlannedPostModal({
           </button>
         </header>
 
-        <p style={helperStyle}>
-          Adicione uma entrada planejada. <strong>Não publica</strong>{" "}
-          automaticamente — é só pra organizar seu conteúdo. Pra publicação
-          automática, conecte IG/LinkedIn (plano Max).
-        </p>
+        {/* Modo: 'planned' (default) vs 'auto'. Edição esconde o toggle. */}
+        {!isEditing && (
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>Como você quer salvar?</label>
+            <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr" }}>
+              <button
+                type="button"
+                onClick={() => setMode("planned")}
+                style={modeCardStyle(mode === "planned")}
+              >
+                <div style={modeBadgeStyle("planned")}>Planejado</div>
+                <strong style={{ fontSize: 12, lineHeight: 1.2 }}>
+                  Só marcar data
+                </strong>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    color: "var(--sv-muted, #555)",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Não publica. Você posta manualmente quando quiser.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => canScheduleAuto && setMode("auto")}
+                disabled={!canScheduleAuto}
+                style={{
+                  ...modeCardStyle(mode === "auto"),
+                  opacity: canScheduleAuto ? 1 : 0.5,
+                  cursor: canScheduleAuto ? "pointer" : "not-allowed",
+                }}
+                title={
+                  canScheduleAuto
+                    ? "Posta sozinho na data marcada"
+                    : "Disponível só no plano Max"
+                }
+              >
+                <div style={modeBadgeStyle("auto")}>
+                  <Sparkles size={9} /> Publica auto
+                </div>
+                <strong style={{ fontSize: 12, lineHeight: 1.2 }}>
+                  Agendar publicação
+                </strong>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    color: "var(--sv-muted, #555)",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {canScheduleAuto
+                    ? "Posta sozinho na data marcada via Zernio."
+                    : "Plano Max — upgrade pra liberar."}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: "grid", gap: 14 }}>
           <Field label="Texto / legenda">
@@ -183,6 +324,8 @@ export function PlannedPostModal({
                 const on = platforms.has(p);
                 const Icon = p === "instagram" ? Instagram : Linkedin;
                 const accent = PLATFORM_COLORS[p];
+                const accountsForPlatform = activeAccountsByPlatform[p] ?? [];
+                const handle = accountsForPlatform[0]?.handle;
                 return (
                   <button
                     key={p}
@@ -195,11 +338,32 @@ export function PlannedPostModal({
                     }}
                   >
                     <Icon size={12} />
-                    {p === "instagram" ? "Instagram" : "LinkedIn"}
+                    <span>{p === "instagram" ? "Instagram" : "LinkedIn"}</span>
+                    {on && handle && (
+                      <span
+                        style={{
+                          fontSize: 9,
+                          opacity: 0.85,
+                          marginLeft: 4,
+                          fontWeight: 500,
+                          letterSpacing: "0.04em",
+                        }}
+                      >
+                        @{handle}
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
+            {/* Hint: explica o que vai acontecer com a plataforma escolhida */}
+            <PlatformHint
+              mode={mode}
+              isEditing={isEditing}
+              platforms={platforms}
+              activeAccountsByPlatform={activeAccountsByPlatform}
+              accountsLoaded={accounts !== null}
+            />
           </Field>
         </div>
 
@@ -218,14 +382,92 @@ export function PlannedPostModal({
           >
             {submitting ? (
               <Loader2 size={13} className="animate-spin" />
+            ) : mode === "auto" && !isEditing ? (
+              <Sparkles size={13} />
             ) : (
               <CalendarPlus size={13} />
             )}
-            {isEditing ? "Salvar" : "Adicionar"}
+            {isEditing
+              ? "Salvar"
+              : mode === "auto"
+                ? "Agendar publicação"
+                : "Adicionar"}
           </button>
         </footer>
       </div>
     </div>
+  );
+}
+
+function PlatformHint({
+  mode,
+  isEditing,
+  platforms,
+  activeAccountsByPlatform,
+  accountsLoaded,
+}: {
+  mode: "planned" | "auto";
+  isEditing: boolean;
+  platforms: Set<string>;
+  activeAccountsByPlatform: Record<string, AccountLite[]>;
+  accountsLoaded: boolean;
+}) {
+  if (isEditing) return null;
+  if (platforms.size === 0) return null;
+
+  if (mode === "planned") {
+    return (
+      <p style={hintStyle}>
+        <Check size={11} style={{ flexShrink: 0 }} />
+        <span>
+          Vai aparecer no calendário como <strong>Planejado</strong>. Não
+          publica sozinho — é só pra você se organizar.
+        </span>
+      </p>
+    );
+  }
+
+  // mode === 'auto'
+  if (!accountsLoaded) {
+    return (
+      <p style={hintStyle}>
+        <Loader2 size={11} className="animate-spin" style={{ flexShrink: 0 }} />
+        <span>Verificando contas conectadas...</span>
+      </p>
+    );
+  }
+
+  const missing = Array.from(platforms).filter(
+    (p) => !(activeAccountsByPlatform[p]?.length > 0)
+  );
+  if (missing.length > 0) {
+    return (
+      <p style={{ ...hintStyle, color: "#92400e", borderColor: "#f59e0b" }}>
+        <span>
+          ⚠ {missing.map((m) => (m === "instagram" ? "Instagram" : "LinkedIn")).join(" + ")}{" "}
+          sem conta conectada. <a href="/app/zernio" target="_blank" rel="noreferrer" style={{ textDecoration: "underline" }}>Conecte em Ajustes → Zernio</a> ou volte pra modo Planejado.
+        </span>
+      </p>
+    );
+  }
+
+  return (
+    <p style={hintStyle}>
+      <Sparkles size={11} style={{ flexShrink: 0 }} />
+      <span>
+        Vai postar automaticamente em:{" "}
+        {Array.from(platforms)
+          .map((p) => {
+            const acc = activeAccountsByPlatform[p]?.[0];
+            return acc?.handle
+              ? `@${acc.handle}`
+              : p === "instagram"
+                ? "Instagram"
+                : "LinkedIn";
+          })
+          .join(" + ")}
+      </span>
+    </p>
   );
 }
 
@@ -257,7 +499,7 @@ const overlayStyle: React.CSSProperties = {
 
 const modalStyle: React.CSSProperties = {
   width: "100%",
-  maxWidth: 480,
+  maxWidth: 500,
   padding: 24,
   background: "var(--sv-white)",
   maxHeight: "90vh",
@@ -268,7 +510,7 @@ const headerStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  marginBottom: 12,
+  marginBottom: 16,
 };
 
 const closeBtnStyle: React.CSSProperties = {
@@ -280,14 +522,6 @@ const closeBtnStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-};
-
-const helperStyle: React.CSSProperties = {
-  fontFamily: "var(--sv-sans)",
-  fontSize: 12.5,
-  color: "var(--sv-muted, #555)",
-  marginBottom: 18,
-  lineHeight: 1.45,
 };
 
 const labelStyle: React.CSSProperties = {
@@ -320,7 +554,7 @@ const platformBtnStyle: React.CSSProperties = {
   border: "1.5px solid var(--sv-ink)",
   fontFamily: "var(--sv-mono)",
   fontSize: 11,
-  letterSpacing: "0.12em",
+  letterSpacing: "0.1em",
   textTransform: "uppercase",
   fontWeight: 700,
   cursor: "pointer",
@@ -334,4 +568,54 @@ const footerStyle: React.CSSProperties = {
   justifyContent: "flex-end",
   gap: 8,
   marginTop: 18,
+};
+
+function modeCardStyle(active: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 4,
+    padding: "10px 12px",
+    border: "1.5px solid var(--sv-ink)",
+    background: active ? "var(--sv-paper, #faf7f2)" : "var(--sv-white)",
+    boxShadow: active ? "2px 2px 0 0 var(--sv-ink)" : "none",
+    cursor: "pointer",
+    textAlign: "left",
+    fontFamily: "var(--sv-sans)",
+    color: "var(--sv-ink)",
+    transition: "transform 0.12s, box-shadow 0.12s",
+  };
+}
+
+function modeBadgeStyle(kind: "planned" | "auto"): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+    fontFamily: "var(--sv-mono)",
+    fontSize: 8.5,
+    fontWeight: 700,
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+    padding: "2px 6px",
+    background: kind === "planned" ? "var(--sv-pink, #D262B2)" : "var(--sv-ink)",
+    color: kind === "planned" ? "var(--sv-ink)" : "var(--sv-paper)",
+    border: "1px solid var(--sv-ink)",
+    marginBottom: 4,
+  };
+}
+
+const hintStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 6,
+  marginTop: 6,
+  padding: "6px 8px",
+  fontSize: 10.5,
+  fontFamily: "var(--sv-sans)",
+  color: "var(--sv-muted, #555)",
+  border: "1px solid var(--sv-soft, #ddd)",
+  background: "var(--sv-paper, #faf7f2)",
+  lineHeight: 1.4,
 };

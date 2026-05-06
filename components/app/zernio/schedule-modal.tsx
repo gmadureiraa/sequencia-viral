@@ -281,6 +281,7 @@ export function ScheduleZernioModal({
   }, [
     profileId,
     selectedAccountIds,
+    accounts.length,
     content,
     mode,
     scheduledLocal,

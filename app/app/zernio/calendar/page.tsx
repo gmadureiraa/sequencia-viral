@@ -737,6 +737,7 @@ export default function ZernioCalendarPage() {
           session={session}
           initialDate={plannedModalDate}
           editing={editingPlanned ?? undefined}
+          userPlan={(profile?.plan as "free" | "pro" | "business") ?? "pro"}
           onCreated={() => {
             fetchAll();
             setEditingPlanned(null);

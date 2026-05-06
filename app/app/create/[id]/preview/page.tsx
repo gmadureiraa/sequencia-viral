@@ -926,7 +926,9 @@ export default function PreviewPage(props: {
             </div>
           )}
 
-          {/* Zernio scheduler — admin + plano business */}
+          {/* Zernio scheduler — admin + plano business. 2 botões:
+              - "Adicionar ao calendário" (Planejado, sem Zernio) — fluxo padrão
+              - "Agendar publicação auto" (Zernio real) — pra quem tem conta conectada */}
           {canScheduleZernio && draft?.id && (
             <div
               style={{
@@ -948,43 +950,65 @@ export default function PreviewPage(props: {
                   opacity: 0.6,
                 }}
               >
-                Nº 02 · Publicar
+                Nº 02 · Calendário
               </div>
               <h4
                 className="sv-display"
                 style={{ fontSize: 22, letterSpacing: "-0.01em", marginBottom: 12 }}
               >
-                Agendar nas <em>redes</em>.
+                Programar <em>esse carrossel</em>.
               </h4>
-              <p style={{ fontSize: 12, color: "var(--sv-soft)", marginBottom: 12 }}>
-                Posta no Instagram + LinkedIn na data e hora que você quiser.
-                Configure suas redes em{" "}
-                <a href="/app/zernio" target="_blank" rel="noreferrer">
-                  /app/zernio
-                </a>
-                .
+              <p style={{ fontSize: 12, color: "var(--sv-soft)", marginBottom: 14 }}>
+                Adicione ao calendário pra organizar (Planejado) ou agende
+                publicação automática direto no IG/LinkedIn (precisa conectar
+                em <a href="/app/zernio" target="_blank" rel="noreferrer">/app/zernio</a>).
               </p>
-              <button
-                type="button"
-                onClick={() => setZernioOpen(true)}
-                disabled={isExporting}
-                style={{
-                  width: "100%",
-                  padding: "11px 12px",
-                  border: "1.5px solid var(--sv-ink)",
-                  background: "var(--sv-ink)",
-                  color: "var(--sv-paper)",
-                  fontFamily: "var(--sv-mono)",
-                  fontSize: 10,
-                  letterSpacing: "0.14em",
-                  textTransform: "uppercase",
-                  cursor: isExporting ? "wait" : "pointer",
-                  fontWeight: 700,
-                  opacity: isExporting ? 0.6 : 1,
-                }}
-              >
-                Abrir agendamento
-              </button>
+
+              <div style={{ display: "grid", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setPlannedModalOpenPreview(true)}
+                  disabled={isExporting}
+                  className="sv-btn sv-btn-primary"
+                  style={{ width: "100%", padding: "11px 12px" }}
+                  title="Marca data no calendário sem publicar — você posta manualmente"
+                >
+                  Adicionar ao calendário
+                  <span
+                    style={{
+                      fontFamily: "var(--sv-mono)",
+                      fontSize: 8.5,
+                      letterSpacing: "0.16em",
+                      opacity: 0.7,
+                      marginLeft: 6,
+                    }}
+                  >
+                    PLANEJADO
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setZernioOpen(true)}
+                  disabled={isExporting}
+                  className="sv-btn sv-btn-outline"
+                  style={{ width: "100%", padding: "11px 12px" }}
+                  title="Publica automaticamente na data marcada via Zernio (precisa de conta conectada)"
+                >
+                  Agendar publicação auto
+                  <span
+                    style={{
+                      fontFamily: "var(--sv-mono)",
+                      fontSize: 8.5,
+                      letterSpacing: "0.16em",
+                      opacity: 0.7,
+                      marginLeft: 6,
+                    }}
+                  >
+                    ZERNIO
+                  </span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -1320,7 +1344,9 @@ export default function PreviewPage(props: {
         session={session}
       />
 
-      {/* Zernio scheduling modal — admin + business. Acesso via card "Nº 02 · Publicar". */}
+      {/* Zernio scheduling modal — admin + business. Acesso via botão
+          "Agendar publicação auto" do card de calendário. Só pra publicação
+          REAL (Zernio API). Pra só marcar data, usa PlannedPostModal abaixo. */}
       {canScheduleZernio && draft?.id && session && (
         <ScheduleZernioModal
           open={zernioOpen}
@@ -1332,14 +1358,19 @@ export default function PreviewPage(props: {
         />
       )}
 
-      {/* Planned post modal — pra plano Pro adicionar ao calendário sem Zernio. */}
-      {!canScheduleZernio && canPlanInCalendar && draft?.id && session && (
+      {/* Planned post modal — usado por TODOS os planos pagos (Pro + Max +
+          admin) pra adicionar entrada PLANEJADA no calendário (não publica
+          auto). Pro abre via card "Adicionar ao calendário"; Max + admin
+          abrem via botão "Adicionar ao calendário" do card de calendário
+          (mesmo state plannedModalOpenPreview). */}
+      {canPlanInCalendar && draft?.id && session && (
         <PlannedPostModal
           open={plannedModalOpenPreview}
           onClose={() => setPlannedModalOpenPreview(false)}
           session={session}
           carouselId={draft.id}
           initialContent={caption || draft?.title || ""}
+          userPlan={(profile?.plan as "free" | "pro" | "business") ?? "pro"}
         />
       )}
 

@@ -338,8 +338,9 @@ export function PricingSection() {
             features={[
               "30 carrosséis/mês",
               "Tudo que o Creator tem",
+              "Conecta Instagram + LinkedIn",
+              "Agendamento + publicação automática",
               "Acesso antecipado a novos templates",
-              "Agendamento + publicação (em breve)",
               "Export PNG + PDF",
               "Suporte prioritário",
             ]}

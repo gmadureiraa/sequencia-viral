@@ -122,7 +122,7 @@ const jsonLd = {
     },
     {
       "@type": "Offer",
-      name: "Pro",
+      name: "Creator",
       price: "49.90",
       priceCurrency: "BRL",
       billingIncrement: "P1M",
@@ -130,11 +130,11 @@ const jsonLd = {
     },
     {
       "@type": "Offer",
-      name: "Max",
+      name: "Pro",
       price: "97.90",
       priceCurrency: "BRL",
       billingIncrement: "P1M",
-      description: "30 carrosséis/mês, imagens IA + stock, cache inteligente, suporte prioritário (preço de lançamento, anchor R$ 199,90)",
+      description: "30 carrosséis/mês, Instagram + LinkedIn conectados, agendamento automático, imagens IA + stock, suporte prioritário (preço de lançamento, anchor R$ 199,90)",
     },
   ],
   featureList: [

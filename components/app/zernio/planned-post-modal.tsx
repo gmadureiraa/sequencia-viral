@@ -273,7 +273,7 @@ export function PlannedPostModal({
                 title={
                   canScheduleAuto
                     ? "Posta sozinho na data marcada"
-                    : "Disponível só no plano Max"
+                    : "Disponível só no plano Pro"
                 }
               >
                 <div style={modeBadgeStyle("auto")}>
@@ -291,7 +291,7 @@ export function PlannedPostModal({
                 >
                   {canScheduleAuto
                     ? "Posta sozinho na data marcada via Zernio."
-                    : "Plano Max — upgrade pra liberar."}
+                    : "Plano Pro — upgrade pra liberar."}
                 </span>
               </button>
             </div>

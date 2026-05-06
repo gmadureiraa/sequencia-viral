@@ -154,9 +154,9 @@ export default function PreviewPage(props: {
   // Zernio scheduling modal — admin only.
   const [zernioOpen, setZernioOpen] = useState(false);
   const isAdmin = isAdminEmail(profile?.email ?? user?.email);
-  // Zernio scheduling (publicação real): admin OR plano Max.
+  // Zernio scheduling (publicação real): admin OR plano Pro (DB key 'business').
   const canScheduleZernio = isAdmin || profile?.plan === "business";
-  // Calendário (planejamento manual sem Zernio): admin OR pro/Max.
+  // Calendário (planejamento manual sem Zernio): admin OR Creator/Pro.
   const canPlanInCalendar =
     isAdmin || profile?.plan === "pro" || profile?.plan === "business";
   const [plannedModalOpenPreview, setPlannedModalOpenPreview] = useState(false);

@@ -1546,7 +1546,7 @@ function SettingsPageContent() {
               title="Publicar nas redes"
               subtitle="Conecte Instagram + LinkedIn pra postar carrosséis automaticamente. Carrosséis criados aqui podem ser agendados direto pra essas contas."
             >
-              {/* Admin sempre passa (isAdminEmail) ou plano Max (DB key 'business'). */}
+              {/* Admin sempre passa (isAdminEmail) ou plano Pro (DB key 'business'). */}
               {profile?.plan === "business" ||
               isAdminEmail(profile?.email ?? null) ? (
                 session ? (
@@ -1588,7 +1588,7 @@ function SettingsPageContent() {
                     >
                       Conecte Instagram + LinkedIn e agende carrosséis pra
                       publicação automática. Disponível só pro plano{" "}
-                      <strong>Max</strong>.
+                      <strong>Pro</strong>.
                     </p>
                     <Link
                       href="/app/plans"
@@ -2429,7 +2429,7 @@ function SettingsPageContent() {
                       className="sv-kicker-sm"
                       style={{ color: "rgba(247,245,239,0.7)" }}
                     >
-                      R$ 89/mês
+                      R$ 49,90/mês
                     </span>
                   )}
                   {plan === "business" && (
@@ -2437,7 +2437,7 @@ function SettingsPageContent() {
                       className="sv-kicker-sm"
                       style={{ color: "rgba(247,245,239,0.7)" }}
                     >
-                      R$ 249/mês
+                      R$ 97,90/mês
                     </span>
                   )}
                 </div>
@@ -2484,22 +2484,24 @@ function SettingsPageContent() {
                     <>
                       <li>◆ 5 carrosséis/mês</li>
                       <li>◆ Template Thread (X) padrão</li>
-                      <li>◆ Export PNG com marca d&apos;água</li>
+                      <li>◆ Export PNG sem marca d&apos;água</li>
                     </>
                   )}
                   {plan === "pro" && (
                     <>
-                      <li>✦ Carrosséis ilimitados</li>
-                      <li>✦ Branding customizado · voz da IA</li>
-                      <li>✦ Export PDF + .zip, sem marca d&apos;água</li>
-                      <li>✦ Templates extras conforme liberados</li>
+                      <li>✦ 10 carrosséis/mês</li>
+                      <li>✦ Voz da IA configurável</li>
+                      <li>✦ Export PNG sem marca d&apos;água</li>
+                      <li>✦ Todas as origens (YouTube, blog, IG, ideia)</li>
                     </>
                   )}
                   {plan === "business" && (
                     <>
-                      <li>✦ Tudo do Pro</li>
-                      <li>✦ Múltiplas marcas · até 5 membros</li>
-                      <li>✦ API + integrações · white-label opcional</li>
+                      <li>✦ 30 carrosséis/mês</li>
+                      <li>✦ Tudo do Creator</li>
+                      <li>✦ Conecta Instagram + LinkedIn</li>
+                      <li>✦ Agendamento + publicação automática</li>
+                      <li>✦ Export PNG + PDF · suporte prioritário</li>
                     </>
                   )}
                 </ul>

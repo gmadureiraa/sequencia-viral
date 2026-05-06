@@ -152,7 +152,7 @@ export default function ZernioAdminV2Page() {
   return (
     <RequireBusiness
       feature="Conectar redes"
-      description="Conecte Instagram + LinkedIn pra publicar carrosséis automaticamente. Disponível só pro plano Max."
+      description="Conecte Instagram + LinkedIn pra publicar carrosséis automaticamente. Disponível só pro plano Pro."
     >
     <div
       className="mx-auto px-6 py-8 lg:px-10 lg:py-12"

@@ -19,7 +19,9 @@ describe("stripe plans", () => {
   it("centraliza limites e valores de cobrança", () => {
     expect(FREE_PLAN_USAGE_LIMIT).toBe(5);
     expect(usageLimitForPaidPlan("pro")).toBe(10);
-    expect(usageLimitForPaidPlan("business")).toBe(300);
+    // Cap reduzido pra 30 em 2026-05-01 (margem ~74%). Histórico:
+    // 300 → 100 (28/04) → 30 (01/05).
+    expect(usageLimitForPaidPlan("business")).toBe(30);
     expect(stripePaymentAmount("pro")).toBe(49.9);
     expect(stripePaymentAmount("business")).toBe(97.9);
     // Alias historico ainda aponta pro mesmo valor BRL.

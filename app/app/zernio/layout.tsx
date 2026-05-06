@@ -10,11 +10,11 @@ import { useAuth } from "@/lib/auth-context";
  *
  * Plan gating é feito em CADA página individualmente:
  *   - /app/zernio/calendar           → todos os planos podem ver
- *   - /app/zernio (page)             → só business (conectar IG/LI)
- *   - /app/zernio/autopilot          → só business (Piloto Auto)
- *   - /app/zernio/connected          → só business (callback OAuth)
+ *   - /app/zernio (page)             → só Pro (DB 'business' — conectar IG/LI)
+ *   - /app/zernio/autopilot          → só Pro (Piloto Auto)
+ *   - /app/zernio/connected          → só Pro (callback OAuth)
  *
- * Páginas business-only usam <RequireBusiness> wrapper que mostra
+ * Páginas Pro-only usam <RequireBusiness> wrapper que mostra
  * upgrade prompt em vez de redirect — ensina sobre a feature.
  */
 export default function ZernioLayout({

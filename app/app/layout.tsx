@@ -79,8 +79,8 @@ const ADMIN_NAV_ITEM: NavItem = {
 function planShortLabel(plan: string | undefined): string {
   const p = plan ?? "free";
   if (p === "free") return "Grátis";
-  if (p === "pro") return "Pro";
-  if (p === "business") return "Max";
+  if (p === "pro") return "Creator";
+  if (p === "business") return "Pro";
   return p;
 }
 

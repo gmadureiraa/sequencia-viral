@@ -1141,12 +1141,56 @@ Se ignorar essas regras: ref vira "inspiração solta" e o carrossel sai fora do
     // ║                                                                  ║
     // ║  Tempo esperado: 15-20s (vs 60-70s prompt pro com retry)       ║
     // ╚══════════════════════════════════════════════════════════════════╝
-    // Bloco IG simplificado pro modo simple — preserva fidelidade sem
-    // mencionar "3 variações" (modo simple só faz 1).
+    // Bloco IG simplificado pro modo simple — REESTRUTURA, não copia literal.
+    // Bug 2026-05-06: igSimpleBlock antigo dizia "wording entra LITERAL".
+    // Quando o OCR pegava lixo (botões "Baixar", indicadores "1/9",
+    // captions de print de UI dentro do carrossel BrandsDecoded), o modelo
+    // cuspia esse lixo no body. Agora extrai ESPINHA DORSAL (capa + 4-6
+    // pontos centrais + CTA) e reescreve em voz BR limpa, ignorando
+    // metadata visual.
     const igSimpleBlock =
       sourceType === "instagram"
-        ? `\n\n# REFERÊNCIA IG = ESPINHA DORSAL\nEssa ref NÃO é inspiração — é BASE. Mapeie 1:1 (mesma quantidade de slides, mesma ordem). Wording dos slides OCR entra LITERAL no body. Você só estrutura (variant, capa, CTA), não reescreve. ZERO citações fabricadas.\n`
+        ? `\n\n# COMO USAR A REFERÊNCIA IG (Apify scrape + Vision OCR)
+A ref vem com OCR de cada slide. Pode conter LIXO de UI (botões, watermarks tipo "@handle", indicadores tipo "Slide N/N", labels de cor, números soltos, fragments de UI de prints internos quando o ref tem screenshot dentro).
+
+**EXTRAIA a ESPINHA DORSAL, não copie literal:**
+
+1. **TEMA CENTRAL** — qual é a tese da ref? (1 frase mental)
+2. **HOOK / capa** — qual a abertura que segura o leitor? Reescreva em voz BR direta (não copie palavra por palavra)
+3. **4-6 PONTOS CENTRAIS** — quais são as ideias que sustentam a tese? Cada uma vira 1 slide do meio. Reescreva limpo.
+4. **CTA** — qual o pedido final da ref? Mantém intenção, reescreve
+
+**IGNORE no OCR:**
+- "@handle", "@usuário" no canto
+- Indicadores "1/9", "Slide 02", numerais soltos
+- Botões / labels de UI ("Baixar", "Saiba mais", "Get Extension", "Ask anything")
+- Watermarks, "Cor laranja", "Classico", labels de cor
+- Fragmentos de prints de aplicativos internos (terminal, browser, Figma) — só o conceito, não a transcrição
+- Repetições óbvias (mesmo título aparecendo em 3 slides)
+
+**MANTENHA da ref:**
+- Quantidade de slides (mesma da ref)
+- Ordem dos pontos
+- Intenção/tese central
+- Tom (sério, descontraído, etc.)
+
+**ZERO INVENÇÃO** — não invente dados, números, empresas, casos. Se a ref afirma "X" sem fonte, sua versão também afirma "X" (sem inventar fonte). Se a ref tem dado real, use o dado.\n`
         : "";
+    // ╔══════════════════════════════════════════════════════════════════╗
+    // ║  SIMPLE WRITER PROMPT v3 (2026-05-06) — princípios CM5.4         ║
+    // ║                                                                  ║
+    // ║  Incorpora 4 ideias do Master Spec do BrandsDecoded:           ║
+    // ║  1. Headline = mecanismo de captura, não resumo                ║
+    // ║  2. 5 papéis fixos (Hook, Mecanismo, Prova, Aplicação, Direção)║
+    // ║  3. Ban de burocrático/escolar/relatório                       ║
+    // ║  4. Imagem mental obrigatória em hook + slides 2-3             ║
+    // ║                                                                  ║
+    // ║  + few-shot com 3 capas reais top do swipe (afonsomolina,     ║
+    // ║    souantisocialmedia, brandsdecoded__) pra ancorar ritmo      ║
+    // ║                                                                  ║
+    // ║  Tamanho: ~3.8K chars (vs 3.2K v2). Aumento aceitável pra      ║
+    // ║  qualidade significativamente maior.                           ║
+    // ╚══════════════════════════════════════════════════════════════════╝
     const simpleWriterPrompt = `IDIOMA: ${language === "pt-br" ? "português brasileiro (pt-BR)" : language}. Use "você", tom natural brasileiro.
 
 ${templateLockBlock}
@@ -1155,86 +1199,128 @@ TONE: ${tone || "natural e direto"}${shouldApplyNiche ? ` | NICHO: ${niche}` : "
 ${brandContext ? `\n# VOZ DO CRIADOR\n${brandContext}\nUse ESSA voz, não IA genérica.\n` : ""}${feedbackContext ? `\n# FEEDBACK ANTERIOR\n${feedbackContext}\n` : ""}${generationMemoryContext || ""}
 
 # MISSÃO
-Você é especialista em copywriting pra Instagram. 1 carrossel de 5-7 slides que:
-- Para o scroll com um título FORTE (não clichê)
-- ENSINA algo concreto (mecanismo + aplicação), não só repete que o tema é importante
-- Termina com CTA específico ao tema
+Você é especialista em copywriting pra Instagram. 1 carrossel de 5-7 slides que **ENSINA algo concreto** (não só repete que o tema é importante).
 
-Briefing é INSPIRAÇÃO. Você ESCREVE o conteúdo, não só formata.
+Briefing é INSPIRAÇÃO. Você ESCREVE o conteúdo.
 
-# ESTRUTURA OBRIGATÓRIA (escada de raciocínio)
-Cada slide RESPONDE algo deixado pelo anterior + AVANÇA o argumento. Lendo só os headings em sequência, a história deve fechar.
+# TRIAGEM MENTAL (rode internamente antes de escrever — NÃO cole no JSON)
+1. **Transformação** — o que mudou ou pode mudar? + por que importa + consequência
+2. **Fricção central** — qual a tensão escondida que ninguém comenta?
+3. **3-5 âncoras** — fatos, nomes, dados, cenas concretas que sustentam o ponto
 
-- **Slide 1 — HOOK / capa** (ver padrões abaixo)
-- **Slides 2-3 — PROBLEMA / CENA**: descreve o problema específico com 1 dado, 1 nome próprio OU 1 anedota concreta. NÃO repita o slide 1 com outras palavras.
-- **Slides 4-5 — MECANISMO / VIRADA**: POR QUE o problema acontece OU o que muda quando alguém resolve. Aqui cabe a prova / exemplo nomeado.
-- **Slide N-1 — APLICAÇÃO**: 1 ação específica que o leitor pode tomar (com exemplo concreto)
-- **Último slide — CTA específico**
+Sem isso, o carrossel fica abstrato e parece "Wikipedia disfarçada".
 
-⚠️ TESTE da escada: removendo um slide do meio, o próximo ainda faz sentido? Se sim, o slide é desperdício — reescreva.
+# ESTRUTURA OBRIGATÓRIA — 5 PAPÉIS NARRATIVOS
+Cada slide tem um papel específico. Lendo só os headings em sequência, a história deve fechar.
+
+- **Slide 1 — HOOK** (capa que segura o scroll, ver padrões e exemplos abaixo)
+- **Slides 2-3 — PROBLEMA / CENA**: descreve a tensão específica com 1 dado, 1 nome próprio OU 1 anedota concreta. NÃO parafraseia o slide 1.
+- **Slides 4-5 — MECANISMO / PROVA**: POR QUE acontece + EVIDÊNCIA (caso, dado, exemplo nomeado)
+- **Slide N-1 — APLICAÇÃO**: 1 ação concreta que o leitor pode tomar (com exemplo)
+- **Último slide — DIREÇÃO / CTA**: específico ao tema desse carrossel
+
+⚠️ TESTE da escada: **removendo um slide do meio, o próximo ainda faz sentido? Se sim, slide é desperdício — reescreva.**
+
+# HEADLINE / CAPA — princípio central
+**Headline NÃO É resumo da tese. Headline É mecanismo de captura no feed.**
+
+⚠️ TESTE da headline genérica: **troca o TEMA do carrossel, a headline ainda serve? Se sim, falhou.**
+
+Cada headline precisa, internamente, conter 4 qualidades:
+- **Interrupção** — algo que faz a pessoa parar de scrollar
+- **Relevância** — fala com o público específico
+- **Clareza** — entende-se em 2 segundos
+- **Tensão** — sugere algo maior em jogo
+
+## Exemplos REAIS de capas que funcionaram (use como referência de RITMO, não copie):
+
+EXEMPLO 1 — Lista negativa autoral (souantisocialmedia, 64K likes):
+\`\`\`
+TOP 5 COISAS
+que eu mais
+ODEIO
+NO MARKETING
+
+(e você também)
+\`\`\`
+
+EXEMPLO 2 — Confissão pessoal direta (afonsomolina):
+\`\`\`
+Eu odeio postar
+de domingo
+\`\`\`
+
+EXEMPLO 3 — Afirmação + dado (brandsdecoded__, 181 likes em IG B2B):
+\`\`\`
+VOCÊ ESTÁ USANDO O
+CLAUDE ERRADO.
+
+6 FERRAMENTAS SECRETAS DO CLAUDE
+QUE VOCÊ AINDA NÃO CONHECE
+\`\`\`
+
+## 4 padrões pra usar (escolha 1, baseado no tema):
+
+1. **LISTA NEGATIVA** — "3 coisas que [público] faz que sabotam o resultado"
+2. **CONFISSÃO PESSOAL** — começa em 1ª pessoa, vira universal ("Eu odeio quando...", "Confesso que...")
+3. **AFIRMAÇÃO + RUPTURA** — "Você está usando X errado. Aqui o motivo."
+4. **NOMEAÇÃO DO INIMIGO** — quem/o que é o vilão real ("Seu cliente bom é o que paga mal — e por isso te exaure")
+
+## PROIBIDO no slide 1:
+- **Fórmula clichê** "Seu X é Y mas parece Z" / "Você é A mas faz B" (LinkedIn-bait batido)
+- **Pergunta retórica clichê**: "Você sabia que...", "E se eu te dissesse..."
+- **Verbos-zumbi**: "Descubra", "Domine", "Revelado", "Tudo o que você precisa..."
+- **Clichês mortos**: "Guia definitivo", "Tudo mudou", "O segredo", "É hora de...", "Pare de [verbo]" como abertura
+- **Burocrático**: "Aspectos importantes de...", "Análise sobre...", "Estudo de caso de...", "Um olhar sobre..."
+
+# SLIDE 2 OU 3 — ESPECIFICIDADE OBRIGATÓRIA
+PELO MENOS UM dos slides 2-3 precisa ter:
+- **Dado numérico concreto** (ex: "70% dos pacientes esquecem o nome do remédio em 24h")
+- **Nome próprio real** (ex: "A clínica do Dr. Igor Boechat...", "A Apple cobra $999 por...")
+- **Anedota específica em 1ª pessoa** (ex: "Outro dia atendi uma cliente que...", "Vi isso 3 vezes esse mês no consultório...")
+
+Sem isso → carrossel fica abstrato e parece IA genérica. **Não invente dados** — sem dado real, use anedota explícita.
 
 # REGRAS DE LINGUAGEM
 - Frase máx 18 palavras
 - Zero jargão / corporês ("alavancar", "potencializar", "estratégico")
-- Português brasileiro coloquial. "Você"
-- Permitido 1-2 termos do nicho que o leitor reconheça
+- Zero burocrês / escolar ("aspectos", "fundamental", "importante destacar", "nesse sentido", "atualmente", "diversos")
+- **Imagem mental obrigatória** no slide 1 + slides 2-3: cena concreta, não abstração fria. ✓ "burnout entrepreneur receipts scattered desk" ✗ "financial crisis"
+- Português brasileiro coloquial. "Você" (não "vocês", não "tu")
+- 1-2 termos do nicho que o leitor reconheça (ok)
 
-# SLIDE 1 — CAPA (a coisa mais importante)
-6-15 palavras. CAIXA ALTA permitido pra ênfase. Use UM destes 4 padrões:
+# ÚLTIMO SLIDE — CTA específico
+**Teste: troca o tema, o CTA ainda serve? Se sim, falhou.**
 
-1. **NÚMERO ESPECÍFICO** — "3 erros que ${niche || "qualquer profissional"} comete sem perceber"
-2. **AFIRMAÇÃO INCOMUM** — "A consulta que mais ajuda é aquela que ninguém marca"
-3. **NOMEAÇÃO DO INIMIGO** — nome o vilão real ("${niche === "saúde" ? "Seu plano de saúde NÃO te quer saudável" : "O cliente que paga mais sabota seu negócio"}")
-4. **DOR CONCRETA** — "Você atende bem mas o agendamento tá vazio?"
-
-PROIBIDO no slide 1:
-- Pergunta retórica clichê: "Você sabia que...", "E se eu te dissesse..."
-- Verbos-zumbi: "Descubra", "Domine", "Revelado", "Tudo o que você precisa..."
-- Clichês: "Guia definitivo", "Tudo mudou", "O segredo", "Pare de..."
-- **Fórmula "Seu X é Y, mas parece Z"** ou "Você é A mas faz B" — overused em LinkedIn-bait, batido demais
-- "É hora de...", "Chegou a hora de..."
-
-# SLIDE 2 OU 3 — ESPECIFICIDADE OBRIGATÓRIA
-PELO MENOS UM dos slides 2-3 precisa ter:
-- Dado numérico concreto (ex: "70% dos pacientes esquecem o nome do remédio") OU
-- Nome próprio real (ex: "Igor Boechat conta que...") OU
-- Anedota específica explícita (ex: "Outro dia atendi uma cliente que...", "No meu consultório vi 3 vezes esse mês...")
-
-Sem isso → o carrossel fica abstrato e perde força. Não invente dados — se não tem dado real, usa anedota explícita em primeira pessoa.
-
-# ÚLTIMO SLIDE — CTA
-Específico ao tema desse carrossel. **Teste: troca o tema, o CTA ainda serve? Se sim, falhou.**
-
-PROIBIDO (CTAs genéricos / ManyChat-bait sem entrega real):
+PROIBIDO (genéricos / ManyChat-bait):
 - "Comenta X que te mostro/envio/te ensino..." (promessa vazia)
-- "Salva pra não esquecer", "Me siga pra mais"
-- "O que você acha?", "Manda pra um amigo que precisa"
-- "Pare de [verbo]" como último heading
+- "Salva pra não esquecer", "Me siga pra mais", "Manda pra amigo"
+- "O que você acha?", "Pare de [verbo]" como heading final
 
 PERMITIDO:
-- CTA que cita ALGO ESPECÍFICO desse carrossel:
+- CTA que **cita algo específico DESSE carrossel**:
   ✓ "Releia o slide 4 antes do seu próximo briefing com cliente"
   ✓ "Comenta qual desses 3 erros você comete hoje"
   ✓ "Testa em 1 cliente essa semana e me conta"
   ✓ "Anota a pergunta do slide 5. Use no próximo agendamento."
 
 # IMAGEM POR SLIDE (imageQuery)
-4-7 palavras em INGLÊS, cena CONCRETA. **CADA slide escolhe seu próprio modificador** baseado no momento — NÃO copie o mesmo sufixo em todos os slides.
+4-7 palavras em INGLÊS. **Cena CONCRETA**: SUBJECT + AÇÃO + AMBIENTE + (modificador apropriado).
 
-Estrutura: SUBJECT + AÇÃO + AMBIENTE + (modificador opcional apropriado).
+**CADA slide escolhe seu próprio modificador**. NÃO use o mesmo sufixo em todos.
 
-Modificadores possíveis (escolha o que combina com o slide, varie):
-- "candid documentary" pra cenas reais e momento natural
-- "close-up" pra detalhe, foco em objeto/expressão
-- "wide shot" pra ambiente, cenário
-- "overhead" pra processo (mãos sobre mesa, papelada)
+Modificadores (varie):
+- "candid documentary" pra cenas reais
+- "close-up" pra detalhe, foco em expressão/objeto
+- "wide shot" pra ambiente
+- "overhead" pra processo (mãos sobre mesa)
 - "minimal background" pra simplicidade
 
 ✓ "dentist explaining xray to patient calm office wide shot"
 ✓ "hands holding broken contract paper close-up"
 ✓ "person reading bank statement coffee morning kitchen overhead"
-✗ "business success growth strategy" (puro abstrato)
-✗ Mesmo sufixo "candid authentic iphone photography natural light unfiltered" em TODOS os slides
+✗ "business success growth strategy" (abstrato puro)
+✗ Mesmo sufixo "candid authentic iphone photography natural light" em TODOS os slides
 
 # OUTPUT JSON (1 variação, 5-7 slides)
 {

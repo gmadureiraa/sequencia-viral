@@ -117,18 +117,46 @@ Se uma imagem não tem texto significativo (só ilustração), retorne
 
 type InstagramKind = "post" | "reel" | "profile";
 
-function parseInstagramUrl(url: string): { kind: InstagramKind; id: string } | null {
+function parseInstagramUrl(input: string): { kind: InstagramKind; id: string } | null {
+  // Normaliza: trim, remove zero-width chars, prepend https:// se faltar
+  let url = (input || "").trim();
+  if (!url) return null;
+  url = url.replace(/[​-‍﻿]/g, "");
+  if (!/^https?:\/\//i.test(url)) {
+    if (/^(www\.)?(instagram\.com|instagr\.am|m\.instagram\.com)\//i.test(url)) {
+      url = `https://${url}`;
+    } else {
+      return null;
+    }
+  }
   try {
     const u = new URL(url);
-    if (!u.hostname.includes("instagram.com")) return null;
-    // /p/<shortcode>/, /reel/<shortcode>/, /reels/<shortcode>/
-    const m = u.pathname.match(/^\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/);
+    // Aceita instagram.com, m.instagram.com, www.instagram.com, instagr.am
+    const host = u.hostname.toLowerCase();
+    if (
+      !host.endsWith("instagram.com") &&
+      !host.endsWith("instagr.am")
+    ) {
+      return null;
+    }
+
+    // Path pode ter locale prefix tipo /pt-br/p/... (raro mas existe)
+    let path = u.pathname;
+    const localeMatch = path.match(/^\/[a-z]{2}(-[a-z]{2})?\/(.+)$/i);
+    if (localeMatch) {
+      path = `/${localeMatch[2]}`;
+    }
+
+    // /p/<shortcode>/, /reel/<shortcode>/, /reels/<shortcode>/, /tv/, /share/
+    const m = path.match(/^\/(p|reel|reels|tv|share)\/([A-Za-z0-9_-]+)/);
     if (m) {
-      const kind: InstagramKind = m[1] === "p" ? "post" : "reel";
+      const t = m[1];
+      const kind: InstagramKind =
+        t === "p" || t === "share" ? "post" : "reel";
       return { kind, id: m[2] };
     }
     // /username/
-    const profileMatch = u.pathname.match(/^\/([A-Za-z0-9._]+)\/?$/);
+    const profileMatch = path.match(/^\/([A-Za-z0-9._]+)\/?$/);
     if (profileMatch) {
       return { kind: "profile", id: profileMatch[1] };
     }
@@ -139,8 +167,12 @@ function parseInstagramUrl(url: string): { kind: InstagramKind; id: string } | n
 }
 
 export async function extractInstagramContent(url: string): Promise<string> {
+  // 2026-05-06: aceita até 2 tokens Apify pra resiliência. Se a key
+  // primária estourar quota (402 / 429), tenta a fallback. Setar
+  // APIFY_API_KEY_FALLBACK no Vercel ativa.
   const apifyKey = process.env.APIFY_API_KEY;
-  if (!apifyKey) {
+  const apifyKeyFallback = process.env.APIFY_API_KEY_FALLBACK;
+  if (!apifyKey && !apifyKeyFallback) {
     throw new Error(
       "APIFY_API_KEY não configurado no servidor. Contate o suporte."
     );
@@ -148,8 +180,13 @@ export async function extractInstagramContent(url: string): Promise<string> {
 
   const parsed = parseInstagramUrl(url);
   if (!parsed) {
+    // Log da URL exata que falhou — antes a mensagem era genérica e
+    // não dava pra entender o formato que o user colou.
+    console.warn(
+      `[ig-extract] URL inválida (não bateu regex): "${(url || "").slice(0, 200)}"`,
+    );
     throw new Error(
-      "URL do Instagram inválida. Use um link de post (/p/...) ou reel (/reel/...)."
+      "URL do Instagram inválida. Cole um link completo de post (instagram.com/p/...), reel (/reel/...) ou compartilhamento (/share/...)."
     );
   }
 
@@ -161,20 +198,43 @@ export async function extractInstagramContent(url: string): Promise<string> {
     addParentData: false,
   };
 
-  const runRes = await fetch(
-    `${APIFY_BASE}/acts/${ACTOR_ID}/run-sync-get-dataset-items?token=${apifyKey}&timeout=${APIFY_TIMEOUT_SECS}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(runInput),
-      signal: AbortSignal.timeout((APIFY_TIMEOUT_SECS + 10) * 1000),
-    }
-  );
+  async function runApify(token: string): Promise<Response> {
+    return fetch(
+      `${APIFY_BASE}/acts/${ACTOR_ID}/run-sync-get-dataset-items?token=${token}&timeout=${APIFY_TIMEOUT_SECS}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(runInput),
+        signal: AbortSignal.timeout((APIFY_TIMEOUT_SECS + 10) * 1000),
+      }
+    );
+  }
 
-  if (!runRes.ok) {
-    const errBody = await runRes.text().catch(() => "");
+  const tokens = [apifyKey, apifyKeyFallback].filter(
+    (t): t is string => typeof t === "string" && t.length > 0
+  );
+  let runRes: Response | null = null;
+  let lastErr = "";
+  for (let i = 0; i < tokens.length; i++) {
+    runRes = await runApify(tokens[i]);
+    if (runRes.ok) break;
+    // 402 (quota) / 429 (rate-limit) / 401 (auth) → tenta fallback
+    if ([401, 402, 429].includes(runRes.status) && i < tokens.length - 1) {
+      lastErr = await runRes.text().catch(() => "");
+      console.warn(
+        `[ig-extract] Apify token ${i + 1} status=${runRes.status}, tentando fallback`,
+      );
+      continue;
+    }
+    lastErr = await runRes.text().catch(() => "");
+    break;
+  }
+
+  if (!runRes || !runRes.ok) {
     throw new Error(
-      `Apify ${runRes.status}: ${errBody.slice(0, 200) || "falha no scraping"}`
+      `Apify ${runRes?.status ?? "no-response"}: ${
+        lastErr.slice(0, 200) || "falha no scraping"
+      }`
     );
   }
 

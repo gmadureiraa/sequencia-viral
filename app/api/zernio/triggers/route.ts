@@ -142,7 +142,10 @@ export async function POST(request: Request) {
     niche: body.niche?.trim() || null,
     tone: body.tone || "editorial",
     language: body.language || "pt-br",
-    design_template: body.designTemplate || "twitter",
+    // 2026-05-06: piloto auto SEMPRE usa template "twitter".
+    // Outros templates (manifesto/futurista/autoral) ainda não rendam
+    // bem sem revisão humana. Ignoramos body.designTemplate.
+    design_template: "twitter",
     target_platforms: targetPlatforms,
     publish_mode: body.publishMode || "scheduled",
   };

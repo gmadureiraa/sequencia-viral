@@ -194,13 +194,18 @@ export async function processTrigger(
     ? `LINHA EDITORIAL DO PROFILE: ${trigger.editorial_line}\n\nMantenha essa voz/ângulo em todos os slides.`
     : undefined;
 
+  // 2026-05-06: piloto auto SEMPRE usa template "twitter".
+  // Os outros templates (manifesto/futurista/autoral) ainda não estão
+  // prontos pra renderização sem revisão humana — twitter é o único
+  // que funciona ponta a ponta sem edição. Forçar aqui evita gerar
+  // carrossel quebrado se o banco tiver design_template legado.
   const generation = await runGeneration({
     topic: theme,
     sourceType: "idea",
     niche: trigger.niche || "marketing",
     tone: trigger.tone,
     language: trigger.language,
-    designTemplate: trigger.design_template as DesignTemplateId,
+    designTemplate: "twitter" as DesignTemplateId,
     brandContext,
     feedbackContext,
     advanced: { extraContext: editorialAsContext },
@@ -221,7 +226,7 @@ export async function processTrigger(
       slideStyle: "white",
       variation: { title: variation.title, style: variation.style },
       status: "draft",
-      designTemplate: trigger.design_template as DesignTemplateId,
+      designTemplate: "twitter" as DesignTemplateId,
     });
     carouselId = row.id;
   } catch (err) {

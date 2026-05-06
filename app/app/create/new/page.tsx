@@ -572,15 +572,13 @@ export default function NewCarouselPage() {
         .join("\n\n");
 
       // 2) Gera carrossel direto — passa o brief como topic + URL detectada.
-      //    Se modo avançado tá aberto, passa overrides junto.
+      //    Se modo avançado tá aberto, passa overrides junto + mode='pro'
+      //    pra ativar prompt completo com 3 variações + archetypes.
+      //    Default (sem advanced) = mode='simple' implícito no servidor.
       const advanced =
-        advOpen &&
-        (advHookDirection.trim() ||
-          advCustomCta.trim() ||
-          mergedExtra ||
-          advNumSlides !== "" ||
-          advUploadedUrls.length > 0)
+        advOpen
           ? {
+              mode: "pro" as const,
               hookDirection: advHookDirection.trim() || undefined,
               customCta: advCustomCta.trim() || undefined,
               extraContext: mergedExtra || undefined,

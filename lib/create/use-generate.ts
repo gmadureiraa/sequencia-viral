@@ -38,6 +38,12 @@ export interface AdvancedGenerationOptions {
   preferredStyle?: "data" | "story" | "provocative";
   extraContext?: string;
   uploadedImageUrls?: string[];
+  /**
+   * 2026-05-06: "pro" ativa o prompt elaborado com 3 variações + archetypes
+   * de hook + arquiteturas narrativas. Default (omitido) = "simple",
+   * 1 variação curta otimizada pra prestador de serviço (15-20s).
+   */
+  mode?: "simple" | "pro";
 }
 
 export type GenerationMode = "writer" | "layout-only";

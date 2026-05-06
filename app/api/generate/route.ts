@@ -215,6 +215,16 @@ interface AdvancedGenerationOptions {
    * avançado (futuro).
    */
   model?: "gemini-2.5-pro" | "gemini-2.5-flash";
+  /**
+   * Modo de geração (2026-05-06):
+   *  - omitido / "simple" (default): 1 carrossel, 5-7 slides, prompt curto
+   *    direto pro nicho do user (dentista, médico, consultor, prestador
+   *    de serviço). Tempo ~15-20s. Foco em clareza + hook bom.
+   *  - "pro": 3 variações com archetypes diferentes, 6-10 slides, prompt
+   *    elaborado. Tempo ~25-35s. Pra criador profissional / agência.
+   *    Toggle "Modo avançado" no /app/create/new.
+   */
+  mode?: "simple" | "pro";
 }
 
 type GenerationMode = "writer" | "layout-only";
@@ -324,6 +334,9 @@ const VariationSchema = z.object({
   slides: z.array(SlideSchema).min(2).max(20),
 });
 
+// 2026-05-06: schema aceita 1-3 variações. Modo simple (default) gera 1,
+// modo pro gera 3. Antes era min(1).max(3) também — mantido pra
+// compatibilidade. O front trata 1 e 3 graciosamente.
 const GenerateOutputSchema = z.object({
   variations: z.array(VariationSchema).min(1).max(3),
 });
@@ -1113,7 +1126,99 @@ A fonte é um carrossel do Instagram com OCR dos slides originais. Essa ref NÃO
 Se ignorar essas regras: ref vira "inspiração solta" e o carrossel sai fora do tema. Teste: um espectador que leu a ref original reconhece seu carrossel como a mesma coisa? Se não, reescreva.`
         : "";
 
-    // ── WRITER MODE — prompt compacto (v2 24/04) ──
+    // ╔══════════════════════════════════════════════════════════════════╗
+    // ║  SIMPLE WRITER PROMPT (2026-05-06) — DEFAULT                    ║
+    // ║                                                                  ║
+    // ║  Pra prestador de serviço: dentista, médico, advogado,         ║
+    // ║  consultor, analista financeiro, personal, etc.                ║
+    // ║                                                                  ║
+    // ║  - 1 variação só (não 3)                                       ║
+    // ║  - 5-7 slides                                                   ║
+    // ║  - ~2.5K chars (vs 11K do prompt pro)                          ║
+    // ║  - Hooks fortes (4 padrões claros, sem 12 archetypes)          ║
+    // ║  - Schema mínimo: title + slides com heading + body            ║
+    // ║  - Sem Content Machine 5.4, sem quality gates intricados       ║
+    // ║                                                                  ║
+    // ║  Tempo esperado: 15-20s (vs 60-70s prompt pro com retry)       ║
+    // ╚══════════════════════════════════════════════════════════════════╝
+    // Bloco IG simplificado pro modo simple — preserva fidelidade sem
+    // mencionar "3 variações" (modo simple só faz 1).
+    const igSimpleBlock =
+      sourceType === "instagram"
+        ? `\n\n# REFERÊNCIA IG = ESPINHA DORSAL\nEssa ref NÃO é inspiração — é BASE. Mapeie 1:1 (mesma quantidade de slides, mesma ordem). Wording dos slides OCR entra LITERAL no body. Você só estrutura (variant, capa, CTA), não reescreve. ZERO citações fabricadas.\n`
+        : "";
+    const simpleWriterPrompt = `IDIOMA: ${language === "pt-br" ? "português brasileiro (pt-BR)" : language}. Use "você", tom natural brasileiro.
+
+${templateLockBlock}
+
+TONE: ${tone || "natural e direto"}${shouldApplyNiche ? ` | NICHO: ${niche}` : ""}${nicheGuide}${igSimpleBlock}${advancedBlock}${slideCountStrictBlock}
+${brandContext ? `\n# VOZ DO CRIADOR\n${brandContext}\nUse ESSA voz, não IA genérica.\n` : ""}${feedbackContext ? `\n# FEEDBACK ANTERIOR\n${feedbackContext}\n` : ""}${generationMemoryContext || ""}
+
+# MISSÃO
+Você é especialista em copywriting pra Instagram. Cria 1 carrossel de 5-7 slides que:
+- Para o scroll com um título FORTE (não clichê)
+- Entrega 1 ideia clara em cada slide
+- Termina com um CTA específico
+
+O briefing é INSPIRAÇÃO. Você ESCREVE o conteúdo, não só formata.
+
+# REGRAS DE LINGUAGEM
+- Frase máxima 18 palavras
+- Zero jargão, zero corporês ("alavancar", "potencializar", "estratégico")
+- Como se uma criança de 12 anos precisasse entender
+- Se não falaria num papo com amigo, reescreva
+- Português brasileiro coloquial. Use "você"
+
+# SLIDE 1 — CAPA (a coisa mais importante)
+6-15 palavras. CAIXA ALTA permitido pra ênfase. Use UM destes 4 padrões:
+
+1. **NÚMERO ESPECÍFICO** — "3 erros que ${niche || "qualquer profissional"} comete sem perceber"
+2. **AFIRMAÇÃO INCOMUM** — "A consulta que mais ajuda é aquela que ninguém marca"
+3. **QUEBRA DE EXPECTATIVA** — "${niche === "saúde" ? "Beber água demais também faz mal" : "O cliente que paga mais nem sempre é o melhor"}"
+4. **DOR CONCRETA** — "Você atende bem mas o agendamento tá vazio?"
+
+PROIBIDO no slide 1:
+- "Você sabia que..." / "E se eu te dissesse..." (perguntas retóricas)
+- "Descubra" / "Domine" / "Revelado" / "Tudo o que você precisa saber"
+- "Guia definitivo" / "Tudo mudou" / "O segredo"
+
+# SLIDES 2 A N-1 — DESENVOLVIMENTO
+- Cada slide responde algo deixado pelo anterior
+- Slide 2 setup ou primeiro ponto
+- Slides do meio: cada um UMA ideia, com exemplo concreto
+- Body máximo 3 linhas
+- Use nomes reais, dados reais, exemplos do nicho ${niche ? `(${niche})` : ""}
+- NUNCA INVENTE estatísticas, empresas, valores. Sem dado real → use anedota ("no meu consultório...", "vejo isso toda semana...")
+
+# ÚLTIMO SLIDE — CTA
+Específico ao carrossel. Teste: troca o tema, o CTA ainda serve? Se sim, falhou.
+
+✓ "Comenta TENHO se já passou por isso" · "Salva pra mostrar no próximo agendamento" · "Manda pra quem ${niche === "saúde" ? "também sente" : "precisa ouvir"} isso"
+✗ "Salva esse post" · "Me siga" · "O que você acha?"
+
+# IMAGEM POR SLIDE (imageQuery)
+4-7 palavras em INGLÊS, cena CONCRETA. SUBJECT + AÇÃO + AMBIENTE.
+Tema abstrato → "QUEM faz, EM ONDE, COM O QUÊ".
+
+✓ "dentist explaining xray to patient calm office"
+✓ "person reading bank statement coffee morning kitchen"
+✗ "business success growth strategy" (termos abstratos)
+
+# OUTPUT JSON (1 variação, 5-7 slides)
+{
+  "variations": [
+    {
+      "title": "string curto",
+      "slides": [
+        { "heading": "string", "body": "string", "imageQuery": "english 4-7 words" }
+      ]
+    }
+  ]
+}
+
+Primeiro caractere = '{', último = '}'. Sem markdown, sem comentários.`;
+
+    // ── WRITER PROMPT (modo PRO — toggle "Modo avançado" no /app/create/new) ──
     // Encolhido ~22% (14.5K → 11K chars) pra reduzir confusão de instruções
     // conflitantes, preservando 6 papéis CM5.4, 4 qualidades de headline,
     // STAIRCASE, PATTERN INTERRUPT e os 12 archetypes (com exemplos).
@@ -1127,126 +1232,83 @@ Se ignorar essas regras: ref vira "inspiração solta" e o carrossel sai fora do
     // 2026-04-25: templateLockBlock injetado NO TOPO. Sem isso, o writer
     // ignora o template visual e gera slides com layout/paleta/quantidade
     // fora da referência. Bloco vence qualquer regra estética abaixo.
-    const writerPrompt = `🔒 REGRA INVIOLÁVEL #1 — IDIOMA DA SAÍDA
-
-LANGUAGE = ${language === "pt-br" ? "português brasileiro (pt-BR)" : language}
-
-Esta regra VENCE qualquer outra instrução deste prompt — incluindo "fidelidade ao source", citações literais, exemplos. Se o source/refs estão em outro idioma, você TRADUZ E ADAPTA mantendo significado, não copia o idioma original.
-
-Exceção única: nomes próprios (pessoas, marcas, ferramentas), termos técnicos universalmente conhecidos (API, framework, ROI), e códigos/símbolos. TUDO o mais é traduzido.
-
-Use "você" (não "tu" ou "tú"). Tom natural brasileiro, não Portugal.
-
-You are the senior editorial director of BrandsDecoded meets Morning Brew meets Paul Graham. Every slide is a scene that earns the next swipe.
+    const writerPrompt = `IDIOMA: ${language === "pt-br" ? "português brasileiro (pt-BR)" : language}. Use "você", tom natural brasileiro. Esta regra vence qualquer outra. Refs em outro idioma: traduz e adapta. Exceção: nomes próprios e termos técnicos universais (API, ROI).
 
 ${templateLockBlock}
 
-# LINGUAGEM (obrigatória)
-Escreva como se uma criança de 12 anos precisasse entender sem reler. Frases máx 18 palavras. Zero jargão, zero corporês. Se não falaria em conversa com amigo, reescreva. Exceção: tom analítico pode usar 1-2 termos do nicho que o leitor reconhece.
-
-${languageInstruction}
-TONE: ${tone || "professional"}${shouldApplyNiche ? ` | NICHE: ${niche}` : ""}${nicheGuide}${igFidelityBlock}${advancedBlock}${slideCountStrictBlock}
-
-Briefing do usuário é inspiração — você ESCREVE o carrossel, não só formata. Preserve dados/nomes (zero invenção).${brandContext ? `
-
-# BRAND VOICE
-${brandContext}
-WEAVE, não acknowledge. O carrossel precisa soar como ESSE criador, não IA genérica.` : ""}${feedbackContext ? `
-
-# FEEDBACK DO USUÁRIO (ground truth)
-${feedbackContext}` : ""}${generationMemoryContext || ""}
+TONE: ${tone || "natural e direto"}${shouldApplyNiche ? ` | NICHO: ${niche}` : ""}${nicheGuide}${igFidelityBlock}${advancedBlock}${slideCountStrictBlock}
+${brandContext ? `\n# VOZ DO CRIADOR\n${brandContext}\nUse ESSA voz, não IA genérica.\n` : ""}${feedbackContext ? `\n# FEEDBACK ANTERIOR\n${feedbackContext}\n` : ""}${generationMemoryContext || ""}
 
 # MISSÃO
-Carrossel 6-10 slides em NARRATIVE TENSION — conflito entre o que todos assumem vs o que é real. Arco macro: leitura de superfície → fricção → reframe → mecanismo → prova → implicação → CTA específico.
+3 carrosséis de 6-10 slides cada, com ângulos DIFERENTES sobre o mesmo tema. Cada um pra um padrão de leitor.
 
-# CONTENT MACHINE 5.4 — rode internamente antes de escrever (NÃO cole no JSON)
-1. TRIAGEM: identifique (a) Transformação (virada + POR QUE + consequência), (b) Fricção central (tensão escondida, NÃO resumo do tema), (c) Âncoras (3-6 fatos/nomes/dados verificáveis).
-2. HEADLINES com 4 qualidades: INTERRUPÇÃO + RELEVÂNCIA + CLAREZA + TENSÃO. Estrutura bi-linha: L1 captura (?/:), L2 ancora (.!).
-3. 10 NATUREZAS DE ABORDAGEM (leituras, 3 variações = 3 naturezas diferentes): reenquadramento, conflito oculto, implicação sistêmica, contradição, ameaça/oportunidade, nomeação, diagnóstico cultural, inversão, ambição de mercado, mecanismo social.
-4. ESPINHA DORSAL em 6 papéis (todos presentes): HOOK → MECANISMO (por quê) → PROVA (dado/caso) → APLICAÇÃO (consequência prática) → IMPLICAÇÃO MAIOR (zoom out) → DIREÇÃO (próximo passo — o que observar/testar, não "compre isso").
+O briefing é INSPIRAÇÃO. Você ESCREVE o conteúdo, não só formata. Preserve dados/nomes — zero invenção.
 
-# SLIDE 1 — CAPA (padrão editorial)
-Fórmula: "Afirmação Contraintuitiva + Pergunta de Aprofundamento" (12-25 palavras) OU compacta 6-8 palavras se archetype compacto (DATA SHOCK / CONFESSION / ENEMY NAMING). CAIXA ALTA. Dispositivos: hipérbole ("A MORTE DE X"), paradoxo ("ter 100 mil seguidores pode ser ruim"), informação privilegiada, contraste extremo. Body abre um LOOP que só o próximo slide fecha.
+# REGRAS DE LINGUAGEM
+- Frase máxima 18 palavras
+- Zero jargão / corporês ("alavancar", "potencializar", "estratégico")
+- Como se uma criança de 12 anos precisasse entender
+- Português brasileiro coloquial. "Você"
+- Permitido 1-2 termos do nicho que o leitor reconheça
 
-PROIBIDO: pergunta retórica ("Você já...", "E se eu te dissesse..."), verbos-zumbi ("descubra", "domine", "desvende", "revelado"), clichê ("tudo mudou", "jogo virou", "céu é o limite", "a revolução chegou").
+# SLIDE 1 — CAPA (a coisa mais importante)
+6-15 palavras. CAIXA ALTA permitido. Use UM destes 4 padrões por variação (cada variação um diferente):
 
-# SLIDES 2 A N-1 — STAIRCASE (papéis narrativos, não repita 2 iguais seguidos)
-SETUP · CLAIM · EVIDENCE · MECHANISM · EXCEPTION · APPLICATION · STAKES · TWIST · CALLBACK-CTA.
+1. **DADO ESPECÍFICO** — número + consequência ("80% dos contratos têm ESSA cláusula errada")
+2. **CONFISSÃO ANTI-CLICHÊ** — algo que vai contra o senso comum do nicho ("Atender 24h por dia destruiu meu consultório")
+3. **NOMEAÇÃO DO INIMIGO** — nome o vilão real ("Seu plano de saúde NÃO te quer saudável")
+4. **PERGUNTA DE RUPTURA** — pergunta que assume premissa errada do leitor ("E se a culpa não for sua?")
 
-Escadas exemplo (8 slides):
-- data: HOOK → EVIDENCE → CLAIM → MECHANISM → EXCEPTION → APPLICATION → STAKES → CALLBACK-CTA
-- story: HOOK → SETUP → STAKES → CLAIM → MECHANISM → TWIST → APPLICATION → CALLBACK-CTA
+PROIBIDO no slide 1:
+- Pergunta retórica clichê ("Você sabia que...", "E se eu te dissesse...")
+- Verbos-zumbi ("descubra", "domine", "desvende", "revelado", "tudo o que...")
+- Clichês ("tudo mudou", "jogo virou", "céu é o limite", "guia definitivo")
 
-REGRAS POR SLIDE:
-- Slide 2 = SETUP. Slide 3 = RUPTURA que CONTRADIZ slide 1 (não expande). Slide 2 E 3: obrigatório 1 dado numérico + 1 nome próprio cada (puxe dos NER facts/factsBlock primeiro; sem isso, anedota específica).
-- Uma ideia só. Body max 3 linhas com quebra. Primeiras 3 palavras = mini-hook.
-- Micro-cliffhanger no final do body referenciando DADO/NOME/CENA do próprio slide. Nunca frase templática ("mas tem um detalhe que muda tudo", "aqui que a maioria para").
-- PATTERN INTERRUPT: a cada 3 slides, quebre ritmo (statement → pergunta, analítico → metáfora curta). Nunca 4 seguidos com mesma estrutura.
+# SLIDES DO MEIO — UMA IDEIA POR SLIDE
+- Cada slide responde algo deixado pelo anterior
+- Body máximo 3 linhas
+- Primeira frase = mini-hook do slide
+- Nomes reais, dados reais, exemplos concretos do nicho ${niche ? `(${niche})` : ""}
+- NUNCA INVENTE números, empresas, valores. Sem dado real → anedota ("no meu último cliente...", "vejo isso toda semana...")
+- Não repita o ângulo do slide anterior. A cada 3 slides quebre o ritmo (afirmação → pergunta, dado → história curta)
 
-# HOOK ARCHETYPES (12 — 1 por variação, 3 variações = 3 diferentes)
-DATA SHOCK ("95% das agências falham aos 18 meses") · CONFESSION ("Queimei R$230k contratando") · ENEMY NAMING ("Seu ICP tá errado") · FORBIDDEN KNOWLEDGE ("O que agência 50+ NUNCA te conta") · ANTI-GURU ("Pare de postar todo dia") · SPECIFIC LOSS ("Perdi 3 clientes em 11 dias") · TIME COMPRESSION ("O briefing de 40 min que vale R$18k") · BEFORE/AFTER ("2023: 70h/semana. 2026: 20h") · RITUAL EXPOSÉ ("O que founders Série A fazem às 6h") · META-CRITIQUE ("Você vai scrollar 90% desse carrossel") · STATUS GAME ("Existe um mercado de M&A em agência") · QUESTION DE RUPTURA ("E se o problema não for o alcance?").
+# ÚLTIMO SLIDE — CTA
+Específico ao tema desse carrossel. Teste: troca o assunto, o CTA ainda serve? Se sim, falhou.
 
-# CLOSING — CTA SEMÂNTICO (última linha = melhor linha)
-(a) Fecha o loop do slide 1 por tema (não paráfrase literal). (b) UMA ação específica ao carrossel — teste: troca o tema, o CTA ainda serve? Se sim, falhou. (c) Opcional: prova social implícita.
+✓ "Comenta TENHO se já passou por isso" · "Releia o slide 3 antes do seu próximo agendamento" · "Manda pra quem precisa ouvir isso"
+✗ "Salva esse post" · "Me siga pra mais" · "O que você acha?"
 
-✓ "Comenta qual dessas 3 métricas você mede hoje" · "Releia o slide 4 antes do seu próximo briefing" · "Testa em 1 cliente essa semana. Me conta" · "Comenta CLAUDE que eu mando o prompt na DM"
-✗ "Salva esse carrossel" · "Me siga pra mais" · "Manda pra aquele amigo que..." · "O que você acha?"
+# 3 VARIAÇÕES = 3 ÂNGULOS DIFERENTES
+- **data** — ângulo analítico, dado encadeado, voz de quem mede
+- **story** — 1ª pessoa ou caso específico, cena, personagem, consequência
+- **provocative** — contradiz a premissa do nicho, nomeia o inimigo, traz prova
 
-# STYLES (3 variações, ARQUITETURAS diferentes, não adjetivos)
-- **data**: arco em 3-5 dados encadeados. Voz analítica. Mechanism explícito.
-- **story**: 1ª pessoa ou case específico. Cena, personagem, tempo, consequência.
-- **provocative**: contradiz premissa do nicho, nomeia inimigo, traz prova. Nassim Taleb, não Pablo Marçal.
+Cada variação tem um padrão de capa diferente (não use o mesmo dos 4 padrões em 2 variações).
 
-# GROUND TRUTH (inegociável)
-NUNCA INVENTE números, empresas, valores, datas, citações. Sem dado no source → (a) número derivável com caveat ("1 em cada 3"), (b) anedota ("no meu último teste com X..."), (c) nome/cena concreta.
-Briefing pede N itens reais? Entregue exatamente N com nomes reais. Ex: "5 skills do Claude" → Computer Use, Artifacts, Projects, Claude Code, MCP servers. Se não sabe 5: reduza pra 3 nomeados OU peça especificação. Nunca invente produtos/skills que não existem.
-BANIDAS: "muitas pessoas", "a maioria", "resultados incríveis", "game-changer", "descubra como", "o segredo", "guia definitivo", "um olhar sobre", "análise de", "aspectos importantes", "estudo de caso", "nesse sentido", "atualmente".
+# IMAGEM POR SLIDE (imageQuery)
+4-7 palavras em INGLÊS, cena CONCRETA. SUBJECT + AÇÃO + AMBIENTE.
+Tema abstrato → "QUEM faz, ONDE, COM O QUÊ".
 
-# VISUAL RHYTHM — variant por slide
-- "cover" — full-bleed + handle pill + título CAPS terço inferior. Abre e fecha (slide 1 E último SE quiser ciclo).
-- "solid-brand" — cor sólida + título CAPS topo + imagem quadrada + body bottom. Meio do carrossel (2-4 usos).
-- "full-photo-bottom" — full-bleed + gradient + título/body terço inferior. Cinemático. Quebra ritmo (1-3 usos).
-- "text-only" — fundo escuro + 2-3 parágrafos center. Só em densidade analítica. Max 1x.
-- "cta" — último. Accent button + handle.
-Legacy aceitos (prefira os novos): headline, photo, quote, split.
-RITMO FORÇADO (8 slides): cover → solid-brand → full-photo-bottom → solid-brand → full-photo-bottom → (solid-brand ou text-only) → full-photo-bottom → cta. Slide 1 = cover, último = cta, nunca 2 iguais seguidos, text-only max 1x.
+✓ "dentist explaining xray to patient calm office"
+✓ "person reading bank statement coffee morning kitchen"
+✗ "business success growth strategy" (abstrato puro)
 
-# IMAGE QUERY — cena concreta DESSE slide
-4-8 keywords inglês: SUBJECT + AÇÃO + AMBIENTE. Tema abstrato → "QUEM faz isso, em QUAL ambiente, com QUAL objeto". Dado/contraste → cena da CONSEQUÊNCIA ("burnout entrepreneur receipts scattered desk" > "financial crisis chart").
-
-MODIFIER POR VARIAÇÃO (mesmo em todos slides da variação):
-- data → "close-up macro shallow depth of field 35mm film grain"
-- story → "cinematic still hard shadow 35mm film grain warm palette"
-- provocative → "editorial documentary natural window light muted palette"
-
-BANIDAS keywords: strategy, innovation, growth, AI, future, success, business, digital, mindset, impact, transformation, leadership, technology.
-
-# QUALITY GATES (falhou qualquer → reescreva)
-1. ESCADA: lendo só headings em sequência, a história fecha?
-2. SLIDE 2 CONTRADIZ slide 1 (não só expande)?
-3. ESPECIFICIDADE slides 2-3: cada um com 1 dado + 1 nome próprio?
-4. INVENÇÃO ZERO: todo número/empresa existe no source, é anedota, ou tem caveat?
-5. STORY ARC: se removo slide do meio, o próximo ainda faz sentido? Se sim, slide desperdício — reescreva.
-6. CTA CITA algo específico DESSE carrossel (troca tema → CTA quebra)?
-7. 3 VARIAÇÕES = 3 archetypes + 3 naturezas diferentes?
-8. 6 PAPÉIS CM5.4 presentes (hook/mecanismo/prova/aplicação/implicação/direção)?
-9. VARIANTS: slide 1 cover, último cta, nenhum repetido 2x seguidas, text-only max 1x?
-10. ZERO clichês (descubra/domine/revelado/céu é o limite/jogo virou/pergunta retórica no slide 1)?
-
-# OUTPUT FORMAT (JSON estrito, 3 variações)
+# OUTPUT JSON (3 variações, 6-10 slides cada)
 {
   "variations": [
     {
-      "title": "string",
-      "style": "data" | "story" | "provocative",
-      "ctaType": "save" | "comment" | "share",
+      "title": "string curto",
+      "style": "data",
       "slides": [
-        { "heading": "string", "body": "string", "imageQuery": "4-8 english keywords", "variant": "cover" | "solid-brand" | "full-photo-bottom" | "text-only" | "cta", "imageRef": number | null }
+        { "heading": "string", "body": "string", "imageQuery": "english 4-7 words" }
       ]
-    }
+    },
+    { "title": "...", "style": "story", "slides": [...] },
+    { "title": "...", "style": "provocative", "slides": [...] }
   ]
 }
-6-10 slides por variação. Toda slide tem variant válido.`;
+
+Primeiro caractere = '{', último = '}'. Sem markdown, sem comentários.`;
 
     // Source content (transcrição YouTube, scrape de link, legenda de Instagram):
     // Video/podcast de 40-60min gera 10-15k chars de transcript. Cortar em 6k
@@ -1469,9 +1531,19 @@ Se ignorar, o carrossel fica shallow e generico — não é o que o criador quer
       );
     }
 
-    // Escolhe o prompt baseado no effectiveMode (UI + overrides).
+    // Escolhe o prompt baseado no effectiveMode + mode (simple/pro).
+    // Default 2026-05-06: SIMPLE (1 variação, 5-7 slides, ~2.5K chars
+    // foco em prestador de serviço). Modo PRO (3 variações, 6-10 slides,
+    // archetypes de hook) só quando o user marca "Modo avançado" no UI
+    // → frontend manda `advanced.mode = "pro"`.
+    const isProMode =
+      typeof advanced?.mode === "string" && advanced.mode === "pro";
     const systemPrompt =
-      effectiveMode === "layout-only" ? layoutOnlyPrompt : writerPrompt;
+      effectiveMode === "layout-only"
+        ? layoutOnlyPrompt
+        : isProMode
+          ? writerPrompt
+          : simpleWriterPrompt;
 
     // 3. Increment usage BEFORE calling AI — ensures quota is always counted
     //    even if the response fails or user closes the tab. Se a RPC
@@ -1602,7 +1674,36 @@ Se ignorar, o carrossel fica shallow e generico — não é o que o criador quer
     // formato de output. O prompt minimal abaixo força JSON cru sem
     // gastar contexto em voice coaching (mesmo modelo já foi treinado
     // nas instruções na attempt 1).
-    const minimalStrictSystemPrompt = `Você é um gerador de carrossel Instagram em português brasileiro.
+    // 2 minimal prompts — um pro modo simple (1 variação) e um pro pro
+    // (3 variações). Strict retry usa o do mode atual pra não pedir
+    // 3 variações em modo simple.
+    const minimalStrictSystemPromptSimple = `Você é um gerador de carrossel Instagram em português brasileiro.
+
+Gere 1 carrossel de 5-7 slides a partir do conteúdo do usuário.
+
+OUTPUT OBRIGATÓRIO — apenas este JSON, sem fences, sem markdown, sem texto antes ou depois:
+
+{
+  "variations": [
+    {
+      "title": "string",
+      "slides": [
+        { "heading": "string", "body": "string", "imageQuery": "string em inglês" }
+      ]
+    }
+  ]
+}
+
+Regras:
+- 5-7 slides
+- heading curto (≤ 80 chars), body ≤ 200 chars
+- imageQuery em inglês, 4-7 palavras, cena concreta (subject + ação + ambiente)
+- texto em português brasileiro coloquial, frase curta, sem jargão
+- Slide 1 = capa com hook forte (dado, confissão, ou pergunta de ruptura)
+- Último slide = CTA específico ao tema
+- Primeiro caractere = '{', último = '}'`;
+
+    const minimalStrictSystemPromptPro = `Você é um gerador de carrossel Instagram em português brasileiro.
 
 Gere 3 variações do carrossel (data, story, provocative) a partir do conteúdo fornecido pelo usuário.
 
@@ -1628,6 +1729,10 @@ Regras:
 - imageQuery em inglês, 4-6 palavras, cena concreta
 - texto em português brasileiro, tom direto, sem guru
 - Primeiro caractere da resposta é '{', último é '}'`;
+
+    const minimalStrictSystemPrompt = isProMode
+      ? minimalStrictSystemPromptPro
+      : minimalStrictSystemPromptSimple;
 
     async function runWriterAttempt(strict: boolean): Promise<AttemptResult> {
       // Attempt 1 (strict=false): Pro + systemPrompt completo + JSON mode + temp 0.85

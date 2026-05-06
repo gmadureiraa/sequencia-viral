@@ -294,18 +294,27 @@ const VALID_VARIANTS: readonly SlideVariant[] = [
  */
 const SlideSchema = z.object({
   heading: z.string().min(1).max(400),
-  body: z.string().max(1200).optional().default(""),
+  body: z.string().max(2000).optional().default(""),
   imageQuery: z.string().max(400).optional().default(""),
   variant: z.string().optional(),
   imageRef: z.number().int().min(1).max(12).optional(),
   imageUrl: z.string().url().optional(),
 });
 
+// `style` e `ctaType` viam enum strict — quando o modelo cuspia
+// "informational"/"educational"/"informative" a validação falhava e
+// disparava strict retry (~38s extras). Como esses campos são só dicas
+// pra UI (icon de variation), aceitamos qualquer string e normalizamos
+// downstream. Se vier undefined ou string fora do enum conhecido, o
+// front trata graciosamente.
 const VariationSchema = z.object({
   title: z.string().min(1).max(300),
-  style: z.enum(["data", "story", "provocative"]).optional(),
-  ctaType: z.enum(["save", "comment", "share"]).optional(),
-  slides: z.array(SlideSchema).min(3).max(20),
+  style: z.string().optional(),
+  ctaType: z.string().optional(),
+  // Slides min 2 (capa + CTA é o mínimo viável pra um carrossel curto).
+  // Era 3 — quando o modelo gerava 2 slides bons e válidos pra um post
+  // simples, o schema disparava retry desnecessário.
+  slides: z.array(SlideSchema).min(2).max(20),
 });
 
 const GenerateOutputSchema = z.object({
@@ -859,13 +868,32 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
       }
     } else if (sourceType === "instagram" && sourceUrl) {
       try {
-        const { extractInstagramContent } = await import(
-          "@/lib/instagram-extractor"
+        const [
+          { extractInstagramContent },
+          { withScrapeCache },
+        ] = await Promise.all([
+          import("@/lib/instagram-extractor"),
+          import("@/lib/server/scrape-content-cache"),
+        ]);
+        // Cache 24h por URL — user testando briefing 3-4x do mesmo IG
+        // antes economiza ~21s a partir da 2ª tentativa. Cache miss
+        // mantém comportamento anterior.
+        const tIg = Date.now();
+        const cacheRes = await withScrapeCache(
+          { prefix: "ig", rawKey: sourceUrl, ttlSec: 86_400 },
+          () => extractInstagramContent(sourceUrl),
         );
-        sourceContent = await extractInstagramContent(sourceUrl);
-        // Track scrape IG (Apify primário + possível ScrapeCreators
-        // fallback + Gemini Vision OCR dos slides). Admin vê volume.
-        if (sb) {
+        sourceContent = cacheRes.content;
+        console.log(
+          `[generate] ig-extract ${cacheRes.fromCache ? "CACHE HIT" : "MISS"} ${
+            Date.now() - tIg
+          }ms url=${sourceUrl.slice(0, 80)}`,
+        );
+
+        // Track scrape IG (só quando NÃO veio do cache — senão dobra cost
+        // tracking). Apify primário + ScrapeCreators fallback + Gemini
+        // Vision OCR dos slides.
+        if (sb && !cacheRes.fromCache) {
           try {
             await sb.from("generations").insert({
               user_id: user.id,

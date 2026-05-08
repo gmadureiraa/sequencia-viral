@@ -5,6 +5,7 @@
  * filtrar no dashboard Resend, rotear supression lists, e separar métricas.
  */
 
+import { createElement } from "react";
 import { sendEmail } from "./send";
 import { WelcomeEmail } from "./templates/welcome";
 import { ActivationNudgeEmail } from "./templates/activation-nudge";
@@ -212,4 +213,78 @@ export async function sendPaymentFailed(
     }),
     tags: [PROJECT_TAG, ENV_TAG, lifecycleTag("payment-failed")],
   });
+}
+
+/**
+ * Alerta interno pro owner — toda vez que um checkout vira assinatura paga,
+ * dispara um email pra `OWNER_EMAIL` (ou fallback hardcoded). Texto puro,
+ * sem template React, pra ficar leve e fácil de ler no celular.
+ *
+ * Falhas SÃO swallowed: webhook Stripe nunca pode quebrar por causa desse
+ * email. Loga warn e segue.
+ */
+export async function sendOwnerSubscriptionAlert(args: {
+  email: string | null | undefined;
+  planName: string;
+  planId: string;
+  amountBrl: number;
+  userId: string;
+  customerId: string | null | undefined;
+  subscriptionId: string | null | undefined;
+}): Promise<void> {
+  try {
+    const ownerEmail =
+      process.env.OWNER_EMAIL ||
+      process.env.STRIPE_NOTIFY_EMAIL ||
+      "gf.madureiraa@gmail.com";
+
+    const adminUrl = `${APP_URL}/app/admin/users/${args.userId}`;
+    const userEmail = args.email || "(email desconhecido)";
+    const subject = `🎉 Nova assinatura SV — ${args.planName} (${userEmail})`;
+
+    const amountFmt = `R$ ${args.amountBrl.toFixed(2).replace(".", ",")}`;
+    const text = [
+      `Nova assinatura paga no Sequência Viral.`,
+      ``,
+      `User: ${userEmail}`,
+      `Plano: ${args.planName} (${args.planId})`,
+      `Valor: ${amountFmt}/mês`,
+      ``,
+      `Admin: ${adminUrl}`,
+      ``,
+      `Stripe customer: ${args.customerId || "n/a"}`,
+      `Stripe subscription: ${args.subscriptionId || "n/a"}`,
+    ].join("\n");
+
+    const html = `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;color:#0a0908">
+<p><strong>Nova assinatura paga no Sequência Viral.</strong></p>
+<ul style="padding-left:18px;margin:12px 0">
+  <li><strong>User:</strong> ${userEmail}</li>
+  <li><strong>Plano:</strong> ${args.planName} (<code>${args.planId}</code>)</li>
+  <li><strong>Valor:</strong> ${amountFmt}/mês</li>
+</ul>
+<p><a href="${adminUrl}">→ Abrir perfil no admin</a></p>
+<hr style="border:none;border-top:1px solid #eee;margin:16px 0" />
+<p style="color:#666;font-size:12px">
+  Stripe customer: <code>${args.customerId || "n/a"}</code><br />
+  Stripe subscription: <code>${args.subscriptionId || "n/a"}</code>
+</p>
+</div>`;
+
+    // sendEmail() exige um ReactElement. Como esse alerta não usa template
+    // dedicado, montamos um div simples via createElement com o HTML inline.
+    const reactElement = createElement("div", {
+      dangerouslySetInnerHTML: { __html: html },
+    });
+
+    await sendEmail({
+      to: ownerEmail,
+      subject,
+      react: reactElement,
+      text,
+      tags: [PROJECT_TAG, ENV_TAG, lifecycleTag("owner-new-subscription")],
+    });
+  } catch (err) {
+    console.warn("[email] sendOwnerSubscriptionAlert falhou:", err);
+  }
 }

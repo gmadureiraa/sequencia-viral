@@ -77,7 +77,6 @@ interface AuthContextValue {
   session: Session | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
-  signInWithTwitter: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
   signUpWithEmail: (
     email: string,
@@ -270,17 +269,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const signInWithTwitter = useCallback(async () => {
-    if (!supabase) {
-      console.warn("Supabase not configured");
-      return;
-    }
-    await supabase.auth.signInWithOAuth({
-      provider: "twitter",
-      options: { redirectTo: `${window.location.origin}/app` },
-    });
-  }, []);
-
   const signInWithEmail = useCallback(
     async (email: string, password: string) => {
       if (!supabase) return { error: "Supabase não está configurado." };
@@ -373,7 +361,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       loading,
       signInWithGoogle,
-      signInWithTwitter,
       signInWithEmail,
       signUpWithEmail,
       signOut,
@@ -386,7 +373,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       loading,
       signInWithGoogle,
-      signInWithTwitter,
       signInWithEmail,
       signUpWithEmail,
       signOut,

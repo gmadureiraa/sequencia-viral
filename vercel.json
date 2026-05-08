@@ -15,7 +15,8 @@
     "app/api/cron/idle-5d/route.ts": { "maxDuration": 60 },
     "app/api/cron/power-user/route.ts": { "maxDuration": 60 },
     "app/api/cron/referral-reminder/route.ts": { "maxDuration": 60 },
-    "app/api/cron/annual-offer/route.ts": { "maxDuration": 60 }
+    "app/api/cron/annual-offer/route.ts": { "maxDuration": 60 },
+    "app/api/cron/cleanup-external-cache/route.ts": { "maxDuration": 300 }
   },
   "crons": [
     { "path": "/api/cron/activation-nudge", "schedule": "0 15 * * *" },
@@ -29,6 +30,7 @@
     { "path": "/api/cron/idle-5d", "schedule": "0 13 * * *" },
     { "path": "/api/cron/power-user", "schedule": "0 14 * * *" },
     { "path": "/api/cron/referral-reminder", "schedule": "0 15 * * *" },
-    { "path": "/api/cron/annual-offer", "schedule": "0 16 * * 1" }
+    { "path": "/api/cron/annual-offer", "schedule": "0 16 * * 1" },
+    { "path": "/api/cron/cleanup-external-cache", "schedule": "0 3 1 * *" }
   ]
 }

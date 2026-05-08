@@ -2,7 +2,7 @@ import {
   requireAuthenticatedUser,
   createServiceRoleSupabaseClient,
 } from "@/lib/server/auth";
-import { getOrCreateReferralCode } from "@/lib/referrals";
+import { getOrCreateReferralCode, REFERRAL_CAROUSELS_BONUS } from "@/lib/referrals";
 
 export async function GET(request: Request) {
   const auth = await requireAuthenticatedUser(request);
@@ -22,39 +22,39 @@ export async function GET(request: Request) {
     );
   }
 
-  // Busca contadores agregados.
-  const [{ data: rows }, { data: profile }] = await Promise.all([
+  // Busca referrals + soma de carrosséis bônus já creditados.
+  const [refsRes, creditsRes] = await Promise.all([
     admin
       .from("referrals")
-      .select("status, reward_amount_cents, reward_applied")
+      .select("status, reward_applied")
       .eq("referrer_user_id", user.id),
     admin
-      .from("profiles")
-      .select("referral_credits_cents")
-      .eq("id", user.id)
-      .maybeSingle(),
+      .from("referral_credits")
+      .select("amount")
+      .eq("referrer_user_id", user.id)
+      .eq("type", "carousels_bonus"),
   ]);
 
-  const list = (rows ?? []) as Array<{
+  const list = (refsRes.data ?? []) as Array<{
     status: string;
-    reward_amount_cents: number | null;
     reward_applied: boolean | null;
   }>;
+  const credits = (creditsRes.data ?? []) as Array<{ amount: number }>;
 
   const signupCount = list.filter((r) =>
     ["signup", "converted"].includes(r.status)
   ).length;
   const conversionCount = list.filter((r) => r.status === "converted").length;
-  const totalCreditCents =
-    (profile?.referral_credits_cents as number | null) ??
-    list
-      .filter((r) => r.reward_applied)
-      .reduce((acc, r) => acc + (r.reward_amount_cents ?? 0), 0);
+  const totalCarouselsBonus = credits.reduce(
+    (acc, c) => acc + (c.amount ?? 0),
+    0
+  );
 
   return Response.json({
     code,
     signupCount,
     conversionCount,
-    totalCreditCents,
+    totalCarouselsBonus,
+    bonusPerReferral: REFERRAL_CAROUSELS_BONUS,
   });
 }

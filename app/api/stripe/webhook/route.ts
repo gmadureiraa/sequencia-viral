@@ -217,19 +217,48 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
           }
         }
 
-        // Programa Indique-e-Ganhe — se a session veio com referralCode,
-        // marca como converted, aplica R$ 25 de credito Stripe no balance
-        // do referrer e dispara email transacional. Idempotente
-        // (reward_applied flag) e silencioso em qualquer falha pra nao
-        // quebrar o webhook. Mesmo sem referralCode na metadata, tenta
-        // aplicar pelo referredUserId — cobre o caso onde o user fez
-        // signup com codigo (ja existe linha pending/signup) mas o
-        // checkout foi sem o code passado adiante.
-        if (referralCode || userId) {
+        // Programa Indique-e-Ganhe v2 (2026-05-08) — referrer ganha
+        // +N carrosséis no `usage_limit` do mês corrente (NÃO mais saldo
+        // Stripe). Idempotente via unique key (referred_user, subscription,
+        // type) na tabela `referral_credits`. Silencioso em qualquer falha
+        // pra nao quebrar o webhook.
+        //
+        // Resolução do referrer (em ordem):
+        //   1) Linha pending/signup em `referrals` (caso normal — user
+        //      veio de ?ref= no signup).
+        //   2) Fallback: `subscription.discount.coupon.metadata.referrer_user_id`
+        //      — cobre o caso onde o cupom dinâmico foi usado mas o user
+        //      pulou /track no signup (ex: criou conta antes, link no
+        //      Whatsapp do amigo só virou checkout direto).
+        if (userId) {
+          let fallbackReferrerUserId: string | null = null;
+          if (subscriptionId) {
+            try {
+              const sub = await stripe.subscriptions.retrieve(subscriptionId, {
+                expand: ["discount.coupon"],
+              });
+              const couponMeta = (
+                sub as unknown as {
+                  discount?: { coupon?: { metadata?: { referrer_user_id?: string } } };
+                }
+              )?.discount?.coupon?.metadata;
+              if (couponMeta?.referrer_user_id) {
+                fallbackReferrerUserId = couponMeta.referrer_user_id;
+              }
+            } catch (err) {
+              console.warn(
+                "[stripe webhook] falha lendo subscription.discount.coupon.metadata:",
+                err
+              );
+            }
+          }
+
           try {
             const result = await applyReferralReward({
               referredUserId: userId,
               stripeSessionId: session.id,
+              stripeSubscriptionId: subscriptionId,
+              fallbackReferrerUserId,
               supabaseAdmin,
             });
             if (!result.ok && result.reason && result.reason !== "no_referral") {
@@ -242,6 +271,7 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
             console.error("[stripe webhook] applyReferralReward exception:", err);
           }
         }
+        void referralCode; // legado — referralCode metadata mantido só pra debug
 
         // Email de confirmação (não bloqueia o webhook)
         const { data: profileRow } = await supabaseAdmin

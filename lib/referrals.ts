@@ -1,14 +1,23 @@
 /**
  * Sistema de referral — helpers server-side.
  *
- * Mecanica:
- *   - Pro referido (quem e convidado): cupom Stripe AMIGOPRO30 (30% off 1o mes).
- *     O cupom em si vive no Stripe Dashboard como `promotion_code` e/ou na
- *     tabela `coupons` se quisermos amarrar local — aqui apenas registramos
- *     a indicacao. O desconto aplicado e responsabilidade do checkout flow.
- *   - Pro referrer (quem indicou): 1 mês grátis de Pro em customer.balance no
- *     Stripe (= valor do Pro mensal) quando o referido paga primeira fatura.
- *     Abate auto na próxima cobrança. Acumula sem limite.
+ * Mecanica (refeita 2026-05-08):
+ *   - Pro REFERIDO (quem é convidado): 30% off no primeiro mês via cupom
+ *     Stripe DINÂMICO criado por referrer (`MAD-X8K2-...`). O cupom carrega
+ *     `metadata.referrer_user_id` pra garantir rastreio no webhook mesmo
+ *     se o `referralCode` do localStorage tiver sumido entre signup e
+ *     checkout.
+ *   - Pro REFERRER (quem indicou): +N carrosséis adicionados ao
+ *     `profiles.usage_limit` (mês corrente) quando o amigo paga primeira
+ *     fatura. **Sem mexer em customer.balance Stripe.** O DEFAULT é 10,
+ *     parametrizável via `REFERRAL_CAROUSELS_BONUS` env var.
+ *
+ * Atomicity / idempotency:
+ *   - RPC `grant_referral_carousels_bonus` (Postgres) faz INSERT em
+ *     `referral_credits` com unique key (referred_user_id, subscription_id,
+ *     type) + UPDATE atômico em `profiles.usage_limit` na mesma transação.
+ *     Se webhook chega 2x pro mesmo subscription, unique violation ⇒
+ *     idempotente sem credit duplicado.
  *
  * Todas as funcoes recebem o supabaseAdmin (service role) explicitamente
  * porque sao chamadas de webhooks/API routes que ja tem o client em scope.
@@ -18,17 +27,22 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
 import { fireResendEvent } from "@/lib/integrations/resend/events";
 import { sendReferralConverted } from "@/lib/email/dispatch";
-import { PLANS } from "@/lib/pricing";
 
 /**
- * Recompensa = preço cheio de 1 mês do Pro. Importado direto de
- * PLANS.pro.priceMonthly pra ficar sempre em sync. Quando o Pro mudar de
- * preço, o reward acompanha automaticamente.
- *
- * UI mostra "1 mês grátis de Pro" — credit BRL é só o mecanismo Stripe.
+ * Quantidade de carrosséis ganhos pelo referrer por amigo que paga.
+ * Default 10 — override via env var `REFERRAL_CAROUSELS_BONUS`.
  */
-export const REFERRAL_REWARD_CENTS: number = PLANS.pro.priceMonthly;
-export const REFERRAL_REWARD_LABEL = "1 mês grátis de Pro" as const;
+export const REFERRAL_CAROUSELS_BONUS: number = (() => {
+  const raw = Number(process.env.REFERRAL_CAROUSELS_BONUS || "");
+  if (!Number.isFinite(raw) || raw <= 0) return 10;
+  return Math.floor(raw);
+})();
+
+/**
+ * Desconto aplicado ao convidado no primeiro mês. Hard-coded pra alinhar
+ * com a copy pública. Ajustar aqui + na page de referrals se mudar.
+ */
+export const REFERRAL_FRIEND_DISCOUNT_PCT = 30 as const;
 
 /**
  * Gera codigo de referral baseado no nome.
@@ -151,6 +165,52 @@ export async function findReferrerByCode(
 }
 
 /**
+ * Cria (ou reusa) um cupom dinâmico no Stripe atrelado ao referrer.
+ *   - 30% off, duration: once (só primeiro mês)
+ *   - metadata.referrer_user_id = ID do indicador
+ *   - id estável: `ref_<REFERRAL_CODE_LOWER>` — chamadas repetidas
+ *     reusam o mesmo cupom (idempotente). Permite múltiplos amigos
+ *     usarem o mesmo cupom (multi-use), todos rastreiam o mesmo referrer.
+ *
+ * Retorna o coupon.id pra passar no `discounts` do Checkout.
+ */
+export async function getOrCreateReferralStripeCoupon(args: {
+  referrerUserId: string;
+  referralCode: string;
+}): Promise<string | null> {
+  const { referrerUserId, referralCode } = args;
+  const cleanCode = referralCode.trim();
+  if (!cleanCode) return null;
+
+  // Stripe coupon ID: max 64 chars, [A-Za-z0-9_]. Lower + replace `-` por `_`.
+  const couponId = `ref_${cleanCode.toLowerCase().replace(/[^a-z0-9]/g, "_")}`.slice(0, 64);
+
+  try {
+    // Tenta reusar.
+    const existing = await stripe.coupons.retrieve(couponId).catch(() => null);
+    if (existing && (existing as { id?: string }).id) {
+      return existing.id;
+    }
+
+    const created = await stripe.coupons.create({
+      id: couponId,
+      name: `Indique e ganhe — ${cleanCode}`,
+      duration: "once",
+      percent_off: REFERRAL_FRIEND_DISCOUNT_PCT,
+      metadata: {
+        referrer_user_id: referrerUserId,
+        referral_code: cleanCode,
+        source: "sv_referral_program_v2",
+      },
+    });
+    return created.id;
+  } catch (err) {
+    console.warn("[referrals] getOrCreateReferralStripeCoupon falhou:", err);
+    return null;
+  }
+}
+
+/**
  * Registra signup com referral. Insere uma linha em `referrals` com
  * status='signup'. Idempotente por (referrer, referred_user_id):
  * se ja existe linha pro mesmo par, nao duplica.
@@ -208,24 +268,43 @@ export async function recordReferralSignup(args: {
 
 /**
  * Aplica recompensa quando o referido paga. Chamado no webhook de
- * checkout.session.completed. Idempotente — se a linha ja foi marcada
- * `reward_applied`, nao credita de novo.
+ * checkout.session.completed.
  *
  * Steps:
- *  1) Acha a linha referrals pelo referredUserId (status signup ou pending).
- *  2) Busca stripe_customer_id do referrer.
- *  3) Cria customer.balanceTransaction de -2500 BRL (negativo = credito).
- *  4) Marca referral como converted + reward_applied=true.
- *  5) Incrementa profiles.referral_credits_cents do referrer (info).
- *  6) Dispara evento Resend e email transacional.
+ *  1) Resolve o referrer: tenta primeiro pela coluna `referrals` (linha
+ *     pending/signup pra esse referredUser). Se não encontrar mas a
+ *     subscription tem `coupon.metadata.referrer_user_id`, usa esse.
+ *  2) Chama RPC `grant_referral_carousels_bonus` — atomic INSERT em
+ *     referral_credits + UPDATE em profiles.usage_limit. Idempotente
+ *     por unique (referred, subscription, type).
+ *  3) Marca referral como converted + reward_applied=true.
+ *  4) Dispara evento Resend e email transacional.
+ *
+ * **Importante:** NÃO mexe em customer.balance Stripe. O bônus é local
+ * (carrosséis adicionados ao usage_limit do mês corrente).
  */
 export async function applyReferralReward(args: {
   referredUserId: string;
   stripeSessionId?: string | null;
+  stripeSubscriptionId?: string | null;
+  /**
+   * Se o webhook conseguiu extrair `referrer_user_id` do
+   * `subscription.discount.coupon.metadata`, passar aqui pra resolver o
+   * referrer mesmo sem linha em `referrals` (caso onde o user pulou o
+   * track e foi direto pro checkout com cupom).
+   */
+  fallbackReferrerUserId?: string | null;
   supabaseAdmin: SupabaseClient;
-}): Promise<{ ok: boolean; reason?: string }> {
-  const { referredUserId, stripeSessionId, supabaseAdmin } = args;
+}): Promise<{ ok: boolean; reason?: string; applied?: boolean }> {
+  const {
+    referredUserId,
+    stripeSessionId,
+    stripeSubscriptionId,
+    fallbackReferrerUserId,
+    supabaseAdmin,
+  } = args;
 
+  // 1) Tenta achar referral pendente pelo referredUser.
   const { data: referral, error: refErr } = await supabaseAdmin
     .from("referrals")
     .select("id, referrer_user_id, reward_applied, status")
@@ -239,108 +318,128 @@ export async function applyReferralReward(args: {
     console.warn("[referrals] applyReferralReward select erro:", refErr.message);
     return { ok: false, reason: refErr.message };
   }
-  if (!referral) {
+
+  let referrerUserId: string | null = null;
+  let referralId: string | null = null;
+
+  if (referral) {
+    if (referral.reward_applied) {
+      return { ok: false, reason: "already_applied" };
+    }
+    referrerUserId = referral.referrer_user_id as string;
+    referralId = referral.id as string;
+  } else if (fallbackReferrerUserId) {
+    // Fallback: cupom Stripe carregava metadata.referrer_user_id mas não
+    // tinha linha em `referrals` (user pulou o /track). Cria a linha agora
+    // pra preservar histórico + auditoria.
+    if (fallbackReferrerUserId === referredUserId) {
+      return { ok: false, reason: "self_referral_blocked" };
+    }
+    referrerUserId = fallbackReferrerUserId;
+    const { data: createdRef } = await supabaseAdmin
+      .from("referrals")
+      .insert({
+        referrer_user_id: fallbackReferrerUserId,
+        referred_user_id: referredUserId,
+        referred_email: "",
+        referral_code: "via_coupon_metadata",
+        status: "signup",
+        signup_at: new Date().toISOString(),
+      })
+      .select("id")
+      .maybeSingle();
+    referralId = (createdRef?.id as string) || null;
+  } else {
     // Nao tem indicacao pra esse user — fluxo normal, nao e erro.
     return { ok: false, reason: "no_referral" };
   }
-  if (referral.reward_applied) {
-    return { ok: false, reason: "already_applied" };
+
+  // 2) Chama RPC atomic. Idempotente via unique key.
+  const { data: rpcRows, error: rpcErr } = await supabaseAdmin.rpc(
+    "grant_referral_carousels_bonus",
+    {
+      p_referrer_user_id: referrerUserId,
+      p_referred_user_id: referredUserId,
+      p_amount: REFERRAL_CAROUSELS_BONUS,
+      p_referral_id: referralId,
+      p_stripe_subscription_id: stripeSubscriptionId || null,
+      p_stripe_session_id: stripeSessionId || null,
+    }
+  );
+
+  if (rpcErr) {
+    console.error("[referrals] RPC grant_referral_carousels_bonus falhou:", rpcErr.message);
+    return { ok: false, reason: "rpc_failed" };
   }
 
-  const referrerUserId = referral.referrer_user_id as string;
+  const rpcResult =
+    Array.isArray(rpcRows) && rpcRows.length > 0
+      ? (rpcRows[0] as { ok: boolean; applied: boolean; reason: string })
+      : null;
 
-  const { data: referrerProfile } = await supabaseAdmin
-    .from("profiles")
-    .select("id, email, name, stripe_customer_id, referral_credits_cents")
-    .eq("id", referrerUserId)
-    .maybeSingle();
+  if (!rpcResult?.applied) {
+    // Já creditado em chamada anterior — webhook duplicado, idempotente.
+    if (referralId) {
+      await supabaseAdmin
+        .from("referrals")
+        .update({
+          status: "converted",
+          conversion_at: new Date().toISOString(),
+          stripe_session_id: stripeSessionId || null,
+          reward_amount_cents: REFERRAL_CAROUSELS_BONUS, // reusa coluna pra exibir N
+          reward_applied: true,
+          reward_applied_at: new Date().toISOString(),
+        })
+        .eq("id", referralId);
+    }
+    return { ok: true, applied: false, reason: rpcResult?.reason || "already_credited" };
+  }
 
-  if (!referrerProfile?.stripe_customer_id) {
-    console.warn(
-      "[referrals] referrer sem stripe_customer_id — registrando indicacao mas sem credito Stripe imediato:",
-      referrerUserId
-    );
-    // Marca converted mas reward_applied=false; admin pode reprocessar manualmente
-    // depois quando o referrer fizer checkout (e ganhar customer_id).
-    await supabaseAdmin
+  // 3) Marca referral como converted + reward_applied.
+  if (referralId) {
+    const { error: updErr } = await supabaseAdmin
       .from("referrals")
       .update({
         status: "converted",
         conversion_at: new Date().toISOString(),
         stripe_session_id: stripeSessionId || null,
-        reward_amount_cents: REFERRAL_REWARD_CENTS,
+        reward_amount_cents: REFERRAL_CAROUSELS_BONUS, // armazena N (pra UI)
+        reward_applied: true,
+        reward_applied_at: new Date().toISOString(),
       })
-      .eq("id", referral.id);
-    return { ok: false, reason: "referrer_no_stripe_customer" };
+      .eq("id", referralId);
+    if (updErr) {
+      console.error("[referrals] update referral pos-credit falhou:", updErr.message);
+      // Já creditou no usage_limit; não rollback.
+    }
   }
 
-  // Aplica credito no Stripe customer balance.
-  // Negative amount em customer balance = credito (Stripe paga o user).
-  // Doc: https://stripe.com/docs/api/customer_balance_transactions/create
-  try {
-    await stripe.customers.createBalanceTransaction(
-      referrerProfile.stripe_customer_id as string,
-      {
-        amount: -REFERRAL_REWARD_CENTS, // negativo = credito (debit do balance)
-        currency: "brl",
-        description: `Indique e ganhe — recompensa por indicacao paga (referral ${referral.id})`,
-        metadata: {
-          referralId: referral.id as string,
-          referrerUserId,
-          referredUserId,
-          source: "sv_referral_program",
-        },
-      }
-    );
-  } catch (err) {
-    console.error("[referrals] falha criando balanceTransaction Stripe:", err);
-    return { ok: false, reason: "stripe_balance_tx_failed" };
-  }
-
-  // Marca referral como converted.
-  const { error: updErr } = await supabaseAdmin
-    .from("referrals")
-    .update({
-      status: "converted",
-      conversion_at: new Date().toISOString(),
-      stripe_session_id: stripeSessionId || null,
-      reward_amount_cents: REFERRAL_REWARD_CENTS,
-      reward_applied: true,
-      reward_applied_at: new Date().toISOString(),
-    })
-    .eq("id", referral.id);
-
-  if (updErr) {
-    console.error("[referrals] update referral falhou apos credito:", updErr.message);
-    // O credito ja foi aplicado no Stripe; deixa fluxo seguir mesmo assim.
-  }
-
-  // Atualiza acumulador (info) no profile do referrer.
-  const newTotal =
-    (referrerProfile.referral_credits_cents as number | null ?? 0) +
-    REFERRAL_REWARD_CENTS;
-  await supabaseAdmin
+  // 4) Email transacional + evento Resend (fire-and-forget).
+  const { data: referrerProfile } = await supabaseAdmin
     .from("profiles")
-    .update({ referral_credits_cents: newTotal })
-    .eq("id", referrerUserId);
+    .select("email, name, usage_limit")
+    .eq("id", referrerUserId)
+    .maybeSingle();
 
-  // Email transacional + evento Resend (fire-and-forget).
-  if (referrerProfile.email) {
+  if (referrerProfile?.email) {
     await sendReferralConverted(
-      { email: referrerProfile.email as string, name: (referrerProfile.name as string) || undefined },
       {
-        rewardCents: REFERRAL_REWARD_CENTS,
-        totalCreditCents: newTotal,
+        email: referrerProfile.email as string,
+        name: (referrerProfile.name as string) || undefined,
+      },
+      {
+        carouselsBonus: REFERRAL_CAROUSELS_BONUS,
+        newUsageLimit: (referrerProfile.usage_limit as number | null) ?? null,
       }
     );
     await fireResendEvent("sv.referral.converted", {
       email: referrerProfile.email,
       user_id: referrerUserId,
-      reward_cents: REFERRAL_REWARD_CENTS,
-      total_credit_cents: newTotal,
+      carousels_bonus: REFERRAL_CAROUSELS_BONUS,
+      new_usage_limit: referrerProfile.usage_limit,
       referred_user_id: referredUserId,
     });
   }
 
-  return { ok: true };
+  return { ok: true, applied: true };
 }

@@ -8,7 +8,7 @@ import {
   Check,
   Share2,
   Users,
-  Wallet,
+  Sparkles,
   TrendingUp,
   ArrowLeft,
   Loader2,
@@ -22,7 +22,8 @@ type MeResponse = {
   code: string;
   signupCount: number;
   conversionCount: number;
-  totalCreditCents: number;
+  totalCarouselsBonus: number;
+  bonusPerReferral: number;
 };
 
 type ReferralItem = {
@@ -31,30 +32,10 @@ type ReferralItem = {
   status: "pending" | "signup" | "converted" | "expired";
   signupAt: string | null;
   conversionAt: string | null;
-  rewardAmountCents: number;
+  rewardCarousels: number;
   rewardApplied: boolean;
   createdAt: string;
 };
-
-function formatBrl(cents: number): string {
-  const v = cents / 100;
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  }).format(v);
-}
-
-/**
- * Cada conversão = 1 mês grátis (reward = 1× preço Pro mensal). totalCents/N
- * conversões dá quantos meses acumulados.
- */
-function formatProMonths(totalCents: number, conversionCount: number): string {
-  if (conversionCount <= 0) return "0 meses";
-  const months = conversionCount; // 1 conversão = 1 mês exatamente
-  void totalCents;
-  return months === 1 ? "1 mês grátis" : `${months} meses grátis`;
-}
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -77,7 +58,7 @@ function statusLabel(status: ReferralItem["status"]): {
   switch (status) {
     case "converted":
       return {
-        label: "Pago — crédito ativo",
+        label: "Pago — bônus creditado",
         bg: "var(--sv-green)",
         fg: "var(--sv-ink)",
       };
@@ -148,6 +129,8 @@ export default function ReferralsPage() {
     if (!me?.code) return "";
     return `${APP_URL}/?ref=${me.code}`;
   }, [me]);
+
+  const bonus = me?.bonusPerReferral ?? 10;
 
   async function handleCopy() {
     if (!link) return;
@@ -227,8 +210,7 @@ export default function ReferralsPage() {
             color: "var(--sv-ink)",
           }}
         >
-          R$ 25 de crédito por <em className="italic">cada amigo</em> que
-          assinar.
+          +{bonus} carrosséis no seu plano por <em className="italic">cada amigo</em> que assinar.
         </h1>
         <p
           className="mt-3 max-w-2xl"
@@ -241,9 +223,8 @@ export default function ReferralsPage() {
         >
           Compartilhe seu link. Quem entra usando ele ganha{" "}
           <strong>30% off no primeiro mês</strong>. Quando o pagamento dele
-          rola, <strong>R$ 25,00</strong> caem no seu saldo Stripe e abatem
-          automaticamente na sua próxima fatura. Sem limite — pode acumular o
-          quanto quiser.
+          rola, <strong>+{bonus} carrosséis</strong> caem direto no seu limite mensal —
+          pode usar agora mesmo. Sem teto, acumula com cada amigo novo.
         </p>
       </header>
 
@@ -409,10 +390,10 @@ export default function ReferralsPage() {
             hint="Pagaram primeira fatura"
           />
           <StatCard
-            icon={<Wallet size={16} />}
-            label="Meses grátis de Pro"
-            value={formatProMonths(me.totalCreditCents, me.conversionCount)}
-            hint={`= ${formatBrl(me.totalCreditCents)} em crédito Stripe (abate auto na próxima fatura)`}
+            icon={<Sparkles size={16} />}
+            label="Carrosséis bônus"
+            value={`+${me.totalCarouselsBonus}`}
+            hint={`Já somados ao seu limite mensal (${bonus} por amigo que paga)`}
             highlight
           />
         </div>
@@ -447,7 +428,7 @@ export default function ReferralsPage() {
               }}
             >
               Ainda sem indicações. Cola seu link em qualquer rede que você usa
-              — cada amigo que assinar vale <strong>1 mês grátis de Pro</strong>.
+              — cada amigo que assinar te dá <strong>+{bonus} carrosséis</strong>.
             </p>
           </div>
         ) : (
@@ -474,7 +455,7 @@ export default function ReferralsPage() {
                   <th className="px-4 py-3">Quando</th>
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Recompensa</th>
+                  <th className="px-4 py-3 text-right">Bônus</th>
                 </tr>
               </thead>
               <tbody>
@@ -526,7 +507,7 @@ export default function ReferralsPage() {
                         }}
                       >
                         {row.rewardApplied
-                          ? `+ ${formatBrl(row.rewardAmountCents)}`
+                          ? `+${row.rewardCarousels} carrosséis`
                           : "—"}
                       </td>
                     </tr>
@@ -569,26 +550,18 @@ export default function ReferralsPage() {
           }}
         >
           <li>
-            <strong>1.</strong> Seu amigo clica no seu link e usa o cupom{" "}
-            <code
-              style={{
-                fontFamily: "var(--sv-mono)",
-                background: "var(--sv-green)",
-                padding: "1px 6px",
-                borderRadius: 4,
-              }}
-            >
-              AMIGOPRO30
-            </code>{" "}
-            — ele ganha 30% off no primeiro mês.
+            <strong>1.</strong> Seu amigo clica no seu link — o cupom de{" "}
+            <strong>30% off no primeiro mês</strong> é aplicado automaticamente
+            no checkout dele.
           </li>
           <li>
             <strong>2.</strong> Quando o pagamento dele cai, você ganha{" "}
-            <strong>R$ 25 de crédito</strong> direto no Stripe.
+            <strong>+{bonus} carrosséis</strong> direto no seu limite do mês
+            corrente — sem precisar fazer nada, dá pra usar agora.
           </li>
           <li>
-            <strong>3.</strong> Esse crédito abate automático na sua próxima
-            fatura. Acumula sem teto — chame 10 amigos, pague 10 meses de menos.
+            <strong>3.</strong> Sem teto. Indica 5 amigos = +{bonus * 5}{" "}
+            carrosséis. Indica 10 = +{bonus * 10}. Acumula.
           </li>
           <li>
             <strong>4.</strong> Auto-indicação não vale (a gente bloqueia). Link

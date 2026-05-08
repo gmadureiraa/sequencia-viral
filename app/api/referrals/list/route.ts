@@ -38,13 +38,16 @@ export async function GET(request: Request) {
     return Response.json({ error: "Falha ao buscar indicacoes" }, { status: 500 });
   }
 
+  // 2026-05-08: a coluna `reward_amount_cents` agora carrega o número de
+  // carrosséis bônus (não centavos). Mantemos o nome da coluna pra evitar
+  // migration destrutiva no DB; expomos como `rewardCarousels` na API.
   const items = (data ?? []).map((r) => ({
     id: r.id,
     email: maskEmail((r.referred_email as string) || ""),
     status: r.status,
     signupAt: r.signup_at,
     conversionAt: r.conversion_at,
-    rewardAmountCents: r.reward_amount_cents ?? 0,
+    rewardCarousels: (r.reward_amount_cents as number | null) ?? 0,
     rewardApplied: !!r.reward_applied,
     createdAt: r.created_at,
   }));

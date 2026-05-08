@@ -47,25 +47,45 @@ export async function POST(request: Request) {
         referralCode?: string;
       };
 
-    // Programa Indique-e-Ganhe — se o user tem ref code no localStorage e
-    // ja fez signup, registra a indicacao agora (tem referrer + referred user).
-    // Idempotente, nao duplica se ja existir. Nao bloqueia o checkout em
-    // qualquer falha — apenas loga.
+    // Programa Indique-e-Ganhe v2 (2026-05-08) — se o user tem ref code do
+    // localStorage:
+    //   1) Registra signup em `referrals` (idempotente, não duplica).
+    //   2) Cria/reusa cupom Stripe dinâmico atrelado ao referrer
+    //      (`ref_<code>`, 30% off once, metadata.referrer_user_id).
+    //   3) Aplica esse cupom como `discounts` do checkout — o cupom é
+    //      single-source: rastreia o referrer mesmo se o referralCode
+    //      sumir do localStorage até o webhook (cookies cleared, etc).
+    //
+    // Não bloqueia o checkout em falha — apenas loga e segue sem cupom
+    // (user pode pagar normalmente).
     const trimmedReferralCode = (referralCode || "").trim();
+    let referralStripeCouponId: string | null = null;
     if (trimmedReferralCode) {
       try {
         const admin = createServiceRoleSupabaseClient();
         if (admin) {
-          const { recordReferralSignup } = await import("@/lib/referrals");
+          const {
+            recordReferralSignup,
+            findReferrerByCode,
+            getOrCreateReferralStripeCoupon,
+          } = await import("@/lib/referrals");
           await recordReferralSignup({
             referralCode: trimmedReferralCode,
             referredEmail: user.email || email || "",
             referredUserId: user.id,
             supabaseAdmin: admin,
           });
+          // Resolve referrer pra criar cupom dinâmico atrelado a ele.
+          const referrer = await findReferrerByCode(trimmedReferralCode, admin);
+          if (referrer && referrer.userId !== user.id) {
+            referralStripeCouponId = await getOrCreateReferralStripeCoupon({
+              referrerUserId: referrer.userId,
+              referralCode: trimmedReferralCode,
+            });
+          }
         }
       } catch (err) {
-        console.warn("[checkout] recordReferralSignup falhou (nao bloqueia):", err);
+        console.warn("[checkout] referral setup falhou (nao bloqueia):", err);
       }
     }
 
@@ -203,7 +223,13 @@ export async function POST(request: Request) {
       success_url: `${ALLOWED_ORIGINS.includes(request.headers.get("origin") || "") ? request.headers.get("origin") : DEFAULT_ORIGIN}/app/settings?payment=success&plan=${planId}${includeBump ? "&bump=1" : ""}`,
       cancel_url: `${ALLOWED_ORIGINS.includes(request.headers.get("origin") || "") ? request.headers.get("origin") : DEFAULT_ORIGIN}/app/checkout?plan=${planId}&payment=cancelled`,
     };
-    if (appliedStripeCouponId) {
+    // Cupom referral (dinâmico, atrelado a referrer) tem precedência sobre
+    // cupom local digitado manualmente. Stripe `discounts` só aceita 1
+    // cupom — escolhemos o referral porque é o que rastreia o programa
+    // Indique-e-Ganhe (sem ele, referrer não ganha bônus de carrosséis).
+    if (referralStripeCouponId) {
+      sessionParams.discounts = [{ coupon: referralStripeCouponId }];
+    } else if (appliedStripeCouponId) {
       sessionParams.discounts = [{ coupon: appliedStripeCouponId }];
     } else {
       sessionParams.allow_promotion_codes = true;

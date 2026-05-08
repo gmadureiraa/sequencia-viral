@@ -176,20 +176,21 @@ export async function sendLastChanceCoupon(
 }
 
 /**
- * Programa Indique-e-Ganhe — referrer ganha credito quando o referido paga.
- * Disparado direto no webhook Stripe (instantaneo, nao depende de Automation).
+ * Programa Indique-e-Ganhe — referrer ganha N carrosséis bônus no usage_limit
+ * do mês corrente quando o referido paga primeira fatura. Disparado direto
+ * no webhook Stripe (instantaneo, nao depende de Automation).
  */
 export async function sendReferralConverted(
   user: Recipient,
-  args: { rewardCents: number; totalCreditCents: number }
+  args: { carouselsBonus: number; newUsageLimit: number | null }
 ) {
   return sendEmail({
     to: user.email,
-    subject: "Você acabou de ganhar R$ 25 em crédito",
+    subject: `Você acabou de ganhar +${args.carouselsBonus} carrosséis`,
     react: ReferralConvertedEmail({
       name: user.name,
-      rewardCents: args.rewardCents,
-      totalCreditCents: args.totalCreditCents,
+      carouselsBonus: args.carouselsBonus,
+      newUsageLimit: args.newUsageLimit,
       appUrl: APP_URL,
     }),
     tags: [PROJECT_TAG, ENV_TAG, lifecycleTag("referral-converted")],

@@ -86,6 +86,24 @@ export function useSaveDraft(userId: string | null, _session: Session | null) {
         displayFont: payload.displayFont,
         textScale: payload.textScale,
       });
+      // Fire-and-forget: dispara render server-side da thumb.
+      // Endpoint é idempotente — se thumbnail_url já existe, no-op.
+      // Só chama em INSERT (1ª vez) pra não re-renderizar a cada save.
+      if (inserted && _session) {
+        const accessToken = _session.access_token;
+        // setTimeout 100ms pra não competir com a HTTP response do salvamento.
+        setTimeout(() => {
+          fetch(`/api/carousels/${row.id}/thumb`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }).catch(() => {
+            /* silent — thumb é cosmético */
+          });
+        }, 100);
+      }
       return {
         id: row.id,
         title: row.title ?? payload.title,
@@ -97,7 +115,7 @@ export function useSaveDraft(userId: string | null, _session: Session | null) {
         _inserted: inserted,
       } as SavedCarousel & { _inserted: boolean };
     },
-    [userId]
+    [userId, _session]
   );
   return { saveNow };
 }

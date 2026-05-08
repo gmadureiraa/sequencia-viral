@@ -20,12 +20,15 @@ import {
   Save,
   Sparkles,
   Trash2,
+  Wand2,
   Webhook,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { jsonWithAuth } from "@/lib/api-auth-headers";
 import { RequireBusiness } from "@/components/app/zernio/require-business";
+import { MassGenerateModal } from "@/components/app/zernio/mass-generate-modal";
+import { MassGenerateJobs } from "@/components/app/zernio/mass-generate-jobs";
 
 type TriggerType = "schedule" | "rss" | "webhook";
 type CadenceType = "daily" | "every_n_days" | "weekly_dow" | "specific_dates";
@@ -103,7 +106,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 };
 
 export default function ZernioAutopilotPage() {
-  const { user, session, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading, profile } = useAuth();
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [loading, setLoading] = useState(true);
   const [runningNowFor, setRunningNowFor] = useState<string | null>(null);
@@ -135,6 +138,13 @@ export default function ZernioAutopilotPage() {
   const [loadingRunsFor, setLoadingRunsFor] = useState<string | null>(null);
   const [hasConnectedAccount, setHasConnectedAccount] = useState(true);
   const [suggestingThemes, setSuggestingThemes] = useState(false);
+
+  const [massGenOpen, setMassGenOpen] = useState(false);
+  const [massGenReloadKey, setMassGenReloadKey] = useState(0);
+  const remainingCarousels =
+    profile && typeof profile.usage_limit === "number"
+      ? Math.max(0, profile.usage_limit - (profile.usage_count ?? 0))
+      : undefined;
 
   const fetchTriggers = useCallback(async () => {
     if (!session) return;
@@ -570,15 +580,44 @@ export default function ZernioAutopilotPage() {
             levantar um dedo.
           </p>
         </div>
-        <button
-          onClick={fetchTriggers}
-          className="sv-btn sv-btn-outline"
-          disabled={loading}
-        >
-          <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
-          Atualizar
-        </button>
+        <div className="flex flex-wrap gap-2" style={{ flexShrink: 0 }}>
+          <button
+            onClick={() => setMassGenOpen(true)}
+            className="sv-btn sv-btn-ink"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            title="Gera vários carrosseis no fundo e (opcional) já agenda no calendário"
+          >
+            <Wand2 size={13} />
+            Gerar em massa
+          </button>
+          <button
+            onClick={fetchTriggers}
+            className="sv-btn sv-btn-outline"
+            disabled={loading}
+          >
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+            Atualizar
+          </button>
+        </div>
       </header>
+
+      {/* JOBS DE GERAÇÃO EM MASSA — em andamento + concluídos 24h */}
+      {session && (
+        <MassGenerateJobs key={massGenReloadKey} session={session} />
+      )}
+
+      {/* MODAL Gerar em Massa */}
+      {session && (
+        <MassGenerateModal
+          open={massGenOpen}
+          onClose={() => setMassGenOpen(false)}
+          session={session}
+          remainingCarousels={remainingCarousels}
+          onCreated={() => {
+            setMassGenReloadKey((k) => k + 1);
+          }}
+        />
+      )}
 
       {/* AVISO: sem conta conectada — Piloto Auto não consegue postar */}
       {!hasConnectedAccount && (

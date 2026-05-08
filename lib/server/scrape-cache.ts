@@ -21,8 +21,20 @@ import { createServiceRoleSupabaseClient } from "./auth";
 
 const BUCKET = "carousel-images";
 const PREFIX = "onboarding-scrape";
+/**
+ * Prefix novo (2026-05-08) pra cache de imagens externas usadas em slides
+ * (Serper / Google Images / Unsplash search). Separado de
+ * `onboarding-scrape/` pra facilitar TTL/cleanup futuro por categoria.
+ */
+const EXTERNAL_PREFIX = "external-cache";
 const MAX_IMG_BYTES = 8 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 8_000;
+/**
+ * Timeout mais curto pro fluxo síncrono de geração (/api/images, /api/generate).
+ * Se a imagem externa não baixar em 5s, devolvemos a URL original e logamos —
+ * vale mais entregar o slide com URL volátil do que travar a geração inteira.
+ */
+const EXTERNAL_FETCH_TIMEOUT_MS = 5_000;
 const CONCURRENCY = 6;
 
 function hashUrl(url: string): string {
@@ -38,7 +50,10 @@ function extFromContentType(ct: string): string {
   return "jpg";
 }
 
-async function downloadImage(url: string): Promise<{
+async function downloadImage(
+  url: string,
+  timeoutMs: number = FETCH_TIMEOUT_MS
+): Promise<{
   bytes: Uint8Array;
   contentType: string;
 } | null> {
@@ -46,7 +61,7 @@ async function downloadImage(url: string): Promise<{
     // SEM User-Agent nem Referer: KAI (projeto irmao que funciona) faz fetch
     // direto sem headers. Referer instagram.com ativa hotlink-block do IG CDN.
     const res = await fetch(url, {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       redirect: "follow",
     });
     if (!res.ok) {
@@ -72,13 +87,15 @@ async function downloadImage(url: string): Promise<{
 async function uploadToBucket(
   supabase: SupabaseClient,
   userId: string,
-  url: string
+  url: string,
+  options: { prefix?: string; timeoutMs?: number } = {}
 ): Promise<string | null> {
-  const downloaded = await downloadImage(url);
+  const prefix = options.prefix ?? PREFIX;
+  const downloaded = await downloadImage(url, options.timeoutMs);
   if (!downloaded) return null;
   const hash = hashUrl(url);
   const ext = extFromContentType(downloaded.contentType);
-  const path = `${PREFIX}/${userId}/${hash}.${ext}`;
+  const path = `${prefix}/${userId}/${hash}.${ext}`;
 
   const { error } = await supabase.storage
     .from(BUCKET)
@@ -152,5 +169,88 @@ export async function cacheImages(
     out.set(u, results[idx] ?? null);
   });
 
+  return out;
+}
+
+/**
+ * Cacheia UMA imagem externa (Serper/Google Images/Unsplash search/etc) pro
+ * bucket `carousel-images/external-cache/{userId}/{hash}.ext`.
+ *
+ * Por que (2026-05-08):
+ *  - Serper devolve URLs de Google Images proxy que expiram em horas/dias
+ *    (assinatura embutida na URL).
+ *  - Quando o user gera o carrossel hoje e tenta baixar amanhã, o slide vem
+ *    com `imageFailed=true` ou silently broken (relato Sam Altman 08/05).
+ *  - Cachear no Supabase resolve: URL pública estável + sem dependência do
+ *    proxy `/api/img-proxy` (que também expira pq a URL upstream expira).
+ *
+ * Trade-offs:
+ *  - +500ms-2s no /api/images (download + upload) — mitigado por timeout 5s.
+ *  - Storage: ~150-400kb por imagem cacheada. ~5MB por carrossel de 10 slides.
+ *  - Skip silencioso se SUPABASE_SERVICE_ROLE_KEY ausente (dev local).
+ *
+ * Idempotente: hash determinístico da URL → upsert. Mesma URL → mesma row.
+ *
+ * Retorna a URL pública do Supabase OU null em caso de falha
+ * (caller deve usar a URL externa como fallback).
+ */
+export async function cacheExternalImage(
+  userId: string,
+  url: string,
+  options: { timeoutMs?: number } = {}
+): Promise<string | null> {
+  if (!url) return null;
+  // Já é uma URL do nosso bucket? Não recachear (evita loop e gasto inútil).
+  if (url.includes("/storage/v1/object/public/carousel-images/")) {
+    return url;
+  }
+  // data: URLs não fazem sentido cachear.
+  if (url.startsWith("data:")) return null;
+
+  const supabase = createServiceRoleSupabaseClient();
+  if (!supabase) {
+    console.warn(
+      "[scrape-cache] cacheExternalImage: no service role — keeping external URL"
+    );
+    return null;
+  }
+
+  return uploadToBucket(supabase, userId, url, {
+    prefix: EXTERNAL_PREFIX,
+    timeoutMs: options.timeoutMs ?? EXTERNAL_FETCH_TIMEOUT_MS,
+  });
+}
+
+/**
+ * Versão batch — cacheia várias URLs externas em paralelo (mesmo prefix
+ * `external-cache`, mesmo timeout curto). Retorna mapa URL externa →
+ * URL Supabase (ou null se falhou).
+ */
+export async function cacheExternalImages(
+  userId: string,
+  urls: string[],
+  options: { timeoutMs?: number } = {}
+): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  const unique = Array.from(new Set(urls.filter(Boolean)));
+  if (unique.length === 0) return out;
+
+  const supabase = createServiceRoleSupabaseClient();
+  if (!supabase) {
+    console.warn(
+      "[scrape-cache] cacheExternalImages: no service role — skipping"
+    );
+    return out;
+  }
+
+  const results = await runWithConcurrency(unique, (url) =>
+    uploadToBucket(supabase, userId, url, {
+      prefix: EXTERNAL_PREFIX,
+      timeoutMs: options.timeoutMs ?? EXTERNAL_FETCH_TIMEOUT_MS,
+    })
+  );
+  unique.forEach((u, idx) => {
+    out.set(u, results[idx] ?? null);
+  });
   return out;
 }

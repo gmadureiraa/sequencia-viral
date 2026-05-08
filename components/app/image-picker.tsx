@@ -176,12 +176,41 @@ export function ImagePicker({
     };
   }, [onClose]);
 
-  function confirmPick() {
-    if (!selected) {
+  const [confirming, setConfirming] = useState(false);
+  async function confirmPick(urlOverride?: string) {
+    const target = urlOverride ?? selected;
+    if (!target) {
       toast.error("Clique numa imagem primeiro.");
       return;
     }
-    onPick(selected);
+    if (confirming) return;
+    setConfirming(true);
+    // Cacheia a URL externa (Serper/Google/Unsplash) pro bucket Supabase
+    // antes de devolver pro slide. URLs Serper expiram em horas — sem isso,
+    // o download zip e o publish IG quebram (bug Sam Altman 08/05/2026).
+    // Se cache falhar, mantemos URL original (não bloqueia escolha).
+    let finalUrl = target;
+    try {
+      const res = await fetch("/api/images/cache", {
+        method: "POST",
+        headers: jsonWithAuth(session),
+        body: JSON.stringify({ url: target }),
+      });
+      if (res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { url?: string; cached?: boolean }
+          | null;
+        if (body?.url) finalUrl = body.url;
+      }
+    } catch (err) {
+      console.warn(
+        "[ImagePicker] cache call failed, usando URL externa:",
+        err instanceof Error ? err.message : err
+      );
+    } finally {
+      setConfirming(false);
+    }
+    onPick(finalUrl);
   }
 
   return (
@@ -344,7 +373,11 @@ export function ImagePicker({
                     key={`${img.url}-${i}`}
                     type="button"
                     onClick={() => setSelected(img.url)}
-                    onDoubleClick={() => onPick(img.url)}
+                    onDoubleClick={() => {
+                      // Mesmo fluxo do botão "Usar essa" — passa pelo cache.
+                      setSelected(img.url);
+                      void confirmPick(img.url);
+                    }}
                     style={{
                       position: "relative",
                       aspectRatio: "1/1",
@@ -473,16 +506,26 @@ export function ImagePicker({
               </div>
               <button
                 type="button"
-                onClick={confirmPick}
-                disabled={!selected}
+                onClick={() => void confirmPick()}
+                disabled={!selected || confirming}
                 className="sv-btn sv-btn-primary"
                 style={{
                   padding: "10px 18px",
                   fontSize: 11.5,
-                  opacity: !selected ? 0.5 : 1,
+                  opacity: !selected || confirming ? 0.5 : 1,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
                 }}
               >
-                Usar essa →
+                {confirming ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Salvando…
+                  </>
+                ) : (
+                  "Usar essa →"
+                )}
               </button>
             </div>
           </>

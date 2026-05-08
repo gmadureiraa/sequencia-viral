@@ -30,6 +30,10 @@ import {
   unsplashSearch,
   unsplashTriggerDownload,
 } from "@/lib/unsplash";
+import {
+  cacheExternalImage,
+  cacheExternalImages,
+} from "@/lib/server/scrape-cache";
 
 export const maxDuration = 60;
 
@@ -499,6 +503,17 @@ export async function POST(request: Request) {
             // Fire-and-forget — não bloqueia resposta.
             void unsplashTriggerDownload(pick.downloadLocation);
 
+            // Cache no Supabase: Unsplash CDN é estável, mas cachear garante
+            // que o zip de download e o IG publish nao falhem se a Unsplash
+            // estiver lenta/fora. Fallback pra URL original se falhar.
+            const cachedUrl = await cacheExternalImage(user.id, pick.url);
+            const finalUrl = cachedUrl ?? pick.url;
+            if (!cachedUrl) {
+              console.warn(
+                `[images] unsplash slide=${slideNumber ?? "?"} cache miss — usando URL externa pick=${pick.url.slice(0, 80)}`
+              );
+            }
+
             // Registra no log de geração (custo 0, provider unsplash) pra
             // admin enxergar a fonte da imagem do slide.
             void recordGeneration({
@@ -518,19 +533,19 @@ export async function POST(request: Request) {
                 supabaseForCache,
                 cacheQueryKey,
                 "stock",
-                pick.url,
+                finalUrl,
                 user.id
               );
             }
 
             console.log(
-              `[images] OK slide=${slideNumber ?? "?"} source=unsplash query="${stockQ.slice(0, 60)}" author=${pick.author}`
+              `[images] OK slide=${slideNumber ?? "?"} source=unsplash query="${stockQ.slice(0, 60)}" author=${pick.author} cached=${!!cachedUrl}`
             );
 
             return Response.json({
               images: [
                 {
-                  url: pick.url,
+                  url: finalUrl,
                   thumbnailUrl: pick.thumbUrl,
                   title: pick.description || stockQ,
                   source: `Unsplash — ${pick.author}`,
@@ -1326,12 +1341,33 @@ export async function POST(request: Request) {
             console.warn(
               `[images] FALHA slide=${slideNumber ?? "?"} reason=serper-all-broken raw=${rawImages.length} query=${searchQuery.slice(0, 80)}`
             );
-          } else {
-            console.log(
-              `[images] OK slide=${slideNumber ?? "?"} source=serper raw=${rawImages.length} valid=${validImages.length}`
-            );
+            return Response.json({ images: validImages });
           }
-          return Response.json({ images: validImages });
+
+          // Cache externo: Serper devolve URLs do Google Images proxy que
+          // expiram em horas/dias. Se nao cachear, slide vira broken image
+          // no zip de download ou no IG publish. Bug 08/05/2026 (Sam Altman).
+          // Falha → mantém URL original (logado em warn). Paralelo c/ timeout.
+          const externalUrls = validImages.map(
+            (img: { url: string }) => img.url
+          );
+          const cacheMap = await cacheExternalImages(user.id, externalUrls);
+          let cachedCount = 0;
+          const cachedImages = validImages.map(
+            (img: { url: string; thumbnailUrl: string }) => {
+              const cached = cacheMap.get(img.url);
+              if (cached) {
+                cachedCount++;
+                return { ...img, url: cached, thumbnailUrl: cached };
+              }
+              return img;
+            }
+          );
+
+          console.log(
+            `[images] OK slide=${slideNumber ?? "?"} source=serper raw=${rawImages.length} valid=${validImages.length} cached=${cachedCount}`
+          );
+          return Response.json({ images: cachedImages });
         }
         console.warn(
           `[images] FALHA slide=${slideNumber ?? "?"} reason=serper-non-ok status=${resp.status}`

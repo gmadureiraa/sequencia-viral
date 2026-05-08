@@ -256,6 +256,16 @@ export async function processTrigger(
     return { status: "render_failed", detail, runId };
   }
 
+  // 7.5. Thumb pra biblioteca: slide capa. Browser resize via CSS.
+  if (mediaUrls.length > 0) {
+    sb.from("carousels")
+      .update({ thumbnail_url: mediaUrls[0] })
+      .eq("id", carouselId)
+      .then(({ error }: { error: { message: string } | null }) => {
+        if (error) console.warn("[autopilot] thumb update falhou:", error.message);
+      });
+  }
+
   // 8. Caption + agendamento
   const content = buildCaption(variation);
   const isPublishNow =

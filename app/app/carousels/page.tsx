@@ -689,23 +689,44 @@ function CarouselCard({
         outlineOffset: selected ? -3 : undefined,
       }}
     >
-      {/* Card sólido colorido — render instantâneo, sem pull de slide data */}
+      {/* Cover: img da capa quando thumbnail_url existe; fallback bloco colorido.
+       *  Imagem é 1080x1350 (slide 0 renderizado server-side), browser resize
+       *  via CSS. Lazy loading carrega só os visíveis. */}
       <div
         className="relative aspect-[4/5] w-full overflow-hidden"
         style={{
           borderBottom: "1.5px solid var(--sv-ink)",
-          background: tilePalette.bg,
+          background: carousel.thumbnailUrl ? "var(--sv-paper, #faf7f2)" : tilePalette.bg,
           color: tilePalette.fg,
-          padding: "20px 22px",
+          padding: carousel.thumbnailUrl ? 0 : "20px 22px",
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          backgroundImage: tilePalette.dotted
+          backgroundImage: !carousel.thumbnailUrl && tilePalette.dotted
             ? "radial-gradient(circle at 2px 2px, var(--sv-ink) 1px, transparent 1.5px)"
             : undefined,
-          backgroundSize: tilePalette.dotted ? "10px 10px" : undefined,
+          backgroundSize: !carousel.thumbnailUrl && tilePalette.dotted ? "10px 10px" : undefined,
         }}
       >
+        {/* Thumb da capa quando existe — imagem real do slide 0 */}
+        {carousel.thumbnailUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={carousel.thumbnailUrl}
+            alt={title}
+            loading="lazy"
+            decoding="async"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              zIndex: 0,
+            }}
+          />
+        )}
+
         {/* Select checkbox */}
         <button
           type="button"
@@ -726,55 +747,79 @@ function CarouselCard({
           {selected ? <CheckSquare size={13} /> : <Square size={13} />}
         </button>
 
-        {/* Top eyebrow */}
-        <div
-          className="uppercase"
-          style={{
-            fontFamily: "var(--sv-mono)",
-            fontSize: 9.5,
-            letterSpacing: "0.2em",
-            fontWeight: 700,
-            color: tilePalette.fg,
-            alignSelf: "flex-end",
-          }}
-        >
-          ● {tmpl}
-        </div>
+        {/* Sem thumb: renderiza placeholder gráfico (mesma coisa de antes) */}
+        {!carousel.thumbnailUrl && (
+          <>
+            {/* Top eyebrow */}
+            <div
+              className="uppercase"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: 9.5,
+                letterSpacing: "0.2em",
+                fontWeight: 700,
+                color: tilePalette.fg,
+                alignSelf: "flex-end",
+              }}
+            >
+              ● {tmpl}
+            </div>
 
-        {/* Título grande */}
-        <h3
-          style={{
-            fontFamily: "var(--sv-display)",
-            fontStyle: "italic",
-            fontSize: "clamp(18px, 2.4vw, 24px)",
-            lineHeight: 1.15,
-            letterSpacing: "-0.01em",
-            margin: 0,
-            overflow: "hidden",
-            display: "-webkit-box",
-            WebkitLineClamp: 3,
-            WebkitBoxOrient: "vertical",
-            color: tilePalette.fg,
-          }}
-        >
-          {title}
-        </h3>
+            {/* Título grande */}
+            <h3
+              style={{
+                fontFamily: "var(--sv-display)",
+                fontStyle: "italic",
+                fontSize: "clamp(18px, 2.4vw, 24px)",
+                lineHeight: 1.15,
+                letterSpacing: "-0.01em",
+                margin: 0,
+                overflow: "hidden",
+                display: "-webkit-box",
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: "vertical",
+                color: tilePalette.fg,
+              }}
+            >
+              {title}
+            </h3>
 
-        {/* Bottom: ed + arrow */}
-        <div
-          className="uppercase flex items-center justify-between"
-          style={{
-            fontFamily: "var(--sv-mono)",
-            fontSize: 9.5,
-            letterSpacing: "0.2em",
-            fontWeight: 700,
-            color: tilePalette.fg,
-            opacity: 0.85,
-          }}
-        >
-          <span>{String(index + 1).padStart(2, "0")}/{tmpl}</span>
-          <span>→</span>
-        </div>
+            {/* Bottom: ed + arrow */}
+            <div
+              className="uppercase flex items-center justify-between"
+              style={{
+                fontFamily: "var(--sv-mono)",
+                fontSize: 9.5,
+                letterSpacing: "0.2em",
+                fontWeight: 700,
+                color: tilePalette.fg,
+                opacity: 0.85,
+              }}
+            >
+              <span>{String(index + 1).padStart(2, "0")}/{tmpl}</span>
+              <span>→</span>
+            </div>
+          </>
+        )}
+
+        {/* Com thumb: badge mínima de template no canto superior direito */}
+        {carousel.thumbnailUrl && (
+          <div
+            className="absolute right-3 top-3 z-10 uppercase"
+            style={{
+              fontFamily: "var(--sv-mono)",
+              fontSize: 9,
+              letterSpacing: "0.18em",
+              fontWeight: 700,
+              padding: "2px 6px",
+              background: "var(--sv-paper, #faf7f2)",
+              border: "1.5px solid var(--sv-ink)",
+              color: "var(--sv-ink)",
+            }}
+          >
+            ● {tmpl}
+          </div>
+        )}
 
         {/* Hover toolbar */}
         <div

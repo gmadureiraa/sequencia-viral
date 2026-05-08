@@ -163,6 +163,17 @@ export async function processMassGenerationItem(
     return await failItem(itemId, `render: ${msg}`);
   }
 
+  // 7.5. Thumb: usa mediaUrls[0] (slide capa). Browser cuida do resize via CSS
+  // na lista de carrosseis. Fire-and-forget — não atrapalha flow se falhar.
+  if (mediaUrls.length > 0) {
+    sb.from("carousels")
+      .update({ thumbnail_url: mediaUrls[0] })
+      .eq("id", carouselId)
+      .then(({ error }: { error: { message: string } | null }) => {
+        if (error) console.warn("[mass-gen] thumb update falhou:", error.message);
+      });
+  }
+
   // 8. Schedule (se autoSchedule) ou draft
   let scheduledPostId: string | null = null;
   const targetPlatforms = (config.targetPlatforms || ["instagram", "linkedin"]).filter((p) =>

@@ -492,10 +492,11 @@ export async function POST(request: Request) {
         .eq("id", user.id)
         .single();
 
-      // Pre-check planCap. Cap automático por plano — fonte de verdade é
-      // `lib/pricing.ts`. Se o usage_limit no banco vier desalinhado (user
-      // legado com 9999, ou cap antigo 100/300 vs cap novo 30), aplicamos
-      // o min(dbLimit, planCap) por cima da RPC atômica.
+      // Pre-check planCap. Cap base vem de `lib/pricing.ts`, mas usage_limit
+      // do DB tem prioridade quando for MAIOR (grandfathering, admin override,
+      // bonus de referral somam aqui). Math.max preserva intenção explícita
+      // do admin/sistema de bonus. Se dbLimit < planCap (usuário com cap
+      // anormalmente baixo), planCap protege como floor.
       if (prof) {
         const dbLimit = prof.usage_limit ?? 5;
         const planCap =
@@ -504,7 +505,7 @@ export async function POST(request: Request) {
             : prof.plan === "pro"
               ? PLANS.pro.carouselsPerMonth
               : FREE_PLAN_USAGE_LIMIT;
-        const effectiveLimit = Math.min(dbLimit, planCap);
+        const effectiveLimit = Math.max(dbLimit, planCap);
         const count = prof.usage_count ?? 0;
         if (count >= effectiveLimit) {
           return Response.json(

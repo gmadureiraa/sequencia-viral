@@ -12,16 +12,19 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 
 /**
- * Decodifica payload JWT sem validar assinatura — pra gate de UX no edge,
- * onde validação completa via Supabase fetch adicionaria latência em todo
- * request. Backend continua validando JWT real em cada /api/* via
- * lib/server/auth.ts::requireAuthenticatedUser (faz `auth.getUser(token)`
- * server-side, rejeita revogados/banidos).
+ * @deprecated INSEGURO — não verifica assinatura. Use
+ * `verifyJwtAndExtractEmail` em qualquer caminho que tome decisão de
+ * autorização. Mantido apenas para diagnóstico em
+ * `/api/zernio/debug-auth` (onde o objetivo é justamente inspecionar o
+ * payload bruto) e para testes legados.
  *
- * Tradeoff explícito: edge gate é defesa em profundidade (não principal),
- * fácil de bypassar editando JWT, mas backend pega tudo. Vale pelo zero
- * latência adicional + UX (página `/app/admin/*` nunca renderiza pra
- * não-admin nem mesmo brevemente).
+ * Backend continua validando JWT real em cada /api/* via
+ * `lib/server/auth.ts::requireAuthenticatedUser` (chama
+ * `auth.getUser(token)` server-side, que rejeita revogados/banidos).
+ *
+ * Decodifica payload JWT sem validar assinatura. Atacante consegue
+ * forjar claims (email, exp) trivialmente — qualquer gate baseado nessa
+ * função é facilmente bypassável.
  */
 export function decodeJwtEmail(token: string): string | null {
   try {
@@ -41,6 +44,94 @@ export function decodeJwtEmail(token: string): string | null {
 }
 
 /**
+ * Converte string base64url em Uint8Array. Edge runtime tem `atob`
+ * mas não `Buffer`.
+ */
+function base64UrlDecodeToBytes(input: string): Uint8Array {
+  const padded = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padLen = (4 - (padded.length % 4)) % 4;
+  const binary = atob(padded + "=".repeat(padLen));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+const TEXT_ENCODER = new TextEncoder();
+
+/**
+ * Verifica assinatura HMAC-SHA256 do JWT contra SUPABASE_JWT_SECRET e
+ * extrai o email do payload. Supabase emite tokens HS256 por padrão —
+ * o secret é o mesmo que aparece em Settings → API → JWT Secret.
+ *
+ * Usa Web Crypto API (nativo no edge runtime) — sem dependências.
+ *
+ * Retorna `null` em qualquer falha (secret ausente, formato inválido,
+ * algoritmo inesperado, signature errada, expirado, sem email). Logging
+ * é silencioso de propósito: se a verificação falhar em prod, o usuário
+ * apenas não passa pelo gate — e o backend continua sendo a fonte da
+ * verdade via `requireAuthenticatedUser`.
+ */
+export async function verifyJwtAndExtractEmail(
+  token: string,
+  secret: string
+): Promise<string | null> {
+  if (!secret) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+
+    const [headerB64, payloadB64, signatureB64] = parts;
+
+    // Header: confere alg=HS256 (defesa contra "alg=none" downgrade).
+    const headerJson = new TextDecoder().decode(
+      base64UrlDecodeToBytes(headerB64)
+    );
+    const header = JSON.parse(headerJson) as { alg?: string; typ?: string };
+    if (header.alg !== "HS256") return null;
+
+    // Payload: extrai email + exp ANTES de verificar pra fail-fast em
+    // tokens triviais (sem email/expirados). Mas a decisão final só
+    // acontece após a verificação da signature abaixo.
+    const payloadJson = new TextDecoder().decode(
+      base64UrlDecodeToBytes(payloadB64)
+    );
+    const payload = JSON.parse(payloadJson) as {
+      email?: string;
+      exp?: number;
+    };
+    if (typeof payload.email !== "string") return null;
+    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
+
+    // Verifica HMAC-SHA256 sobre `<headerB64>.<payloadB64>` usando o
+    // secret raw (Supabase armazena como string UTF-8, não base64).
+    const key = await crypto.subtle.importKey(
+      "raw",
+      TEXT_ENCODER.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+    const data = TEXT_ENCODER.encode(`${headerB64}.${payloadB64}`);
+    const signatureBytes = base64UrlDecodeToBytes(signatureB64);
+    // `crypto.subtle.verify` espera BufferSource sobre ArrayBuffer.
+    // Os bytes vêm de `new Uint8Array(len)` em
+    // `base64UrlDecodeToBytes`, então é seguro tratar como ArrayBuffer.
+    // O cast contorna a inferência overly-broad do TS pra o type union
+    // ArrayBuffer | SharedArrayBuffer.
+    const sigBuffer = signatureBytes.buffer.slice(
+      signatureBytes.byteOffset,
+      signatureBytes.byteOffset + signatureBytes.byteLength
+    ) as ArrayBuffer;
+    const ok = await crypto.subtle.verify("HMAC", key, sigBuffer, data);
+    if (!ok) return null;
+
+    return payload.email.toLowerCase().trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Lê cookie de sessão Supabase. Formatos suportados:
  *  - `sb-<projectRef>-auth-token` único (sessão pequena)
  *  - `sb-<projectRef>-auth-token.0`, `.1`, `.2`... (chunked quando JWT
@@ -52,8 +143,18 @@ export function decodeJwtEmail(token: string): string | null {
  *
  * Implementação espelha @supabase/ssr/dist/main/utils.js::combineChunks
  * pra paridade com o storage do Supabase JS no cliente.
+ *
+ * **Verificação de assinatura:** quando `SUPABASE_JWT_SECRET` está
+ * disponível no ambiente, valida o HMAC do token via
+ * `verifyJwtAndExtractEmail`. Sem o secret (ex: edge runtime sem env
+ * propagada), cai pra `decodeJwtEmail` (insecure) com warning — usado
+ * apenas pra debug. Hoje essa função é exercida somente em
+ * `/api/zernio/debug-auth` (admin-gated) e nos testes; o gate edge
+ * `/app/admin/*` está desabilitado (ver comentário em `proxy()`).
  */
-export function getSupabaseSessionEmail(request: NextRequest): string | null {
+export async function getSupabaseSessionEmail(
+  request: NextRequest
+): Promise<string | null> {
   // 1. Agrupa cookies sb-*-auth-token (e seus chunks .0/.1/...) por base name.
   // Match: cookie.name começa com "sb-" e contém "-auth-token", com ou sem
   // sufixo ".<digit>". Captura: `base` = parte antes de qualquer sufixo `.N`.
@@ -102,6 +203,25 @@ export function getSupabaseSessionEmail(request: NextRequest): string | null {
         ? parsed[0]
         : parsed?.access_token;
       if (!accessToken) continue;
+
+      // Preferência: verificar HMAC quando `SUPABASE_JWT_SECRET` existe.
+      // Atacante que forge claims (ex: troca email pra admin) não passa
+      // sem o secret. Sem secret no ambiente, fallback insecure roda só
+      // pra não quebrar dev local — mas com warning explícito.
+      const secret = process.env.SUPABASE_JWT_SECRET;
+      if (secret) {
+        const email = await verifyJwtAndExtractEmail(accessToken, secret);
+        if (email) return email;
+        continue;
+      }
+
+      // Fallback inseguro (sem secret no ambiente).
+      if (process.env.NODE_ENV === "production") {
+        console.warn(
+          "[proxy] SUPABASE_JWT_SECRET ausente — JWT não verificado " +
+            "(claims forjáveis). Setar env var em prod pra fechar gap."
+        );
+      }
       const email = decodeJwtEmail(accessToken);
       if (email) return email;
     } catch {

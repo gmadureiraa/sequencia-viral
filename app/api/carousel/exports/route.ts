@@ -7,8 +7,12 @@ export const maxDuration = 60;
 const MAX_BYTES_PER_FILE = 15 * 1024 * 1024;
 const MAX_PNG_SLIDES = 24;
 
+// P2-6 audit 2026-05-08: regex anterior `[1-5]` no nibble de versão
+// rejeitava UUIDv6/v7 que Postgres pode passar a gerar. Aceita qualquer
+// versão hex válida agora — o ownership check em `carousels.id = ? AND
+// user_id = ?` é a defesa real contra IDOR.
 function isUuid(id: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
 /**

@@ -66,7 +66,7 @@ export async function GET(request: Request) {
     cookies: { getAll: () => allCookies },
   } as Parameters<typeof getSupabaseSessionEmail>[0];
 
-  const email = getSupabaseSessionEmail(fakeReq);
+  const email = await getSupabaseSessionEmail(fakeReq);
   const isAdmin = email !== null && ADMIN_EMAILS.map((e) => e.toLowerCase()).includes(email);
 
   // Diagnóstico extra: tenta extrair JWT bruto pra debug se falhou

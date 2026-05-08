@@ -8,6 +8,15 @@ import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
 //
 // Uso primário: auto-suppress de hard bounce + complained (proteção de reputation).
 // Logging em DB é best-effort (tabela email_events opcional).
+//
+// Defesas anti-replay (P2-3 audit 2026-05-08):
+//  1. Janela de tolerância de 5min em `svix-timestamp` — request com timestamp
+//     fora da janela é rejeitado com 400 (mesmo se o HMAC for válido).
+//  2. Dedup persistente via `webhook_events_processed (provider, event_id)`.
+//     Replay com mesmo `svix-id` retorna 200 idempotente sem reprocessar
+//     (proteção contra retry storm + atacante que replay dentro da janela).
+
+const TIMESTAMP_TOLERANCE_SEC = 5 * 60; // 5 minutos
 
 type ResendEvent = {
   type: string;
@@ -99,6 +108,47 @@ export async function POST(request: Request) {
 
   if (secret && !verifySvixSignature(body, request.headers, secret)) {
     return Response.json({ error: "invalid signature" }, { status: 400 });
+  }
+
+  // Replay window: rejeitar timestamps muito antigos/futuros mesmo com HMAC
+  // válido. Sem isso, atacante captura request (MITM, log leak) e replay
+  // infinito porque o HMAC continua válido.
+  const tsHeader = request.headers.get("svix-timestamp");
+  if (tsHeader) {
+    const ts = Number(tsHeader);
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (
+      !Number.isFinite(ts) ||
+      Math.abs(nowSec - ts) > TIMESTAMP_TOLERANCE_SEC
+    ) {
+      return Response.json(
+        { error: "timestamp out of window" },
+        { status: 400 }
+      );
+    }
+  } else if (secret) {
+    // Secret configurado implica Svix headers presentes. Header ausente
+    // num webhook validado = request anômala.
+    return Response.json(
+      { error: "missing svix-timestamp" },
+      { status: 400 }
+    );
+  }
+
+  // Dedup: mesmo `svix-id` já processado vira no-op idempotente.
+  const eventId = request.headers.get("svix-id");
+  if (eventId) {
+    const adminEarly = createServiceRoleSupabaseClient();
+    if (adminEarly) {
+      const { error: insErr } = await adminEarly
+        .from("webhook_events_processed")
+        .insert({ provider: "resend", event_id: eventId });
+      if (insErr && insErr.code === "23505") {
+        // duplicate key → replay
+        return Response.json({ received: true, deduped: true });
+      }
+      // outros erros (tabela ausente em ambiente novo) → seguem
+    }
   }
 
   let event: ResendEvent;

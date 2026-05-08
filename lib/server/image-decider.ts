@@ -32,6 +32,20 @@ import {
 
 const TIMEOUT_MS = 12_000;
 
+/**
+ * 2026-05-08 — Por padrão TODO slide é gerado por IA (Gemini Flash Image /
+ * Imagen 4). Search/Stock continuam disponíveis no image-picker quando o
+ * user troca manualmente um slide pós-geração — só não são o caminho
+ * default do pipeline. Motivação: consistência visual cinematográfica
+ * em todo carrossel, sem depender de qualidade variável do estoque.
+ *
+ * Toggle via env `IMAGE_DECIDER_MODE`:
+ *   - "generate-only" (default) → sempre gera com IA
+ *   - "auto" → decider clássico (search | stock | generate)
+ */
+const DECIDER_MODE: "generate-only" | "auto" =
+  process.env.IMAGE_DECIDER_MODE === "auto" ? "auto" : "generate-only";
+
 export interface StructuredImagePrompt {
   /** Sujeito principal da cena. Ex: "founder sitting alone at laptop at dusk". */
   subject: string;
@@ -114,7 +128,10 @@ export async function decideSlideImage(
     return fallbackDecision(input, "GEMINI_API_KEY missing");
   }
 
-  const prompt = buildDeciderPrompt(input);
+  const prompt =
+    DECIDER_MODE === "generate-only"
+      ? buildGenerateOnlyPrompt(input)
+      : buildDeciderPrompt(input);
 
   try {
     const ai = new GoogleGenAI({ apiKey: geminiKey });
@@ -293,6 +310,105 @@ Formato de resposta (JSON puro):
 }`;
 }
 
+/**
+ * Versão enxuta do prompt — usada quando DECIDER_MODE="generate-only".
+ * Pula a árvore de decisão (search/stock/generate) e foca em produzir
+ * um StructuredImagePrompt cinematográfico de alta qualidade pra cada
+ * slide. Reduz tokens (~40%) e melhora consistência visual.
+ */
+function buildGenerateOnlyPrompt(input: ImageDeciderInput): string {
+  const {
+    heading,
+    body,
+    slideNumber,
+    totalSlides,
+    isCover,
+    niche,
+    tone,
+    brandAesthetic,
+    facts,
+    imageRules,
+    designTemplate,
+  } = input;
+
+  const tmplMeta = designTemplate
+    ? getDesignTemplateMeta(designTemplate)
+    : null;
+  const templateBlock = tmplMeta
+    ? `
+## TEMPLATE VISUAL ESCOLHIDO (REGRA INVIOLÁVEL — não improvise)
+- Template: "${tmplMeta.name}" (id: ${tmplMeta.id})
+- Style guide: ${tmplMeta.styleGuidePrompt}
+- Modifier estético OBRIGATÓRIO em todas as imagens deste carrossel: "${tmplMeta.slideAestheticModifier}"
+- Paleta PREFERIDA (use só essas cores no campo palette): ${tmplMeta.preferPalette.join(", ")}
+- Paleta PROIBIDA (NUNCA use, conflita com accent): ${tmplMeta.avoidPalette.join(", ") || "(nenhuma)"}`
+    : "";
+
+  const factsBlock =
+    facts && (facts.entities.length || facts.dataPoints.length || facts.summary.length)
+      ? `
+FACTS DO SOURCE:
+- Entidades: ${facts.entities.slice(0, 10).join(", ") || "(nenhuma)"}
+- Data points: ${facts.dataPoints.slice(0, 8).join(", ") || "(nenhum)"}
+- Resumo: ${facts.summary.slice(0, 3).join(" | ") || "(vazio)"}`
+      : "";
+
+  const imageRulesBlock =
+    Array.isArray(imageRules) && imageRules.length > 0
+      ? `
+## DIRETRIZES DO USER PARA IMAGENS (peso ALTO):
+${imageRules.slice(0, 10).map((r, i) => `${i + 1}. ${r}`).join("\n")}`
+      : "";
+
+  const coverHint = isCover
+    ? "ESTE É A CAPA (slide 1). MAXIMUM DRAMA, scroll-stopping em 0.3s."
+    : "Slide de body — coerente com a capa, sem competir com ela.";
+
+  return `Você é um DIRETOR DE ARTE produzindo a imagem de um slide de carrossel Instagram.
+Sua tarefa: gerar um StructuredImagePrompt cinematográfico e específico baseado no conteúdo do slide.
+Toda imagem é gerada por IA (Imagen 4 / Gemini Flash Image) — não há busca em estoque.
+
+CONTEXTO DO SLIDE:
+- Slide ${slideNumber} de ${totalSlides}${isCover ? " (CAPA)" : ""}
+- Heading: "${heading}"
+- Body: "${body.slice(0, 500)}"
+${niche ? `- Nicho: ${niche}` : ""}
+${tone ? `- Tom: ${tone}` : ""}
+${brandAesthetic ? `- Estética da marca: ${brandAesthetic.slice(0, 300)}` : ""}
+${factsBlock}
+${imageRulesBlock}
+${templateBlock}
+
+DIRETRIZ: ${coverHint}
+
+REGRAS DE OUTPUT:
+
+mode: SEMPRE "generate" (modo único ativo).
+
+generatePrompt — objeto JSON com TODOS estes campos preenchidos de forma rica e cinematográfica:
+- subject: quem/o quê aparece + ação/estado. 1 frase em inglês, concreta. Use entidades nomeadas (NER) quando o slide as cita. Ex: "founder sitting alone at laptop at dusk, hand on forehead" / "Vitalik Buterin profile silhouette against Ethereum-themed background".
+- composition: regras de enquadramento. Ex: "rule of thirds, subject in upper-left, bottom third simpler for text overlay, negative space right side".
+- lighting: iluminação intencional. Ex: "blue hour + amber desk lamp practicals, rim light from window, hard shadow on wall".
+- mood: emoção/atmosfera. Ex: "cinematic thriller, uneasy tension, introspective".
+- palette: array de 3-5 cores em inglês.${tmplMeta ? ` USE APENAS cores da preferida acima.` : ""} Ex: ["navy blue", "amber", "charcoal", "cream"].
+- camera: especificações. Ex: "35mm prime lens, shallow depth of field, subtle film grain, medium shot".
+- textures: texturas enfatizadas. Ex: "skin pores, wool fabric weave, scratched wood desk, dust particles in light beam".
+- negative: o que evitar. Ex: "no text, no letters, no logos, no visible UI, no stock-photo cliches".
+- aspectRatio: sempre "1:1".
+
+reasoning: 1 frase curta explicando a direção criativa (pra log).
+
+ZERO markdown. Retorne APENAS JSON válido.
+ZERO texto na imagem (negative deve proibir).
+
+Formato de resposta (JSON puro):
+{
+  "mode": "generate",
+  "generatePrompt": { ... StructuredImagePrompt ... },
+  "reasoning": "1 frase explicando a direção criativa"
+}`;
+}
+
 // ─────────────────────────────────────────────────────────
 // Parsing / normalization
 // ─────────────────────────────────────────────────────────
@@ -312,6 +428,12 @@ function normalizeDecision(
 
   // Capa sempre força generate — blindagem contra decisões erradas do model.
   if (input.isCover) {
+    mode = "generate";
+  }
+
+  // Modo generate-only (default 2026-05-08): força generate em todo slide.
+  // User pode trocar imagens manualmente via image-picker depois.
+  if (DECIDER_MODE === "generate-only") {
     mode = "generate";
   }
 

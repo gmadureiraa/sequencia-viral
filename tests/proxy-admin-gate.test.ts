@@ -93,26 +93,26 @@ describe("getSupabaseSessionEmail", () => {
   const future = Math.floor(Date.now() / 1000) + 3600;
   const validJwt = makeJwt({ email: "session@test.com", exp: future });
 
-  it("retorna null quando não há cookie sb-*-auth-token", () => {
+  it("retorna null quando não há cookie sb-*-auth-token", async () => {
     const req = mockRequestWithCookies([{ name: "other-cookie", value: "x" }]);
-    expect(getSupabaseSessionEmail(req)).toBeNull();
+    await expect(getSupabaseSessionEmail(req)).resolves.toBeNull();
   });
 
-  it("retorna null quando não há cookies", () => {
+  it("retorna null quando não há cookies", async () => {
     const req = mockRequestWithCookies([]);
-    expect(getSupabaseSessionEmail(req)).toBeNull();
+    await expect(getSupabaseSessionEmail(req)).resolves.toBeNull();
   });
 
-  it("extrai email de cookie array format [token, refresh]", () => {
+  it("extrai email de cookie array format [token, refresh]", async () => {
     // Supabase recente: array de 4 items, primeiro é access_token
     const value = JSON.stringify([validJwt, "refresh-token", null, null]);
     const req = mockRequestWithCookies([
       { name: "sb-abcdef-auth-token", value },
     ]);
-    expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
+    await expect(getSupabaseSessionEmail(req)).resolves.toBe("session@test.com");
   });
 
-  it("extrai email de cookie object format { access_token }", () => {
+  it("extrai email de cookie object format { access_token }", async () => {
     // Supabase legado: objeto com access_token
     const value = JSON.stringify({
       access_token: validJwt,
@@ -121,55 +121,55 @@ describe("getSupabaseSessionEmail", () => {
     const req = mockRequestWithCookies([
       { name: "sb-projref-auth-token", value },
     ]);
-    expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
+    await expect(getSupabaseSessionEmail(req)).resolves.toBe("session@test.com");
   });
 
-  it("decodifica cookie com prefixo base64-", () => {
+  it("decodifica cookie com prefixo base64-", async () => {
     const arrayValue = JSON.stringify([validJwt, "refresh", null, null]);
     const base64Value = "base64-" + Buffer.from(arrayValue, "utf8").toString("base64");
     const req = mockRequestWithCookies([
       { name: "sb-x-auth-token", value: base64Value },
     ]);
-    expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
+    await expect(getSupabaseSessionEmail(req)).resolves.toBe("session@test.com");
   });
 
-  it("ignora cookies que não começam com sb- ou não terminam em -auth-token", () => {
+  it("ignora cookies que não começam com sb- ou não terminam em -auth-token", async () => {
     const value = JSON.stringify([validJwt]);
     const req = mockRequestWithCookies([
       { name: "supabase-something", value },
       { name: "sb-other", value },
       { name: "auth-token", value },
     ]);
-    expect(getSupabaseSessionEmail(req)).toBeNull();
+    await expect(getSupabaseSessionEmail(req)).resolves.toBeNull();
   });
 
-  it("pula cookie corrompido (JSON inválido) sem crashar", () => {
+  it("pula cookie corrompido (JSON inválido) sem crashar", async () => {
     const req = mockRequestWithCookies([
       { name: "sb-x-auth-token", value: "not-json-{{{" },
     ]);
-    expect(getSupabaseSessionEmail(req)).toBeNull();
+    await expect(getSupabaseSessionEmail(req)).resolves.toBeNull();
   });
 
-  it("pula cookie com access_token expirado", () => {
+  it("pula cookie com access_token expirado", async () => {
     const past = Math.floor(Date.now() / 1000) - 60;
     const expiredJwt = makeJwt({ email: "old@x.com", exp: past });
     const value = JSON.stringify([expiredJwt]);
     const req = mockRequestWithCookies([
       { name: "sb-x-auth-token", value },
     ]);
-    expect(getSupabaseSessionEmail(req)).toBeNull();
+    await expect(getSupabaseSessionEmail(req)).resolves.toBeNull();
   });
 
-  it("encontra cookie auth-token quando há múltiplos sb-* cookies", () => {
+  it("encontra cookie auth-token quando há múltiplos sb-* cookies", async () => {
     const value = JSON.stringify([validJwt]);
     const req = mockRequestWithCookies([
       { name: "sb-projref-other", value: "ignored" },
       { name: "sb-projref-auth-token", value },
     ]);
-    expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
+    await expect(getSupabaseSessionEmail(req)).resolves.toBe("session@test.com");
   });
 
-  it("concatena chunks .0 .1 .2 (cookies grandes do Supabase JS)", () => {
+  it("concatena chunks .0 .1 .2 (cookies grandes do Supabase JS)", async () => {
     // Cookie chunked: o Supabase JS divide JSON grande em pedaços
     // sb-x-auth-token.0, .1, .2... Cada pedaço é uma fatia do JSON original.
     const fullValue = JSON.stringify([validJwt, "refresh-tok", null, null]);
@@ -184,10 +184,10 @@ describe("getSupabaseSessionEmail", () => {
       { name: "sb-x-auth-token.0", value: chunk0 },
       { name: "sb-x-auth-token.1", value: chunk1 },
     ]);
-    expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
+    await expect(getSupabaseSessionEmail(req)).resolves.toBe("session@test.com");
   });
 
-  it("concatena chunks com prefixo base64- depois do join", () => {
+  it("concatena chunks com prefixo base64- depois do join", async () => {
     const arrayValue = JSON.stringify([validJwt, "refresh", null, null]);
     const fullValue = "base64-" + Buffer.from(arrayValue, "utf8").toString("base64");
     const half = Math.ceil(fullValue.length / 2);
@@ -195,10 +195,10 @@ describe("getSupabaseSessionEmail", () => {
       { name: "sb-x-auth-token.0", value: fullValue.slice(0, half) },
       { name: "sb-x-auth-token.1", value: fullValue.slice(half) },
     ]);
-    expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
+    await expect(getSupabaseSessionEmail(req)).resolves.toBe("session@test.com");
   });
 
-  it("se há cookie único E chunks, prefere o cookie único (estado misto)", () => {
+  it("se há cookie único E chunks, prefere o cookie único (estado misto)", async () => {
     const goodValue = JSON.stringify([validJwt]);
     // Chunks com email diferente — não deveriam ser usados se há single
     const otherJwt = makeJwt({ email: "should-not-use@x.com", exp: future });
@@ -208,15 +208,15 @@ describe("getSupabaseSessionEmail", () => {
       { name: "sb-x-auth-token.1", value: chunkedValue.slice(5) },
       { name: "sb-x-auth-token", value: goodValue },
     ]);
-    expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
+    await expect(getSupabaseSessionEmail(req)).resolves.toBe("session@test.com");
   });
 
-  it("suporta múltiplos project refs (escolhe o que tem JWT válido)", () => {
+  it("suporta múltiplos project refs (escolhe o que tem JWT válido)", async () => {
     const value = JSON.stringify([validJwt]);
     const req = mockRequestWithCookies([
       { name: "sb-other-auth-token", value: "{ corrompido}" },
       { name: "sb-mainref-auth-token", value },
     ]);
-    expect(getSupabaseSessionEmail(req)).toBe("session@test.com");
+    await expect(getSupabaseSessionEmail(req)).resolves.toBe("session@test.com");
   });
 });

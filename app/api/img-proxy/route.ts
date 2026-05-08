@@ -31,11 +31,16 @@ const MAX_REDIRECTS = 3;
 const ALLOWED_CONTENT_TYPE = /^image\//i;
 
 /**
- * Hosts publicos permitidos sem auth — sao CDNs de redes sociais/Apify
- * cujo conteudo ja e publico de origem. Browser <img src> nao consegue
- * mandar Bearer token, entao essa whitelist permite que avatars/posts do
+ * Hosts publicos permitidos sem auth — sao CDNs de redes sociais cujo
+ * conteudo ja e publico de origem. Browser <img src> nao consegue mandar
+ * Bearer token, entao essa whitelist permite que avatars/posts do
  * onboarding renderizem diretamente. Qualquer URL fora dessa lista ainda
  * exige auth.
+ *
+ * P2-2 audit 2026-05-08: Apify (`apify.com`, `apifyusercontent.com`)
+ * REMOVIDO da whitelist publica — Apify URLs sao endpoints de scraping
+ * que podem servir conteudo arbitrario (qualquer URL passada como input
+ * pelo dataset), virando bandwidth amplifier. Agora exige Bearer token.
  */
 const PUBLIC_HOST_SUFFIXES = [
   "cdninstagram.com",
@@ -47,8 +52,6 @@ const PUBLIC_HOST_SUFFIXES = [
   "media.licdn.com",
   "googleusercontent.com",
   "ytimg.com",
-  "apify.com",
-  "apifyusercontent.com",
 ];
 
 function hostAllowedPublic(host: string): boolean {
@@ -113,18 +116,32 @@ export async function GET(request: Request) {
     const auth = await requireAuthenticatedUser(request);
     if (!auth.ok) return auth.response;
   } else {
-    // Sem auth → cap por IP pra nao virar bandwidth amplifier publico.
-    // 120 req/min cobre carrosseis grandes (~12 imgs × 10 carrosseis/min)
-    // sem permitir scraping pesado por IPs aleatorios.
-    const limiter = await rateLimit({
-      key: `img-proxy-public-ip:${getRequestIp(request)}`,
-      limit: 120,
+    // Sem auth → cap defensivo por IP pra nao virar bandwidth amplifier
+    // publico (P2-2 audit 2026-05-08).
+    //  - 60 req/min cobre carrosseis grandes (~12 imgs × 5 carrosseis/min)
+    //    sem permitir scraping pesado por IPs aleatorios.
+    //  - 600 req/dia (10x o burst minuto) cap de longo prazo.
+    const ip = getRequestIp(request);
+    const minuteLimiter = await rateLimit({
+      key: `img-proxy-public-ip-min:${ip}`,
+      limit: 60,
       windowMs: 60 * 1000,
     });
-    if (!limiter.allowed) {
+    if (!minuteLimiter.allowed) {
       return new Response("rate limit exceeded", {
         status: 429,
-        headers: { "Retry-After": String(limiter.retryAfterSec) },
+        headers: { "Retry-After": String(minuteLimiter.retryAfterSec) },
+      });
+    }
+    const dayLimiter = await rateLimit({
+      key: `img-proxy-public-ip-day:${ip}`,
+      limit: 600,
+      windowMs: 24 * 60 * 60 * 1000,
+    });
+    if (!dayLimiter.allowed) {
+      return new Response("daily quota exceeded", {
+        status: 429,
+        headers: { "Retry-After": String(dayLimiter.retryAfterSec) },
       });
     }
   }

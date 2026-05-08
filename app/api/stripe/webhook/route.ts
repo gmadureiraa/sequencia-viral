@@ -19,6 +19,7 @@ import { removeFromOnboardingAudience } from "@/lib/server/resend-audience";
 import { applyReferralReward } from "@/lib/referrals";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
+import crypto from "node:crypto";
 
 export async function POST(request: Request) {
   const admin = createServiceRoleSupabaseClient();
@@ -359,10 +360,19 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
             .eq("stripe_customer_id", customerId)
             .maybeSingle();
           if (profile?.id) {
-            userId = profile.id;
+            const resolvedUserId = String(profile.id);
+            userId = resolvedUserId;
+            // P3-3 audit 2026-05-08: log de userId+customerId rebaixado
+            // pra hashes curtos. Suficiente pra correlacionar com event
+            // por Sentry/Stripe dashboard sem ficar com PII em retention.
+            const shortHash = (s: string) =>
+              crypto.createHash("sha256").update(s).digest("hex").slice(0, 8);
             console.log(
-              "[stripe webhook] subscription.updated userId resolvido via stripe_customer_id:",
-              { customerId, userId }
+              "[stripe webhook] subscription.updated resolved via customer_id:",
+              {
+                customerHash: shortHash(customerId),
+                userHash: shortHash(resolvedUserId),
+              }
             );
           }
         }

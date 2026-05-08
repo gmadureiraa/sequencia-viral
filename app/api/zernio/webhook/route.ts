@@ -81,20 +81,24 @@ export async function POST(request: Request) {
   const secret = process.env.ZERNIO_WEBHOOK_SECRET;
   const rawBody = await request.text();
 
-  // Aceita 2 modos de auth:
-  //  1. Sem secret configurado: aceita qualquer request (DEV-mode). Loga warning.
-  //  2. Com secret: valida assinatura.
-  if (secret) {
-    const sig =
-      request.headers.get("x-zernio-signature") ||
-      request.headers.get("x-late-signature");
-    if (!verifySignature(rawBody, sig, secret)) {
-      return new Response("invalid signature", { status: 401 });
-    }
-  } else {
-    console.warn(
-      "[zernio/webhook] ZERNIO_WEBHOOK_SECRET ausente — aceitando sem validar (DEV)"
+  // P2-4 audit 2026-05-08: removido bypass DEV-mode. Secret é OBRIGATÓRIO
+  // sempre. Sem ele, retorna 503 — antes aceitava qualquer request quando
+  // env var ausente, e bastava `NODE_ENV=development` (ou env var sumir
+  // por config errada em prod) pra atacante alterar status de qualquer
+  // post agendado. Side effect: dev local agora exige
+  // `ZERNIO_WEBHOOK_SECRET` no .env.local.
+  if (!secret) {
+    console.error(
+      "[zernio/webhook] ZERNIO_WEBHOOK_SECRET ausente — rejeitando request"
     );
+    return new Response("not configured", { status: 503 });
+  }
+
+  const sig =
+    request.headers.get("x-zernio-signature") ||
+    request.headers.get("x-late-signature");
+  if (!verifySignature(rawBody, sig, secret)) {
+    return new Response("invalid signature", { status: 401 });
   }
 
   let payload: WebhookPayload;

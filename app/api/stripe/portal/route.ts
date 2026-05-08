@@ -7,6 +7,20 @@ import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
 
 export const maxDuration = 15;
 
+// Mantém allowlist alinhada com `/api/stripe/checkout` (P2-5 audit
+// 2026-05-08 — antes aceitava `request.headers.get('origin')` direto, sem
+// checar contra lista). Stripe valida internamente, mas consistência
+// fecha a porta de origin spoofing nos logs/return URL.
+const ALLOWED_ORIGINS = [
+  "https://viral.kaleidos.com.br",
+  "https://www.viral.kaleidos.com.br",
+  "https://sequencia-viral.vercel.app",
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
+];
+const DEFAULT_ORIGIN = "https://viral.kaleidos.com.br";
+
 /**
  * Cria uma sessão do Customer Portal do Stripe e retorna a URL para redirect.
  * O frontend chama POST com Authorization Bearer e faz `window.location.href = url`.
@@ -73,10 +87,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const origin =
-      request.headers.get("origin") ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      "https://viral.kaleidos.com.br";
+    const requestOrigin = request.headers.get("origin") || "";
+    const origin = ALLOWED_ORIGINS.includes(requestOrigin)
+      ? requestOrigin
+      : process.env.NEXT_PUBLIC_APP_URL && ALLOWED_ORIGINS.includes(process.env.NEXT_PUBLIC_APP_URL)
+        ? process.env.NEXT_PUBLIC_APP_URL
+        : DEFAULT_ORIGIN;
 
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,

@@ -1,3 +1,7 @@
+// PUBLIC_OK: gateado por env var ZERNIO_DEBUG_TOKEN + header
+// X-Debug-Token (timingSafeEqual). Quando env não setada, retorna 404
+// silencioso. Não dá pra usar requireAdmin aqui porque o objetivo do
+// endpoint é justamente debugar o motivo do gate admin estar quebrado.
 /**
  * GET /api/zernio/debug-auth
  *

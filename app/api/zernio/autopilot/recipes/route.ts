@@ -1,3 +1,4 @@
+// PUBLIC_OK: stub 410 Gone (deprecated em 05/05) — sem lógica, sem dados.
 /**
  * DEPRECATED — substituído por /api/zernio/triggers em 05/05.
  * Mantido como stub 410 Gone pra qualquer client antigo. UI v2 não usa.

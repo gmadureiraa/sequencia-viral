@@ -48,3 +48,6 @@ next-env.d.ts
 /scripts/time-*.ts
 /scripts/analyze-refs-*.ts
 /scripts/fetch-gabriel-*.ts
+
+# Security audits — local-only, contém detalhes de vulnerabilidades
+.security/

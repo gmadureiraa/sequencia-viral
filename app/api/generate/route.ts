@@ -151,6 +151,12 @@ import { perplexityQuery, isPerplexityConfigured } from "@/lib/perplexity";
 import { requireAuthenticatedUser, createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { rateLimit, getRateLimitKey, getRequestIp } from "@/lib/server/rate-limit";
 import { captureRouteError } from "@/lib/server/sentry";
+import {
+  wrapUserInput,
+  INJECTION_GUARD_SYSTEM_HINT,
+  detectInjectionPatterns,
+  containsSuspiciousOutput,
+} from "@/lib/server/prompt-injection-guard";
 import { PLANS, FREE_PLAN_USAGE_LIMIT } from "@/lib/pricing";
 import { getPostHogClient } from "@/lib/posthog-server";
 import {
@@ -460,10 +466,12 @@ export async function POST(request: Request) {
 
     // Atomic check-and-increment — elimina race condition onde duas
     // requests simultâneas com count = limit - 1 passariam pelo check
-    // e ambas incrementariam. A RPC faz UPDATE condicional e retorna se
-    // foi permitido. Se não tiver RPC disponível (ambiente antigo), faz
-    // fallback pro check + increment sequencial (mantém compatibilidade
-    // enquanto migration não roda).
+    // e ambas incrementariam. A RPC `try_increment_usage_count` faz UPDATE
+    // condicional e retorna se foi permitido. Migration aplicada em
+    // 2026-04-20 (`20260420180000_atomic_usage_check.sql`); fallback
+    // non-atomic foi removido em 2026-05-08 (security fix P1-2) — se a
+    // RPC retornar erro, retornamos 503 explícito em vez de cair em
+    // increment_usage_count + select sequencial (que reintroduziria TOCTOU).
     //
     // ⚠️ Ordem importa (fix 2026-05-02): fazemos o pre-check do planCap ANTES
     // da RPC porque a RPC só compara `usage_count < usage_limit`. Users
@@ -513,30 +521,54 @@ export async function POST(request: Request) {
         "try_increment_usage_count",
         { uid: user.id }
       );
-      if (!gateErr && Array.isArray(gate) && gate[0]) {
-        const row = gate[0] as {
-          out_allowed: boolean;
-          out_new_count: number;
-          out_usage_limit: number;
-          out_plan: string;
-        };
-        if (!row.out_allowed) {
-          return Response.json(
-            {
-              error: `Você atingiu o limite de ${row.out_usage_limit} carrosséis do plano ${row.out_plan || "free"}. Faça upgrade para continuar gerando.`,
-              code: "PLAN_LIMIT_REACHED",
-            },
-            { status: 403 }
-          );
-        }
-        usageAlreadyIncremented = true;
-        usageIncrementedFlag = true;
-      } else if (gateErr) {
-        console.warn(
-          "[generate] try_increment_usage_count RPC indisponível, usando fallback:",
+      if (gateErr) {
+        // RPC sempre presente em prod desde 2026-04-20. Se cair aqui é
+        // sinal de regressão (migration revertida, RLS quebrada, RPC
+        // dropada). Não fallback pra increment non-atomic — preferimos
+        // 503 explícito a reintroduzir TOCTOU silenciosamente.
+        console.error(
+          "[generate] try_increment_usage_count RPC error — abort:",
           gateErr.message
         );
+        return Response.json(
+          {
+            error: "Sistema de cota indisponível. Tente novamente em instantes.",
+            code: "USAGE_RPC_UNAVAILABLE",
+          },
+          { status: 503 }
+        );
       }
+      if (!Array.isArray(gate) || !gate[0]) {
+        // RPC retornou sem erro mas sem linha — schema mismatch ou função
+        // assinada diferente. Mesma decisão: fail closed.
+        console.error(
+          "[generate] try_increment_usage_count RPC returned empty result — abort"
+        );
+        return Response.json(
+          {
+            error: "Sistema de cota indisponível. Tente novamente em instantes.",
+            code: "USAGE_RPC_EMPTY",
+          },
+          { status: 503 }
+        );
+      }
+      const row = gate[0] as {
+        out_allowed: boolean;
+        out_new_count: number;
+        out_usage_limit: number;
+        out_plan: string;
+      };
+      if (!row.out_allowed) {
+        return Response.json(
+          {
+            error: `Você atingiu o limite de ${row.out_usage_limit} carrosséis do plano ${row.out_plan || "free"}. Faça upgrade para continuar gerando.`,
+            code: "PLAN_LIMIT_REACHED",
+          },
+          { status: 403 }
+        );
+      }
+      usageAlreadyIncremented = true;
+      usageIncrementedFlag = true;
 
       if (prof) {
         // Extract brand context from same query
@@ -798,6 +830,38 @@ ${voiceSamples ? `- Voice samples (imite ritmo e estrutura, NÃO copie literalme
     }
     if (sourceUrl && sourceUrl.length > 2000) {
       return Response.json({ error: "URL is too long (max 2000 chars)" }, { status: 400 });
+    }
+
+    // P1-4: prompt injection detection — heurística leve (regex). NÃO
+    // bloqueia: false positives em conteúdo legítimo (briefing pra peça
+    // sobre social engineering, por exemplo) seriam piores que o ataque.
+    // O wrap em <user_input> + system hint do guard já mitiga. Aqui só
+    // logamos pra Sentry/console pra ter visibilidade de tentativas.
+    const injectionFlags = [
+      ...detectInjectionPatterns(topic).map((id) => `topic:${id}`),
+      ...detectInjectionPatterns(advExtraContext).map((id) => `extra_context:${id}`),
+      ...detectInjectionPatterns(advCustomCta).map((id) => `cta:${id}`),
+      ...detectInjectionPatterns(advHookDirection).map((id) => `hook:${id}`),
+    ];
+    if (injectionFlags.length > 0) {
+      console.warn(
+        `[generate] prompt-injection patterns detected user=${user.id} flags=${injectionFlags.join(",")}`
+      );
+      try {
+        captureRouteError(
+          new Error(`prompt-injection-suspect: ${injectionFlags.join(",")}`),
+          {
+            route: "/api/generate",
+            extra: {
+              userId: user.id,
+              flags: injectionFlags,
+              topicSample: topic ? topic.slice(0, 200) : "",
+            },
+          }
+        );
+      } catch {
+        // Sentry indisponível — log já saiu acima.
+      }
     }
 
     const geminiKey = process.env.GEMINI_API_KEY;
@@ -1627,16 +1691,30 @@ Se ignorar, o carrossel fica shallow e generico — não é o que o criador quer
             .join("\n")}\n\nREGRA: cada slide que use imagem deve ter copy que CASA com a imagem. Você decide a ORDEM pelo conteúdo. Devolva no JSON: slides[i].imageRef = índice (1, 2, 3...) da imagem que casa, ou null se não usar imagem nesse slide.`
         : "";
 
+    // P1-4: input do user (topic, sourceContent) envelopado em tags XML.
+    // O system hint do INJECTION_GUARD diz pro modelo tratar conteúdo
+    // dentro dessas tags como dado, não comando. Wrap escapa qualquer
+    // tentativa de fechar a tag cedo.
+    const wrappedTopic = wrapUserInput(topic, "user_briefing");
+    const wrappedSource = wrapUserInput(
+      sourceContent ? sourceContent.slice(0, SOURCE_SLICE) : "",
+      "source_content"
+    );
+    const wrappedTopicHint = wrapUserInput(
+      topic && topic.trim().length > 50 ? topic.slice(0, 1000) : "",
+      "user_briefing"
+    );
+
     const userMessage =
       mode === "layout-only"
         ? // Em layout-only + source: o transcript/scrape VIRA o texto a ser formatado
           // (não é "fonte adicional", é O conteúdo). Topic do user é só hint/contexto.
           sourceContent
-          ? `${overridesBlock}TEXTO PRA FORMATAR EM SLIDES — extraído da fonte (${sourceType}). Preserve wording, ordem, dados, fale da cabeça do autor quando fizer sentido:${sourceFidelityBlock}${factsBlockPrefix}${imagesBlock}\n\n"""\n${sourceContent.slice(0, SOURCE_SLICE)}\n"""${topic && topic.trim().length > 50 ? `\n\nContexto/direcionamento do usuário:\n${topic.slice(0, 1000)}` : ""}`
-          : `${overridesBlock}TEXTO DO USUÁRIO PRA FORMATAR EM SLIDES (preserve wording, ordem, dados, CTA):${imagesBlock}\n\n"""\n${topic}\n"""`
+          ? `${overridesBlock}TEXTO PRA FORMATAR EM SLIDES — extraído da fonte (${sourceType}). Preserve wording, ordem, dados, fale da cabeça do autor quando fizer sentido:${sourceFidelityBlock}${factsBlockPrefix}${imagesBlock}\n\n${wrappedSource}${topic && topic.trim().length > 50 ? `\n\nContexto/direcionamento do usuário:\n${wrappedTopicHint}` : ""}`
+          : `${overridesBlock}TEXTO DO USUÁRIO PRA FORMATAR EM SLIDES (preserve wording, ordem, dados, CTA):${imagesBlock}\n\n${wrappedTopic}`
         : sourceContent
-          ? `${overridesBlock}Create 3 carousel variations (data, story, provocative) based on this content:\n\nTopic: ${topic}${sourceFidelityBlock}${factsBlockPrefix}${imagesBlock}${factCheckSuffix}\n\nSource (${sourceType}):\n${sourceContent.slice(0, SOURCE_SLICE)}`
-          : `${overridesBlock}Create 3 carousel variations (data, story, provocative) about: ${topic}${imagesBlock}${factCheckSuffix}`;
+          ? `${overridesBlock}Create 3 carousel variations (data, story, provocative) based on this content:\n\nTopic: ${wrappedTopic}${sourceFidelityBlock}${factsBlockPrefix}${imagesBlock}${factCheckSuffix}\n\nSource (${sourceType}):\n${wrappedSource}`
+          : `${overridesBlock}Create 3 carousel variations (data, story, provocative) about: ${wrappedTopic}${imagesBlock}${factCheckSuffix}`;
 
     // Se o usuário pediu fidelidade literal, força layout-only — writer
     // ainda parafraseia mesmo com instrução. Layout-only é o único modo
@@ -1663,32 +1741,10 @@ Se ignorar, o carrossel fica shallow e generico — não é o que o criador quer
           ? writerPrompt
           : simpleWriterPrompt;
 
-    // 3. Increment usage BEFORE calling AI — ensures quota is always counted
-    //    even if the response fails or user closes the tab. Se a RPC
-    //    atômica já fez o increment, pula essa etapa.
-    if (sb && !usageAlreadyIncremented) {
-      const { error: incErr } = await sb.rpc("increment_usage_count", { uid: user.id });
-      if (incErr) {
-        console.warn("[generate] RPC increment failed, falling back:", incErr.message);
-        const { data: currentProfile } = await sb
-          .from("profiles")
-          .select("usage_count")
-          .eq("id", user.id)
-          .single();
-        if (currentProfile) {
-          const { error: updErr } = await sb
-            .from("profiles")
-            .update({ usage_count: (currentProfile.usage_count ?? 0) + 1 })
-            .eq("id", user.id);
-          if (!updErr) {
-            usageIncrementedFlag = true;
-          }
-        }
-      } else {
-        // RPC funcionou — usage subiu. Marca pra rollback safety-net.
-        usageIncrementedFlag = true;
-      }
-    }
+    // 3. Usage já incrementado atomicamente acima via try_increment_usage_count.
+    //    Bloco non-atomic legacy (RPC increment_usage_count + select+update
+    //    sequencial) removido em 2026-05-08 — reintroduzia TOCTOU se RPC
+    //    atômica falhasse. Hoje, falha da RPC retorna 503 antes deste ponto.
 
     // 4. Call Gemini
     // - Writer mode: Pro (qualidade prioritária — criação de conteúdo do zero).
@@ -1857,7 +1913,11 @@ Regras:
       // Attempt 2 (strict=true):  Flash + systemPrompt MINIMAL + JSON mode + temp 0.3
       //                           — troca prompt de 49K chars por ~600 chars pra
       //                           eliminar recency bias e confusão de formato.
-      const attemptSystem = strict ? minimalStrictSystemPrompt : systemPrompt;
+      // P1-4: prepend INJECTION_GUARD_SYSTEM_HINT em ambos os caminhos —
+      // tags XML <user_briefing>/<source_content> são tratadas como DADO,
+      // nunca como comando.
+      const baseSystem = strict ? minimalStrictSystemPrompt : systemPrompt;
+      const attemptSystem = `${INJECTION_GUARD_SYSTEM_HINT}${baseSystem}`;
       const attemptModel = strict ? "gemini-2.5-flash" : modelId;
       const attemptThinkingBudget = strict ? 4000 : thinkingBudget;
 
@@ -1909,6 +1969,35 @@ Regras:
         console.warn(
           `[generate] finishReason=${finishReason} strict=${strict} outputLen=${textResponse.length}`
         );
+      }
+
+      // P1-4: heurística pós-output — flag se Gemini repete o system
+      // prompt (leakage), inclui endereços de wallet, ou padrões de scam.
+      // Não bloqueia (false positive em peça legítima sobre cripto seria
+      // pior); só registra pra Sentry/log.
+      if (textResponse) {
+        const outputFlags = containsSuspiciousOutput(textResponse);
+        if (outputFlags.length > 0) {
+          console.warn(
+            `[generate] suspicious-output user=${user.id} strict=${strict} flags=${outputFlags.join(",")}`
+          );
+          try {
+            captureRouteError(
+              new Error(`suspicious-output: ${outputFlags.join(",")}`),
+              {
+                route: "/api/generate",
+                extra: {
+                  userId: user.id,
+                  flags: outputFlags,
+                  strict,
+                  outputSample: textResponse.slice(0, 500),
+                },
+              }
+            );
+          } catch {
+            // já logado acima
+          }
+        }
       }
 
       if (!textResponse) {

@@ -1,3 +1,7 @@
+// PUBLIC_OK: webhook público disparado por terceiros (Zapier/Make/n8n).
+// Auth via `?secret=<token>` em vez de Bearer/cookie — comparado em
+// timing-safe contra trigger.secret no DB. Bearer não funcionaria pra
+// caller de terceiros sem OAuth complexo.
 /**
  * POST /api/zernio/triggers/:id/fire?secret=<token>
  *

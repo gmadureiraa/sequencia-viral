@@ -1,3 +1,4 @@
+// PUBLIC_OK: stub 410 Gone (deprecated em 05/05) — sem lógica, sem dados.
 /**
  * DEPRECATED — movido pra /api/zernio/planned-posts em 05/05.
  * Rota original conflitava com /api/zernio/posts/[id] (Next roteava

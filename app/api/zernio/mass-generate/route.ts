@@ -8,7 +8,7 @@
  *   Lista jobs do user (recent first, limit 20).
  */
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { requireAdminOrPlan } from "@/lib/server/plan-gate";
 import { rateLimit, getRateLimitKey } from "@/lib/server/rate-limit";
@@ -233,18 +233,26 @@ export async function POST(request: Request) {
     );
   }
 
-  // Trigger primeiro batch inline (fire-and-forget pra não esperar 5min de geração)
-  // Worker do cron continua processando o resto a cada minuto.
-  void (async () => {
+  // Trigger imediato após response retornar. `after()` do Next 16 garante
+  // execução pós-response sem ser cortada pela serverless function (diferente
+  // de `void (async () => ...)` que pode ser interrompido).
+  //
+  // Vercel Hobby plan limita crons a 1×/dia, então não dá pra contar com cron
+  // 5/5min como antes. Estratégia: processa AQUI quando job é criado +
+  // cron diário 8h UTC como safety net pra recuperar items travados.
+  //
+  // maxItems = MAX_BATCH_SIZE pra cobrir job inteiro; concurrency 2 evita
+  // sobrecarga simultânea no Gemini/Imagen.
+  after(async () => {
     try {
       const { processPendingItems } = await import(
         "@/lib/server/mass-generation/job-runner"
       );
-      await processPendingItems({ maxItems: 2, concurrency: 2 });
+      await processPendingItems({ maxItems: MAX_BATCH_SIZE, concurrency: 2 });
     } catch (err) {
-      console.warn("[mass-generate] inline kickoff falhou:", err);
+      console.warn("[mass-generate] after() kickoff falhou:", err);
     }
-  })();
+  });
 
   return NextResponse.json({
     ok: true,

@@ -33,6 +33,6 @@
     { "path": "/api/cron/referral-reminder", "schedule": "0 15 * * *" },
     { "path": "/api/cron/annual-offer", "schedule": "0 16 * * 1" },
     { "path": "/api/cron/cleanup-external-cache", "schedule": "0 3 1 * *" },
-    { "path": "/api/cron/process-mass-jobs", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/process-mass-jobs", "schedule": "0 8 * * *" }
   ]
 }

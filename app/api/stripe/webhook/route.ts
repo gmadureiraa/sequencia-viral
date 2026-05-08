@@ -15,6 +15,7 @@ import {
   sendOwnerSubscriptionAlert,
 } from "@/lib/email/dispatch";
 import { fireResendEvent } from "@/lib/integrations/resend/events";
+import { removeFromOnboardingAudience } from "@/lib/server/resend-audience";
 import { applyReferralReward } from "@/lib/referrals";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
@@ -277,6 +278,19 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
           customerId,
           subscriptionId,
         });
+
+        // Stop condition do drip onboarding — lead virou cliente pagante,
+        // não faz sentido continuar recebendo "ative sua conta" + cupom
+        // VIRAL50. Remove da audience SV (a automation `SV — Onboarding
+        // completo` dispara em `contact.created` dentro dela; tirar o
+        // contact pausa as próximas etapas). Não toca em outras audiences
+        // (Kaleidos Leads, Madureira Newsletter). Helper tem try/catch
+        // interno e nunca lança.
+        const onboardingRemovalEmail =
+          profileRow?.email || session.customer_email || null;
+        if (onboardingRemovalEmail) {
+          await removeFromOnboardingAudience({ email: onboardingRemovalEmail });
+        }
       }
       break;
     }
@@ -445,6 +459,12 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
             user_id: userId,
             plan: resolvedPlan,
           });
+
+          // Stop condition do drip onboarding — cobre o caso edge de
+          // upgrade direto via Stripe Billing Portal (sem checkout novo,
+          // só troca de plano). Sem isso, lead que já tava na audience
+          // continuaria recebendo o drip mesmo virando pagante.
+          await removeFromOnboardingAudience({ email: upProfile.email });
         }
       }
       break;

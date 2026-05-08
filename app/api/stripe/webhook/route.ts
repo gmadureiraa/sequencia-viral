@@ -9,7 +9,11 @@ import { PLANS } from "@/lib/pricing";
 import type { PlanId } from "@/lib/pricing";
 import { createServiceRoleSupabaseClient } from "@/lib/server/auth";
 import { getPostHogClient } from "@/lib/posthog-server";
-import { sendPaymentSuccess, sendPaymentFailed } from "@/lib/email/dispatch";
+import {
+  sendPaymentSuccess,
+  sendPaymentFailed,
+  sendOwnerSubscriptionAlert,
+} from "@/lib/email/dispatch";
 import { fireResendEvent } from "@/lib/integrations/resend/events";
 import { applyReferralReward } from "@/lib/referrals";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -261,6 +265,18 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
             coupon: svCouponCode || null,
           });
         }
+
+        // Owner alert — notifica o Gabriel de cada nova assinatura paga.
+        // Helper já tem try/catch interno; nunca quebra o webhook.
+        await sendOwnerSubscriptionAlert({
+          email: profileRow?.email || session.customer_email || null,
+          planName: PLANS[planId]?.name || planId,
+          planId,
+          amountBrl: stripePaymentAmountUsd(planId),
+          userId,
+          customerId,
+          subscriptionId,
+        });
       }
       break;
     }

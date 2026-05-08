@@ -136,11 +136,14 @@ type Step =
   | "dna"
   | "photo"
   | "visual"
+  // "visual" desativado (2026-05-08): só temos template Twitter, carrossel
+  // é padrão. User ajusta cor depois em Settings se quiser. StepVisual
+  // fica no código pra reativar se voltarmos a ter múltiplos templates.
   // "ideas" e "generating" temporariamente desativados (2026-04-27):
   // /api/suggestions tava lento e atrasava o end-to-end do onboarding.
   // Componentes StepIdeas e StepGenerating ficam no código pra reativar
   // quando o backend de sugestões ficar performant. Fluxo agora vai
-  // visual → done direto.
+  // photo → done direto.
   | "done";
 
 const STEP_ORDER: Step[] = [
@@ -150,7 +153,6 @@ const STEP_ORDER: Step[] = [
   "refs",
   "dna",
   "photo",
-  "visual",
   "done",
 ];
 
@@ -225,7 +227,9 @@ export default function OnboardingPage() {
   // imageStyleId aceita "photo" | "illus" | "iso3d" | "custom" (quando o
   // usuario subiu referencias proprias, os presets ficam ocultos).
   const [imageStyleId, setImageStyleId] = useState<string>("photo");
-  const [designId, setDesignId] = useState<DesignTemplateId>("manifesto");
+  // Default "twitter" — único template ativo após remoção do passo visual
+  // (2026-05-08). User pode trocar em Settings.
+  const [designId, setDesignId] = useState<DesignTemplateId>("twitter");
   // Upload de referencias visuais proprias (0-3). Se houver, roda
   // /api/brand-aesthetic e guarda a description inline.
   const [brandImageRefs, setBrandImageRefs] = useState<string[]>([]);
@@ -956,7 +960,24 @@ export default function OnboardingPage() {
                 preview={avatarDataUrl}
                 uploading={avatarUploading}
                 onBack={() => goto(backFrom("photo"))}
-                onNext={() => goto("visual")}
+                onNext={async () => {
+                  // photo é o último passo ativo (visual removido em
+                  // 2026-05-08). Persiste perfil antes de fechar onboarding.
+                  setSaving(true);
+                  try {
+                    await saveProfileBeforeGeneration();
+                  } catch (err) {
+                    toast.error(
+                      err instanceof Error
+                        ? err.message
+                        : "Falha ao salvar perfil."
+                    );
+                    setSaving(false);
+                    return;
+                  }
+                  setSaving(false);
+                  goto("done");
+                }}
               />
             )}
             {step === "visual" && (

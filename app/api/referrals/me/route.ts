@@ -2,7 +2,11 @@ import {
   requireAuthenticatedUser,
   createServiceRoleSupabaseClient,
 } from "@/lib/server/auth";
-import { getOrCreateReferralCode, REFERRAL_CAROUSELS_BONUS } from "@/lib/referrals";
+import {
+  getOrCreateReferralCode,
+  REFERRAL_BONUS_ACTIVATION,
+  REFERRAL_BONUS_PAID,
+} from "@/lib/referrals";
 
 export async function GET(request: Request) {
   const auth = await requireAuthenticatedUser(request);
@@ -22,7 +26,8 @@ export async function GET(request: Request) {
     );
   }
 
-  // Busca referrals + soma de carrosséis bônus já creditados.
+  // Busca referrals + créditos por tipo. Inclui o legado 'carousels_bonus'
+  // pra somar usuários cujo backfill ainda não rodou (defensivo).
   const [refsRes, creditsRes] = await Promise.all([
     admin
       .from("referrals")
@@ -30,31 +35,52 @@ export async function GET(request: Request) {
       .eq("referrer_user_id", user.id),
     admin
       .from("referral_credits")
-      .select("amount")
+      .select("type, amount")
       .eq("referrer_user_id", user.id)
-      .eq("type", "carousels_bonus"),
+      .in("type", ["activation_bonus", "paid_bonus", "carousels_bonus"]),
   ]);
 
   const list = (refsRes.data ?? []) as Array<{
     status: string;
     reward_applied: boolean | null;
   }>;
-  const credits = (creditsRes.data ?? []) as Array<{ amount: number }>;
+  const credits = (creditsRes.data ?? []) as Array<{
+    type: string;
+    amount: number;
+  }>;
 
   const signupCount = list.filter((r) =>
     ["signup", "converted"].includes(r.status)
   ).length;
   const conversionCount = list.filter((r) => r.status === "converted").length;
-  const totalCarouselsBonus = credits.reduce(
+
+  const activationCredits = credits.filter((c) => c.type === "activation_bonus");
+  const paidCredits = credits.filter(
+    (c) => c.type === "paid_bonus" || c.type === "carousels_bonus"
+  );
+
+  const activationCount = activationCredits.length;
+  const totalActivationBonus = activationCredits.reduce(
     (acc, c) => acc + (c.amount ?? 0),
     0
   );
+  const totalPaidBonus = paidCredits.reduce(
+    (acc, c) => acc + (c.amount ?? 0),
+    0
+  );
+  const totalCarouselsBonus = totalActivationBonus + totalPaidBonus;
 
   return Response.json({
     code,
     signupCount,
     conversionCount,
+    activationCount,
     totalCarouselsBonus,
-    bonusPerReferral: REFERRAL_CAROUSELS_BONUS,
+    totalActivationBonus,
+    totalPaidBonus,
+    bonusActivation: REFERRAL_BONUS_ACTIVATION,
+    bonusPaid: REFERRAL_BONUS_PAID,
+    /** @deprecated cliente novo usa bonusPaid */
+    bonusPerReferral: REFERRAL_BONUS_PAID,
   });
 }

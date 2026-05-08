@@ -19,6 +19,7 @@ import { OnboardingWhyUpgradeEmail } from "./templates/onboarding-why-upgrade";
 import { PaymentFailedEmail } from "./templates/payment-failed";
 import { LastChanceCouponEmail } from "./templates/last-chance-coupon";
 import { ReferralConvertedEmail } from "./templates/referral-converted";
+import { ReferralActivationEmail } from "./templates/referral-activation";
 
 import { APP_URL } from "@/lib/app-url";
 
@@ -194,6 +195,28 @@ export async function sendReferralConverted(
       appUrl: APP_URL,
     }),
     tags: [PROJECT_TAG, ENV_TAG, lifecycleTag("referral-converted")],
+  });
+}
+
+/**
+ * Bônus de ATIVAÇÃO — disparado quando um amigo indicado cria o
+ * PRIMEIRO carrossel. +N carrosséis no plano do referrer (default 5).
+ * Vem antes do `referral-converted` (que só dispara quando o amigo paga).
+ */
+export async function sendReferralActivation(
+  user: Recipient,
+  args: { carouselsBonus: number; newUsageLimit: number | null }
+) {
+  return sendEmail({
+    to: user.email,
+    subject: `+${args.carouselsBonus} carrosséis — seu amigo ativou`,
+    react: ReferralActivationEmail({
+      name: user.name,
+      carouselsBonus: args.carouselsBonus,
+      newUsageLimit: args.newUsageLimit,
+      appUrl: APP_URL,
+    }),
+    tags: [PROJECT_TAG, ENV_TAG, lifecycleTag("referral-activated")],
   });
 }
 

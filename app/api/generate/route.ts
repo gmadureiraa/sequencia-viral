@@ -2656,6 +2656,10 @@ Regras:
 
     // Primeiro carrossel: dispara email "bem-vindo, salvou" com idempotência
     // via brand_analysis.__lifecycle.first_carousel_sent_at.
+    //
+    // PLUS: se o user veio via referral, credita o bônus de ATIVAÇÃO ao
+    // referrer (+5 carrosséis no usage_limit dele). RPC é idempotente
+    // por unique key, então rodar 2× não duplica crédito.
     if (sb) {
       try {
         const { data: profRow } = await sb
@@ -2684,6 +2688,33 @@ Regras:
             .from("profiles")
             .update({ brand_analysis: nextBa })
             .eq("id", user.id);
+
+          // Bônus de ativação pro referrer (best-effort, não bloqueia
+          // o response). Idempotente via unique referral_credits key.
+          try {
+            const { applyReferralActivationReward } = await import(
+              "@/lib/referrals"
+            );
+            const result = await applyReferralActivationReward({
+              referredUserId: user.id,
+              supabaseAdmin: sb,
+            });
+            if (
+              !result.ok &&
+              result.reason &&
+              result.reason !== "no_referral"
+            ) {
+              console.warn(
+                "[generate] referral activation não aplicada:",
+                result.reason
+              );
+            }
+          } catch (refErr) {
+            console.warn(
+              "[generate] applyReferralActivationReward exception:",
+              refErr
+            );
+          }
         }
       } catch (e) {
         console.warn("[generate] first-carousel email falhou (não bloqueante):", e);

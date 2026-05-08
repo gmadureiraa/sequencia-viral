@@ -1,42 +1,65 @@
 /**
  * Sistema de referral — helpers server-side.
  *
- * Mecanica (refeita 2026-05-08):
+ * Mecânica (refeita 2026-05-08, 2 eventos):
  *   - Pro REFERIDO (quem é convidado): 30% off no primeiro mês via cupom
  *     Stripe DINÂMICO criado por referrer (`MAD-X8K2-...`). O cupom carrega
  *     `metadata.referrer_user_id` pra garantir rastreio no webhook mesmo
  *     se o `referralCode` do localStorage tiver sumido entre signup e
  *     checkout.
- *   - Pro REFERRER (quem indicou): +N carrosséis adicionados ao
- *     `profiles.usage_limit` (mês corrente) quando o amigo paga primeira
- *     fatura. **Sem mexer em customer.balance Stripe.** O DEFAULT é 10,
- *     parametrizável via `REFERRAL_CAROUSELS_BONUS` env var.
+ *   - Pro REFERRER (quem indicou) — DOIS gatilhos somáveis:
+ *       1) ATIVAÇÃO — amigo cria PRIMEIRO carrossel ⇒ +5 carrosséis
+ *          (`REFERRAL_BONUS_ACTIVATION`, default 5)
+ *       2) PAGAMENTO — amigo paga primeira fatura ⇒ +20 carrosséis
+ *          (`REFERRAL_BONUS_PAID`, default 20)
+ *     Ambos somam diretamente em `profiles.usage_limit` (mês corrente).
+ *     **Sem mexer em customer.balance Stripe.**
  *
  * Atomicity / idempotency:
- *   - RPC `grant_referral_carousels_bonus` (Postgres) faz INSERT em
- *     `referral_credits` com unique key (referred_user_id, subscription_id,
+ *   - RPC `grant_referral_carousels_bonus(p_type=...)` (Postgres) faz INSERT
+ *     em `referral_credits` com unique key (referred_user_id, subscription_id,
  *     type) + UPDATE atômico em `profiles.usage_limit` na mesma transação.
- *     Se webhook chega 2x pro mesmo subscription, unique violation ⇒
- *     idempotente sem credit duplicado.
+ *     - paid_bonus: dedup por subscription_id (1 crédito por sub).
+ *     - activation_bonus: dedup por referee (subscription_id NULL,
+ *       só pode acontecer 1× por amigo).
  *
- * Todas as funcoes recebem o supabaseAdmin (service role) explicitamente
- * porque sao chamadas de webhooks/API routes que ja tem o client em scope.
+ * Todas as funções recebem o supabaseAdmin (service role) explicitamente
+ * porque são chamadas de webhooks/API routes que já têm o client em scope.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
 import { fireResendEvent } from "@/lib/integrations/resend/events";
-import { sendReferralConverted } from "@/lib/email/dispatch";
+import {
+  sendReferralConverted,
+  sendReferralActivation,
+} from "@/lib/email/dispatch";
 
 /**
- * Quantidade de carrosséis ganhos pelo referrer por amigo que paga.
- * Default 10 — override via env var `REFERRAL_CAROUSELS_BONUS`.
+ * Bônus quando o amigo cria o PRIMEIRO carrossel (ativação).
+ * Default 5 — override via env var `REFERRAL_BONUS_ACTIVATION`.
  */
-export const REFERRAL_CAROUSELS_BONUS: number = (() => {
-  const raw = Number(process.env.REFERRAL_CAROUSELS_BONUS || "");
-  if (!Number.isFinite(raw) || raw <= 0) return 10;
+export const REFERRAL_BONUS_ACTIVATION: number = (() => {
+  const raw = Number(process.env.REFERRAL_BONUS_ACTIVATION || "");
+  if (!Number.isFinite(raw) || raw <= 0) return 5;
   return Math.floor(raw);
 })();
+
+/**
+ * Bônus quando o amigo paga a primeira fatura (conversão).
+ * Default 20 — override via env var `REFERRAL_BONUS_PAID`.
+ *
+ * `REFERRAL_CAROUSELS_BONUS` é mantido como alias deprecado pra UI/email
+ * antigos enquanto os call-sites são atualizados.
+ */
+export const REFERRAL_BONUS_PAID: number = (() => {
+  const raw = Number(process.env.REFERRAL_BONUS_PAID || "");
+  if (!Number.isFinite(raw) || raw <= 0) return 20;
+  return Math.floor(raw);
+})();
+
+/** @deprecated usar REFERRAL_BONUS_PAID. Mantido até remover todos call-sites. */
+export const REFERRAL_CAROUSELS_BONUS: number = REFERRAL_BONUS_PAID;
 
 /**
  * Desconto aplicado ao convidado no primeiro mês. Hard-coded pra alinhar
@@ -267,23 +290,23 @@ export async function recordReferralSignup(args: {
 }
 
 /**
- * Aplica recompensa quando o referido paga. Chamado no webhook de
- * checkout.session.completed.
+ * Aplica recompensa de PAGAMENTO quando o referido paga primeira fatura.
+ * Chamado no webhook de checkout.session.completed.
  *
  * Steps:
  *  1) Resolve o referrer: tenta primeiro pela coluna `referrals` (linha
  *     pending/signup pra esse referredUser). Se não encontrar mas a
  *     subscription tem `coupon.metadata.referrer_user_id`, usa esse.
- *  2) Chama RPC `grant_referral_carousels_bonus` — atomic INSERT em
- *     referral_credits + UPDATE em profiles.usage_limit. Idempotente
- *     por unique (referred, subscription, type).
+ *  2) Chama RPC `grant_referral_carousels_bonus(p_type='paid_bonus')` —
+ *     atomic INSERT em referral_credits + UPDATE em profiles.usage_limit.
+ *     Idempotente por unique (referred, subscription, type).
  *  3) Marca referral como converted + reward_applied=true.
  *  4) Dispara evento Resend e email transacional.
  *
  * **Importante:** NÃO mexe em customer.balance Stripe. O bônus é local
  * (carrosséis adicionados ao usage_limit do mês corrente).
  */
-export async function applyReferralReward(args: {
+export async function applyReferralPaidReward(args: {
   referredUserId: string;
   stripeSessionId?: string | null;
   stripeSubscriptionId?: string | null;
@@ -315,7 +338,7 @@ export async function applyReferralReward(args: {
     .maybeSingle();
 
   if (refErr) {
-    console.warn("[referrals] applyReferralReward select erro:", refErr.message);
+    console.warn("[referrals] applyReferralPaidReward select erro:", refErr.message);
     return { ok: false, reason: refErr.message };
   }
 
@@ -360,10 +383,11 @@ export async function applyReferralReward(args: {
     {
       p_referrer_user_id: referrerUserId,
       p_referred_user_id: referredUserId,
-      p_amount: REFERRAL_CAROUSELS_BONUS,
+      p_amount: REFERRAL_BONUS_PAID,
       p_referral_id: referralId,
       p_stripe_subscription_id: stripeSubscriptionId || null,
       p_stripe_session_id: stripeSessionId || null,
+      p_type: "paid_bonus",
     }
   );
 
@@ -386,7 +410,7 @@ export async function applyReferralReward(args: {
           status: "converted",
           conversion_at: new Date().toISOString(),
           stripe_session_id: stripeSessionId || null,
-          reward_amount_cents: REFERRAL_CAROUSELS_BONUS, // reusa coluna pra exibir N
+          reward_amount_cents: REFERRAL_BONUS_PAID, // reusa coluna pra exibir N
           reward_applied: true,
           reward_applied_at: new Date().toISOString(),
         })
@@ -403,7 +427,7 @@ export async function applyReferralReward(args: {
         status: "converted",
         conversion_at: new Date().toISOString(),
         stripe_session_id: stripeSessionId || null,
-        reward_amount_cents: REFERRAL_CAROUSELS_BONUS, // armazena N (pra UI)
+        reward_amount_cents: REFERRAL_BONUS_PAID, // armazena N (pra UI)
         reward_applied: true,
         reward_applied_at: new Date().toISOString(),
       })
@@ -428,17 +452,132 @@ export async function applyReferralReward(args: {
         name: (referrerProfile.name as string) || undefined,
       },
       {
-        carouselsBonus: REFERRAL_CAROUSELS_BONUS,
+        carouselsBonus: REFERRAL_BONUS_PAID,
         newUsageLimit: (referrerProfile.usage_limit as number | null) ?? null,
       }
     );
     await fireResendEvent("sv.referral.converted", {
       email: referrerProfile.email,
       user_id: referrerUserId,
-      carousels_bonus: REFERRAL_CAROUSELS_BONUS,
+      carousels_bonus: REFERRAL_BONUS_PAID,
       new_usage_limit: referrerProfile.usage_limit,
       referred_user_id: referredUserId,
     });
+  }
+
+  return { ok: true, applied: true };
+}
+
+/** @deprecated alias retrocompatível — usar `applyReferralPaidReward`. */
+export const applyReferralReward = applyReferralPaidReward;
+
+/**
+ * Aplica recompensa de ATIVAÇÃO quando o referido cria seu PRIMEIRO
+ * carrossel. Chamado de `app/api/generate/route.ts` no bloco que envia
+ * o email "first carousel" (best-effort, não bloqueante).
+ *
+ * - Resolve referrer pelo `referrals` (qualquer status, exceto expired)
+ *   onde referred_user_id = uid do criador do carrossel.
+ * - Chama RPC com p_type='activation_bonus'. Idempotência via unique
+ *   (referred_user_id, NULL subscription, 'activation_bonus') ⇒ só
+ *   pode creditar 1× por referee.
+ * - Email transacional pro referrer (sem affect no Resend Automation,
+ *   evento separado pra reporting).
+ *
+ * **Não bloqueia** o caller — qualquer falha é logada e segue.
+ */
+export async function applyReferralActivationReward(args: {
+  referredUserId: string;
+  supabaseAdmin: SupabaseClient;
+}): Promise<{ ok: boolean; reason?: string; applied?: boolean }> {
+  const { referredUserId, supabaseAdmin } = args;
+
+  // 1) Resolve referrer pela linha referrals desse referee.
+  const { data: referral, error: refErr } = await supabaseAdmin
+    .from("referrals")
+    .select("id, referrer_user_id, status")
+    .eq("referred_user_id", referredUserId)
+    .in("status", ["pending", "signup", "converted"])
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (refErr) {
+    console.warn("[referrals] applyReferralActivationReward select erro:", refErr.message);
+    return { ok: false, reason: refErr.message };
+  }
+  if (!referral) {
+    return { ok: false, reason: "no_referral" };
+  }
+
+  const referrerUserId = referral.referrer_user_id as string;
+  const referralId = referral.id as string;
+
+  if (referrerUserId === referredUserId) {
+    return { ok: false, reason: "self_referral_blocked" };
+  }
+
+  // 2) RPC atomic. Idempotente — se rodar 2× pro mesmo referee, unique
+  //    violation devolve {applied:false, reason:'already_credited'}.
+  const { data: rpcRows, error: rpcErr } = await supabaseAdmin.rpc(
+    "grant_referral_carousels_bonus",
+    {
+      p_referrer_user_id: referrerUserId,
+      p_referred_user_id: referredUserId,
+      p_amount: REFERRAL_BONUS_ACTIVATION,
+      p_referral_id: referralId,
+      p_stripe_subscription_id: null,
+      p_stripe_session_id: null,
+      p_type: "activation_bonus",
+    }
+  );
+
+  if (rpcErr) {
+    console.error(
+      "[referrals] RPC activation_bonus falhou:",
+      rpcErr.message
+    );
+    return { ok: false, reason: "rpc_failed" };
+  }
+
+  const rpcResult =
+    Array.isArray(rpcRows) && rpcRows.length > 0
+      ? (rpcRows[0] as { ok: boolean; applied: boolean; reason: string })
+      : null;
+
+  if (!rpcResult?.applied) {
+    return { ok: true, applied: false, reason: rpcResult?.reason || "already_credited" };
+  }
+
+  // 3) Email + evento (fire-and-forget).
+  const { data: referrerProfile } = await supabaseAdmin
+    .from("profiles")
+    .select("email, name, usage_limit")
+    .eq("id", referrerUserId)
+    .maybeSingle();
+
+  if (referrerProfile?.email) {
+    try {
+      await sendReferralActivation(
+        {
+          email: referrerProfile.email as string,
+          name: (referrerProfile.name as string) || undefined,
+        },
+        {
+          carouselsBonus: REFERRAL_BONUS_ACTIVATION,
+          newUsageLimit: (referrerProfile.usage_limit as number | null) ?? null,
+        }
+      );
+      await fireResendEvent("sv.referral.activated", {
+        email: referrerProfile.email,
+        user_id: referrerUserId,
+        carousels_bonus: REFERRAL_BONUS_ACTIVATION,
+        new_usage_limit: referrerProfile.usage_limit,
+        referred_user_id: referredUserId,
+      });
+    } catch (err) {
+      console.warn("[referrals] activation email/event falhou (não bloqueante):", err);
+    }
   }
 
   return { ok: true, applied: true };

@@ -22,8 +22,14 @@ type MeResponse = {
   code: string;
   signupCount: number;
   conversionCount: number;
+  activationCount: number;
   totalCarouselsBonus: number;
-  bonusPerReferral: number;
+  totalActivationBonus: number;
+  totalPaidBonus: number;
+  bonusActivation: number;
+  bonusPaid: number;
+  /** @deprecated mantido pra cliente antigo */
+  bonusPerReferral?: number;
 };
 
 type ReferralItem = {
@@ -34,6 +40,10 @@ type ReferralItem = {
   conversionAt: string | null;
   rewardCarousels: number;
   rewardApplied: boolean;
+  activationCarousels: number;
+  paidCarousels: number;
+  activated: boolean;
+  paid: boolean;
   createdAt: string;
 };
 
@@ -50,12 +60,26 @@ function formatDate(iso: string | null): string {
   }
 }
 
-function statusLabel(status: ReferralItem["status"]): {
+function statusLabel(item: ReferralItem): {
   label: string;
   bg: string;
   fg: string;
 } {
-  switch (status) {
+  if (item.paid) {
+    return {
+      label: "Pago — +20",
+      bg: "var(--sv-green)",
+      fg: "var(--sv-ink)",
+    };
+  }
+  if (item.activated) {
+    return {
+      label: "Ativou — +5",
+      bg: "#B6E3FF",
+      fg: "var(--sv-ink)",
+    };
+  }
+  switch (item.status) {
     case "converted":
       return {
         label: "Pago — bônus creditado",
@@ -130,7 +154,9 @@ export default function ReferralsPage() {
     return `${APP_URL}/?ref=${me.code}`;
   }, [me]);
 
-  const bonus = me?.bonusPerReferral ?? 10;
+  const bonusActivation = me?.bonusActivation ?? 5;
+  const bonusPaid = me?.bonusPaid ?? 20;
+  const bonusTotal = bonusActivation + bonusPaid;
 
   async function handleCopy() {
     if (!link) return;
@@ -210,7 +236,7 @@ export default function ReferralsPage() {
             color: "var(--sv-ink)",
           }}
         >
-          +{bonus} carrosséis no seu plano por <em className="italic">cada amigo</em> que assinar.
+          Até <em className="italic">+{bonusTotal} carrosséis</em> por amigo que entra pelo seu link.
         </h1>
         <p
           className="mt-3 max-w-2xl"
@@ -222,9 +248,12 @@ export default function ReferralsPage() {
           }}
         >
           Compartilhe seu link. Quem entra usando ele ganha{" "}
-          <strong>30% off no primeiro mês</strong>. Quando o pagamento dele
-          rola, <strong>+{bonus} carrosséis</strong> caem direto no seu limite mensal —
-          pode usar agora mesmo. Sem teto, acumula com cada amigo novo.
+          <strong>30% off no primeiro mês</strong>. Você ganha em{" "}
+          <strong>2 momentos</strong>:{" "}
+          <strong>+{bonusActivation} carrosséis</strong> quando ele cria o
+          primeiro carrossel, mais <strong>+{bonusPaid} carrosséis</strong>{" "}
+          quando o pagamento dele cai. Tudo direto no seu limite mensal,
+          sem teto, acumula com cada amigo novo.
         </p>
       </header>
 
@@ -376,24 +405,30 @@ export default function ReferralsPage() {
 
       {/* Stat cards */}
       {me && (
-        <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatCard
             icon={<Users size={16} />}
-            label="Indicados"
+            label="Cadastrados"
             value={String(me.signupCount)}
-            hint="Cadastraram com seu link"
-          />
-          <StatCard
-            icon={<TrendingUp size={16} />}
-            label="Conversões"
-            value={String(me.conversionCount)}
-            hint="Pagaram primeira fatura"
+            hint="Entraram pelo seu link"
           />
           <StatCard
             icon={<Sparkles size={16} />}
-            label="Carrosséis bônus"
+            label={`Ativações · +${bonusActivation}`}
+            value={String(me.activationCount)}
+            hint={`Criaram 1º carrossel — +${bonusActivation} carrosséis cada`}
+          />
+          <StatCard
+            icon={<TrendingUp size={16} />}
+            label={`Pagamentos · +${bonusPaid}`}
+            value={String(me.conversionCount)}
+            hint={`Pagaram primeira fatura — +${bonusPaid} carrosséis cada`}
+          />
+          <StatCard
+            icon={<Gift size={16} />}
+            label="Total bônus"
             value={`+${me.totalCarouselsBonus}`}
-            hint={`Já somados ao seu limite mensal (${bonus} por amigo que paga)`}
+            hint="Já somados ao seu limite mensal"
             highlight
           />
         </div>
@@ -428,7 +463,9 @@ export default function ReferralsPage() {
               }}
             >
               Ainda sem indicações. Cola seu link em qualquer rede que você usa
-              — cada amigo que assinar te dá <strong>+{bonus} carrosséis</strong>.
+              — cada amigo te rende até{" "}
+              <strong>+{bonusTotal} carrosséis</strong> (
+              {bonusActivation} ao criar o primeiro + {bonusPaid} ao assinar).
             </p>
           </div>
         ) : (
@@ -460,7 +497,7 @@ export default function ReferralsPage() {
               </thead>
               <tbody>
                 {items.map((row, idx) => {
-                  const s = statusLabel(row.status);
+                  const s = statusLabel(row);
                   return (
                     <tr
                       key={row.id}
@@ -501,14 +538,30 @@ export default function ReferralsPage() {
                           fontSize: "13px",
                           fontWeight: 700,
                           color:
-                            row.status === "converted"
+                            row.rewardCarousels > 0
                               ? "var(--sv-ink)"
                               : "var(--sv-muted)",
                         }}
                       >
-                        {row.rewardApplied
-                          ? `+${row.rewardCarousels} carrosséis`
-                          : "—"}
+                        {row.rewardCarousels > 0 ? (
+                          <span>
+                            +{row.rewardCarousels}
+                            {row.activated && row.paid ? (
+                              <span
+                                style={{
+                                  marginLeft: 6,
+                                  fontSize: 10,
+                                  color: "var(--sv-muted)",
+                                  fontWeight: 500,
+                                }}
+                              >
+                                ({row.activationCarousels}+{row.paidCarousels})
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                     </tr>
                   );
@@ -555,16 +608,21 @@ export default function ReferralsPage() {
             no checkout dele.
           </li>
           <li>
-            <strong>2.</strong> Quando o pagamento dele cai, você ganha{" "}
-            <strong>+{bonus} carrosséis</strong> direto no seu limite do mês
-            corrente — sem precisar fazer nada, dá pra usar agora.
+            <strong>2.</strong> Quando ele cria o <strong>primeiro carrossel</strong>,
+            você ganha <strong>+{bonusActivation} carrosséis</strong> no
+            limite do mês corrente. (Vale mesmo que ele esteja no plano free.)
           </li>
           <li>
-            <strong>3.</strong> Sem teto. Indica 5 amigos = +{bonus * 5}{" "}
-            carrosséis. Indica 10 = +{bonus * 10}. Acumula.
+            <strong>3.</strong> Quando o <strong>pagamento dele cai</strong>,
+            você ganha mais <strong>+{bonusPaid} carrosséis</strong>. Total:
+            até <strong>{bonusTotal} carrosséis por amigo</strong>.
           </li>
           <li>
-            <strong>4.</strong> Auto-indicação não vale (a gente bloqueia). Link
+            <strong>4.</strong> Sem teto. Indica 5 amigos que ativam e pagam
+            = +{bonusTotal * 5} carrosséis. Acumula tudo.
+          </li>
+          <li>
+            <strong>5.</strong> Auto-indicação não vale (a gente bloqueia). Link
             tem validade de 30 dias no navegador do convidado.
           </li>
         </ul>

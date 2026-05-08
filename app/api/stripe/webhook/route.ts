@@ -16,7 +16,7 @@ import {
 } from "@/lib/email/dispatch";
 import { fireResendEvent } from "@/lib/integrations/resend/events";
 import { removeFromOnboardingAudience } from "@/lib/server/resend-audience";
-import { applyReferralReward } from "@/lib/referrals";
+import { applyReferralPaidReward } from "@/lib/referrals";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 import crypto from "node:crypto";
@@ -254,7 +254,7 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
           }
 
           try {
-            const result = await applyReferralReward({
+            const result = await applyReferralPaidReward({
               referredUserId: userId,
               stripeSessionId: session.id,
               stripeSubscriptionId: subscriptionId,
@@ -263,12 +263,15 @@ async function handleEvent(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
             });
             if (!result.ok && result.reason && result.reason !== "no_referral") {
               console.warn(
-                "[stripe webhook] applyReferralReward nao aplicado:",
+                "[stripe webhook] applyReferralPaidReward nao aplicado:",
                 result.reason
               );
             }
           } catch (err) {
-            console.error("[stripe webhook] applyReferralReward exception:", err);
+            console.error(
+              "[stripe webhook] applyReferralPaidReward exception:",
+              err
+            );
           }
         }
         void referralCode; // legado — referralCode metadata mantido só pra debug

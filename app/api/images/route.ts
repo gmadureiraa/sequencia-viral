@@ -1022,19 +1022,19 @@ export async function POST(request: Request) {
             });
           }
 
-          // imageBytes nao veio nem do Flash Image nem do Imagen → cai pro Serper.
+          // 2026-05-08: Imagen+FlashImage falharam. SEM fallback automático
+          // pra Serper/Unsplash — Gabriel quer zero stock photos. Frontend
+          // recebe 502 e marca slide como imageFailed pro user clicar
+          // "regenerar" manualmente.
           console.error(
-            `[images] FALHA slide=${slideNumber ?? "?"} reason=no-image-bytes-after-all-providers isCover=${!!isCover} — fallback pro Serper search`
+            `[images] FALHA slide=${slideNumber ?? "?"} reason=no-image-bytes-after-all-providers isCover=${!!isCover}`
           );
         } catch (err) {
           console.error(
             `[images] FALHA slide=${slideNumber ?? "?"} reason=gemini-outer-exception msg=${err instanceof Error ? err.message : String(err)}`
           );
-          // Fall through to search mode as fallback
         }
       }
-
-      // If Gemini failed, fall through to Serper search as fallback
     }
 
     // ── MODE: SEARCH (Serper + Unsplash em paralelo) ────────────────
@@ -1261,7 +1261,31 @@ export async function POST(request: Request) {
       });
     }
 
-    // ── Fluxo auto (single source, count <= 10): só Serper ──────────
+    // ── Fluxo single-source (count ≤ 10) ────────────────────────────
+    //
+    // 2026-05-08: Auto-flow do carrossel SÓ usa generate (Imagen/Flash Image).
+    // Se chegou aqui com mode != "search" significa que Imagen falhou pra
+    // valer — retorna 502 e o front mostra "regenerar" no slide.
+    //
+    // Serper continua disponível APENAS quando o caller pede explicitamente
+    // mode="search" (= botão "Buscar foto" no editor, ação manual do user).
+    // Picker manual usa o branch isPickerManualMode acima (Serper+Unsplash).
+    const isAutoFlow = !!useDecider || !!isCover || mode !== "search";
+    if (isAutoFlow) {
+      console.error(
+        `[images] FALHA slide=${slideNumber ?? "?"} reason=auto-flow-gen-failed useDecider=${!!useDecider} isCover=${!!isCover} mode=${mode}`
+      );
+      return Response.json(
+        {
+          error:
+            "Não foi possível gerar a imagem com IA agora. Tenta de novo daqui a pouco — ou clica em 'Regenerar' no slide.",
+          images: [],
+        },
+        { status: 502 }
+      );
+    }
+
+    // mode="search" explícito do user (handleSearchImage no editor).
     if (serperKey) {
       try {
         const useLicenseFilter =
@@ -1285,13 +1309,6 @@ export async function POST(request: Request) {
 
         if (resp.ok) {
           const data = await resp.json();
-          // Serper sempre devolve mais do que pedimos — pedimos num:
-          // desiredCount mas mandamos num:Math.max(8,desiredCount) pra
-          // ter margem de fallback. Se o user quer 1 imagem, precisamos
-          // ter 6-8 candidatas pra filtrar as broken.
-          // 28/04: pool de candidatas reduzido de 12 → 6 pra desiredCount=1.
-          // Validar 12 HEADs era ~700-1500ms; agora ~400-800ms. Trade-off:
-          // mais raros 'all broken' (Serper top-6 quase sempre tem 1+ válida).
           const rawImages = (data.images || [])
             .slice(0, Math.max(desiredCount * 3, 6))
             .map(
@@ -1312,7 +1329,6 @@ export async function POST(request: Request) {
             )
             .filter((img: { url: string }) => !!img.url);
 
-          // Log da chamada Serper (fluxo auto, 1 query = 1 cobrança).
           void recordGeneration({
             userId: user.id,
             model: "serper",
@@ -1323,9 +1339,6 @@ export async function POST(request: Request) {
             promptType: "image-picker-search",
           });
 
-          // Filtra URLs que 403/404/timeout — evita broken image no slide.
-          // Usa validador ESTRITO (rejeita 403 que pro browser é fatal).
-          // Custo: ~400-800ms pro slide (HEADs em paralelo). Vale o UX.
           const checked = await Promise.all(
             rawImages.map(async (img: { url: string }) => ({
               img,
@@ -1344,10 +1357,6 @@ export async function POST(request: Request) {
             return Response.json({ images: validImages });
           }
 
-          // Cache externo: Serper devolve URLs do Google Images proxy que
-          // expiram em horas/dias. Se nao cachear, slide vira broken image
-          // no zip de download ou no IG publish. Bug 08/05/2026 (Sam Altman).
-          // Falha → mantém URL original (logado em warn). Paralelo c/ timeout.
           const externalUrls = validImages.map(
             (img: { url: string }) => img.url
           );
@@ -1383,31 +1392,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Strategy 2: Sem fallback — devolver array vazio com aviso.
-    // O endpoint source.unsplash.com foi deprecado em 2024 e retorna 404.
-    // Preferimos sinalizar explicitamente pro front mostrar placeholder
-    // + botão de "gerar com IA" ou "upload manual".
-    //
-    // Quando o fluxo é auto (useDecider=true ou isCover=true), devolvemos
-    // status 502 explicito com error claro, pro editor detectar e marcar
-    // imageFailed=true no slide em vez de receber array vazio silencioso.
-    console.error(
-      `[images] FALHA slide=${slideNumber ?? "?"} reason=no-sources-available useDecider=${!!useDecider} isCover=${!!isCover}`
-    );
-    const isAutoFlow = !!useDecider || !!isCover;
-    if (isAutoFlow) {
-      return Response.json(
-        {
-          error:
-            "Nenhuma fonte de imagem conseguiu entregar. Tente gerar com IA manualmente ou subir uma imagem.",
-          images: [],
-        },
-        { status: 502 }
-      );
-    }
     return Response.json({
       images: [],
-      warning: "Nenhuma fonte de imagem disponível. Tente gerar com IA ou subir uma imagem.",
+      warning: "Nenhum resultado pra essa busca. Tenta outra query.",
     });
   } catch (error) {
     console.error("Images API error:", error);

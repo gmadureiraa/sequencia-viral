@@ -144,8 +144,11 @@ export async function decideSlideImage(
         contents: prompt,
         config: {
           responseMimeType: "application/json",
-          temperature: 0.4,
-          maxOutputTokens: 1500,
+          // Temperature 0.85 (era 0.4) — quero mais criatividade visual
+          // entre slides do mesmo carrossel. Coerência vem do template lock
+          // (paleta + modifier), variação vem do temp alto.
+          temperature: 0.85,
+          maxOutputTokens: 2500,
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),
@@ -364,9 +367,40 @@ ${imageRules.slice(0, 10).map((r, i) => `${i + 1}. ${r}`).join("\n")}`
     ? "ESTE É A CAPA (slide 1). MAXIMUM DRAMA, scroll-stopping em 0.3s."
     : "Slide de body — coerente com a capa, sem competir com ela.";
 
-  return `Você é um DIRETOR DE ARTE produzindo a imagem de um slide de carrossel Instagram.
-Sua tarefa: gerar um StructuredImagePrompt cinematográfico e específico baseado no conteúdo do slide.
-Toda imagem é gerada por IA (Imagen 4 / Gemini Flash Image) — não há busca em estoque.
+  // Variation seed por slide — empurra o decider a EVITAR repetir
+  // ângulo/distância/sujeito do slide anterior. Carrossel viral precisa de
+  // ritmo visual: slide 1 close-up rosto, slide 2 wide ambiente, slide 3
+  // detalhe objeto, etc. Sem essa instrução o decider gerava 8 close-ups
+  // do mesmo personagem e o user reclamava de "tudo parecido".
+  const variationGuidance = isCover
+    ? "Esta é a CAPA — escolha a composição mais POTENTE possível, scroll-stopping em 0.3s."
+    : `Slide ${slideNumber} de ${totalSlides} — VARIE radicalmente em relação aos slides anteriores. Se um slide anterior provavelmente teve close-up de rosto, faça wide. Se teve wide, faça macro detalhe de objeto. Se teve pessoa, faça lugar/objeto. Mantenha paleta e mood coerentes com o template, mas mude ângulo, distância, foco e composição. Carrossel deve ter ritmo cinematográfico.`;
+
+  // Sugestões de tipo-de-shot por posição do slide. Não é regra rígida (o
+  // decider escolhe baseado no conteúdo), mas é uma orientação pra evitar
+  // monotonia. Cycle: close-up → wide → detail → portrait → environment.
+  const shotTypeHint = isCover
+    ? "Hero shot cinematográfico — pessoa OU ambiente OU objeto principal, dramatizado ao máximo."
+    : (() => {
+        const cycle = [
+          "wide environmental shot (ambiente amplo, pequeno protagonista perdido na escala)",
+          "close-up macro (detalhe de objeto, mãos, textura — sem rosto)",
+          "medium shot editorial (sujeito centralizado, contexto visível)",
+          "low-angle dramatic (câmera baixa, sujeito imponente)",
+          "overhead flat-lay (visão de cima, objetos arranjados)",
+          "portrait extreme close-up (só rosto/olhos)",
+          "silhouette / backlight (sujeito como contorno escuro)",
+          "candid documentary (pessoa em ação real, não posada)",
+        ];
+        const idx = Math.max(0, slideNumber - 2) % cycle.length;
+        return `Tipo de shot sugerido (varie pra fugir da monotonia visual do carrossel): ${cycle[idx]}.`;
+      })();
+
+  return `Você é um DIRETOR DE ARTE de revista editorial (Vogue, Wired, Bloomberg Businessweek) produzindo a imagem cinematográfica de um slide de carrossel Instagram.
+
+REGRA #1: Toda imagem é GERADA por IA (Imagen 4 / Gemini Flash Image). NÃO existe busca em estoque, Serper, Unsplash ou Google Images. Se você sugerir "stock photo" ou "search", o output é REJEITADO.
+
+REGRA #2: Pense como Roger Deakins iluminando uma cena, Wes Anderson compondo o frame, Annie Leibovitz escolhendo o ângulo. Cada slide é um STILL DE FILME, não uma foto de banco de imagens.
 
 CONTEXTO DO SLIDE:
 - Slide ${slideNumber} de ${totalSlides}${isCover ? " (CAPA)" : ""}
@@ -379,33 +413,60 @@ ${factsBlock}
 ${imageRulesBlock}
 ${templateBlock}
 
-DIRETRIZ: ${coverHint}
+DIRETRIZ DO SLIDE: ${coverHint}
 
-REGRAS DE OUTPUT:
+VARIAÇÃO VISUAL: ${variationGuidance}
 
-mode: SEMPRE "generate" (modo único ativo).
+${shotTypeHint}
 
-generatePrompt — objeto JSON com TODOS estes campos preenchidos de forma rica e cinematográfica:
-- subject: quem/o quê aparece + ação/estado. 1 frase em inglês, concreta. Use entidades nomeadas (NER) quando o slide as cita. Ex: "founder sitting alone at laptop at dusk, hand on forehead" / "Vitalik Buterin profile silhouette against Ethereum-themed background".
-- composition: regras de enquadramento. Ex: "rule of thirds, subject in upper-left, bottom third simpler for text overlay, negative space right side".
-- lighting: iluminação intencional. Ex: "blue hour + amber desk lamp practicals, rim light from window, hard shadow on wall".
-- mood: emoção/atmosfera. Ex: "cinematic thriller, uneasy tension, introspective".
-- palette: array de 3-5 cores em inglês.${tmplMeta ? ` USE APENAS cores da preferida acima.` : ""} Ex: ["navy blue", "amber", "charcoal", "cream"].
-- camera: especificações. Ex: "35mm prime lens, shallow depth of field, subtle film grain, medium shot".
-- textures: texturas enfatizadas. Ex: "skin pores, wool fabric weave, scratched wood desk, dust particles in light beam".
-- negative: o que evitar. Ex: "no text, no letters, no logos, no visible UI, no stock-photo cliches".
-- aspectRatio: sempre "1:1".
+REGRAS DE QUALIDADE DO PROMPT (StructuredImagePrompt):
 
-reasoning: 1 frase curta explicando a direção criativa (pra log).
+Você vai retornar um JSON com 9 campos. Cada campo precisa ser RICO, ESPECÍFICO e CINEMATOGRÁFICO. Prompt vago = imagem genérica. Prompt cravado = imagem que para o scroll.
 
-ZERO markdown. Retorne APENAS JSON válido.
-ZERO texto na imagem (negative deve proibir).
+1. **subject** — Quem/o quê aparece + ação concreta + emoção. NÃO use abstração ("pessoa pensando em sucesso"). USE cena específica ("woman in her 30s reading a stained handwritten letter, head tilted, eyes glassy, late afternoon kitchen"). Inclua entidades nomeadas (NER) quando o slide as cita. Mínimo 12 palavras, máximo 35.
 
-Formato de resposta (JSON puro):
+2. **composition** — Regra de enquadramento + onde o sujeito está + onde fica espaço pra texto. Ex: "rule of thirds, subject upper-right intersection, bottom-left negative space for text overlay, foreground object out of focus framing the subject". Mínimo 10 palavras.
+
+3. **lighting** — Iluminação intencional, tipo direção de fotografia. Ex: "blue hour from window left + warm tungsten lamp practicals + rim light kicker behind subject, hard shadow on wall". Mínimo 10 palavras. Banidas: "natural light", "soft light" (sozinhas — adicione qualificadores).
+
+4. **mood** — Emoção da cena + tensão narrativa. Ex: "cinematic editorial, uneasy contemplation, the moment before a hard decision, quiet domestic tension". Mínimo 8 palavras.
+
+5. **palette** — Array de 3-5 cores em inglês.${tmplMeta ? ` Use APENAS cores da paleta PREFERIDA acima.` : ""} Cores específicas, não genéricas. Ex: ["deep navy", "burnt amber", "warm cream", "graphite charcoal"]. NÃO ["blue", "yellow", "white"].
+
+6. **camera** — Lente + abertura + grão + tipo de shot. Ex: "85mm prime f/1.8, shallow depth of field, subtle Kodak Portra 400 film grain, medium close-up, slight Dutch tilt". Mínimo 8 palavras.
+
+7. **textures** — Materiais e superfícies enfatizadas. Ex: "skin pores with fine hairs catching light, raw linen fabric weave, scratched maple wood desk, dust particles dancing in the light beam, condensation on cold glass". Mínimo 10 palavras. NÃO "natural textures" genérico.
+
+8. **negative** — O que evitar pra evitar a estética stock-photo. Inclua sempre: "no text, no letters, no readable signs, no logos, no UI screens with content". Adicione específicos do slide. Ex: "no smiling people in business suits, no high-five poses, no headset call-center vibe, no stock-photo over-saturated colors".
+
+9. **aspectRatio**: sempre "1:1".
+
+reasoning: 1 frase curta (max 200 chars) explicando POR QUÊ essa direção visual fala desse slide.
+
+EXEMPLO DE OUTPUT BOM (para um slide sobre "burnout do empreendedor"):
+{
+  "mode": "generate",
+  "generatePrompt": {
+    "subject": "exhausted founder in his late 30s slumped at messy desk past midnight, laptop screen glow lighting his face, hand pressed against forehead, half-eaten cold pizza forgotten beside him",
+    "composition": "rule of thirds, subject in left third, screen glow as key visual anchor, bottom third of frame darker and simpler for text overlay, blurred chaotic desk in foreground",
+    "lighting": "monitor blue glow as key light + single warm desk lamp practical at 45 degrees + deep shadows on right side of face, no fill light, dramatic chiaroscuro",
+    "mood": "cinematic thriller atmosphere, deep loneliness of late-night work, the silent cost of ambition, weighted exhaustion",
+    "palette": ["deep navy", "monitor cyan glow", "warm amber", "charcoal black", "muted cream"],
+    "camera": "50mm prime f/1.4, shallow depth of field with bokeh on background screens, subtle film grain, medium close-up at eye level",
+    "textures": "stubble shadow on jaw, oily skin reflecting screen light, crumpled paper sheets, plastic keycap shine, condensation on water glass, dust in light beam",
+    "negative": "no smiling, no clean desk, no stock-business attire, no posed laptop hero shot, no daylight office, no team in background, no readable text on screen",
+    "aspectRatio": "1:1"
+  },
+  "reasoning": "Slide fala da solidão real do founder — cena específica de madrugada, único corpo no frame, luz fria do monitor é a única companhia."
+}
+
+ZERO markdown. ZERO prose antes/depois do JSON. Retorne APENAS o JSON válido.
+
+Formato:
 {
   "mode": "generate",
   "generatePrompt": { ... StructuredImagePrompt ... },
-  "reasoning": "1 frase explicando a direção criativa"
+  "reasoning": "..."
 }`;
 }
 
@@ -555,13 +616,31 @@ function fallbackDecision(
 /**
  * Monta prompt final pro Imagen-4 / Gemini Flash Image a partir do structured.
  * Formato inspirado em ai.google.dev/gemini-api/docs/image-generation.
- * Target: ~300-500 chars (sem contar rules NO-TEXT do caller).
+ * Target: ~500-900 chars (sem contar rules NO-TEXT do caller).
+ *
+ * Estrutura intencional: SUBJECT primeiro (Imagen pondera o início), depois
+ * camera+lighting (define look), depois mood+composition (define enquadramento),
+ * depois textures+palette (define finish), por último negative (proibições).
  */
 export function buildImagePromptFromStructured(
   s: StructuredImagePrompt
 ): string {
-  const palette = s.palette.length > 0 ? s.palette.join(", ") : "editorial palette";
-  return `A photorealistic ${s.camera} of ${s.subject}. ${s.composition}. Lit by ${s.lighting}, creating ${s.mood}. Emphasizing ${s.textures}. Palette: ${palette}. Aspect ratio ${s.aspectRatio}. ${s.negative}`
+  const palette =
+    s.palette.length > 0
+      ? s.palette.join(", ")
+      : "deep navy, warm amber, charcoal, cream";
+  return [
+    `A photorealistic cinematic editorial photograph of ${s.subject}.`,
+    `Shot with ${s.camera}.`,
+    `Lit by ${s.lighting}.`,
+    `Composition: ${s.composition}.`,
+    `Mood: ${s.mood}.`,
+    `Texture details: ${s.textures}.`,
+    `Color palette: ${palette}.`,
+    `Aspect ratio ${s.aspectRatio}.`,
+    `AVOID: ${s.negative}.`,
+  ]
+    .join(" ")
     .replace(/\s+/g, " ")
     .trim();
 }

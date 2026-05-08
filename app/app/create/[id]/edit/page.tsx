@@ -500,24 +500,16 @@ export default function EditPage(props: {
       // com backoff. Se depois de N passes ainda falhar, marca imageFailed=true
       // pra UX do editor mostrar card "Gerar de novo" claramente.
       while (passIndex < maxRetries) {
-        // Snapshot dos indices que precisam de imagem.
-        // 28/04: respeita decisão do Gemini de "slide sem imagem" —
-        // imageQuery === "" string vazia significa intencional (não é
-        // missing). Isso pula auto-fill em ~50% dos slides típicos
-        // (texto puro/abstrato/CTA), reduzindo tempo total de geração.
+        // 2026-05-08: TODO slide deve ter imagem gerada por IA (Gabriel
+        // pediu zero stock, zero busca, todo slide cinematográfico).
+        // Antes pulávamos quando imageQuery=="" (modelo dizia "não precisa"),
+        // agora forçamos geração mesmo assim — usamos heading/body como seed
+        // pro decider montar prompt rico.
         const missing: number[] = [];
         for (let i = 0; i < slides.length; i++) {
           const s = slides[i];
           if (!s) continue;
           if (s.imageUrl) continue; // já tem imagem
-          // imageQuery vazio EXPLÍCITO = modelo decidiu que slide não
-          // tem imagem. Não é "missing".
-          if (
-            typeof s.imageQuery === "string" &&
-            s.imageQuery.trim() === ""
-          ) {
-            continue;
-          }
           missing.push(i);
         }
         setImagesPending(missing.length);

@@ -1,23 +1,10 @@
 /**
- * Estrategia de imagens por slide — decide quem recebe imagem e qual tecnologia.
+ * Cache tematico de imagens geradas. TTL 30d, isolado por user.
  *
- * Regra (2026-04-22 v3 — TODOS slides com imagem):
- *  - Slide 0 (CAPA): SEMPRE Imagen 4 premium (scroll stopper, cinema)
- *  - Slides 1..N-1 (inner + CTA): TODOS recebem imagem. Alternam:
- *      - pos par   → Serper search (stock real, $0.008/img)
- *      - pos impar → Gemini 3.1 Flash Image (geracao simples, $0.008/img)
- *  - CTA tb tem imagem pq user reclamou de slide vazio
- *
- * Por que tudo tem imagem:
- *  - Template 'foto' tem espaco dedicado — sem imagem ficava vazio
- *  - Twitter template renderiza imagem se existir, texto puro fica magro
- *  - Gabriel prefere ate R\$ 1/carrossel do que slide vazio
- *
- * Custo estimado (6 slides):
- *  - 1 Imagen 4 capa: \$0.04
- *  - 3 Gemini Flash Image: 3 × \$0.008 = \$0.024
- *  - 2 Serper: 2 × \$0.008 = \$0.016
- *  - Total: ~\$0.08 = R\$ 0.45/carrossel (dentro do budget R\$ 1)
+ * 2026-05-08: a função `planSlideImages` (alternava search/generate par/ímpar)
+ * foi REMOVIDA. Hoje todo slide é decidido individualmente pelo `image-decider`
+ * (lib/server/image-decider.ts) que usa Gemini Flash 2.5 pra escolher prompt
+ * cinematográfico estruturado. Sem busca online no auto-flow.
  *
  * Cache tematico (TTL 30d):
  *  - Hash sha256(userId::mode::query) → image_theme_cache
@@ -30,43 +17,6 @@
 
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-
-export type ImageAction = {
-  slideIndex: number;
-  /** "skip" = nao gera imagem, layout text-only. */
-  mode: "generate" | "search" | "stock" | "skip";
-  /** Flag pro prompt Imagen ativar pipeline 2-pass cinematografico. */
-  isCover: boolean;
-  /** Razao da decisao — util pra log/debug. */
-  reason: string;
-};
-
-export function planSlideImages(totalSlides: number): ImageAction[] {
-  const actions: ImageAction[] = [];
-  for (let i = 0; i < totalSlides; i++) {
-    if (i === 0) {
-      // Capa SEMPRE Imagen 4 — primeira impressao, scroll stopper.
-      actions.push({
-        slideIndex: i,
-        mode: "generate",
-        isCover: true,
-        reason: "cover-imagen-4",
-      });
-      continue;
-    }
-    // Internos + CTA: TODOS tem imagem pra evitar slide vazio. Alternam
-    // entre Serper stock e Gemini Flash Image (gen simples barata).
-    const innerPos = i - 1;
-    const useSearch = innerPos % 2 === 0;
-    actions.push({
-      slideIndex: i,
-      mode: useSearch ? "search" : "generate",
-      isCover: false,
-      reason: useSearch ? "inner-stock" : "inner-flash-image",
-    });
-  }
-  return actions;
-}
 
 // ──────────────────────────────────────────────────────────────────────────
 // Cache tematico

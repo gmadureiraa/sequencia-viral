@@ -595,7 +595,7 @@ export default function NewCarouselPage() {
       // 5000. NÃO fatia em title/hook/angle diferentes — isso confundia a
       // IA a "parafrasear" em vez de respeitar o conteúdo.
       const fullIdea = idea.slice(0, 4900);
-      const { variations, promptUsed } = await generateCarousel({
+      const { variations, promptUsed, facts: nerFacts } = await generateCarousel({
         concept: {
           title: idea.split("\n")[0].slice(0, 120) || idea.slice(0, 120),
           hook: "",
@@ -614,112 +614,101 @@ export default function NewCarouselPage() {
       const chosen = variations[0];
       if (!chosen) throw new Error("IA não devolveu slides.");
 
-      // 3) Busca imagens em paralelo pra cada slide. Search (Serper) em
-      //    vez de generate (Imagen) pra não explodir latência — usuário
-      //    pode trocar pra Imagen no editor depois.
+      // 3) Gera imagens cinematográficas pra cada slide via Gemini Imagen / Flash Image.
+      //    2026-05-08: TODA imagem agora é GERADA por IA (zero stock, zero busca online).
+      //    O image-decider monta StructuredImagePrompt rico pra cada slide
+      //    (subject + composition + lighting + mood + palette + camera + textures),
+      //    usando NER facts pra cravar entidades nomeadas e o template lock pra
+      //    coerência visual. Sem fallback Serper/Unsplash no auto-flow.
       setPhase("images");
       setImagesProgress({ done: 0, total: chosen.slides.length });
-      // Lógica por template:
-      // - twitter: busca stock (Serper) — imagens candid pra ficar como "post real"
-      // - manifesto/futurista/autoral: gera cinematográfico (Imagen) na capa + headlines/photo
-      //   variants; quote/cta sem imagem (são tipográficos); restante buscar stock
-      //   editorial se não for cover.
-      const imageMode: "search" | "generate" =
-        designTemplate === "twitter" ? "search" : "generate";
-      // Nota: server já injetou as imagens do usuário nos slides 0..N-1 (ordem
-      // fornecida). Aqui só tratamos slides SEM imageUrl (precisam fetch).
-      // Isso evita o bug de duplicar URLs entre slides que o server já cobriu
-      // e o resto da sequência.
-      const slidesWithImages = await Promise.all(
-        chosen.slides.map(async (slide, idx) => {
-          // Se já veio imageUrl (server injetou do upload do user), pula fetch.
+
+      // Concurrency baixa pra não estourar rate limit (Imagen é caro,
+      // /api/images tem cap 40/h por user). Slides processados em paralelo
+      // de 3 em 3.
+      const IMAGE_CONCURRENCY = 3;
+      const totalSlides = chosen.slides.length;
+      const slidesWithImages = [...chosen.slides];
+
+      // Worker pool simples — varre slides em ordem mas processa
+      // IMAGE_CONCURRENCY em paralelo.
+      let cursor = 0;
+      async function worker() {
+        while (true) {
+          const idx = cursor++;
+          if (idx >= totalSlides) return;
+          const slide = slidesWithImages[idx];
+          if (!slide) continue;
+
+          // Se server já injetou imageUrl (upload do user), pula fetch.
           if (slide.imageUrl && typeof slide.imageUrl === "string") {
             setImagesProgress((prev) =>
               prev ? { ...prev, done: prev.done + 1 } : null
             );
-            return slide;
-          }
-          // Quote/cta em templates editoriais não precisam de imagem (são puramente tipográficos).
-          const skipImage =
-            imageMode === "generate" &&
-            (slide.variant === "quote" || slide.variant === "cta");
-          if (skipImage) {
-            setImagesProgress((prev) =>
-              prev ? { ...prev, done: prev.done + 1 } : null
-            );
-            return slide;
+            continue;
           }
 
-          // 28/04: SE o Gemini retornou imageQuery EXPLICITAMENTE vazio
-          // (string ""), respeitamos a decisão dele de "esse slide não
-          // precisa de imagem". Isso tira ~50% dos fetches/Imagens em
-          // carrosseis típicos (cover sempre tem, demais o modelo decide
-          // pelo conteúdo: nome próprio/produto/dado → tem; texto puro
-          // abstrato → não tem). Antes caía no fallback `|| heading` e
-          // toda página acabava ganhando imagem forçada.
-          if (
-            typeof slide.imageQuery === "string" &&
-            slide.imageQuery.trim() === ""
-          ) {
-            setImagesProgress((prev) =>
-              prev ? { ...prev, done: prev.done + 1 } : null
-            );
-            return slide;
-          }
-
-          const query = (slide.imageQuery || slide.heading || "").slice(0, 300);
-          if (!query.trim()) {
-            setImagesProgress((prev) =>
-              prev ? { ...prev, done: prev.done + 1 } : null
-            );
-            return slide;
-          }
-
-          // Capa (idx 0) recebe reforço dramático/cinematográfico.
           const isCover = idx === 0;
+          // Query base: imageQuery do writer ou heading. Decider monta o
+          // prompt rico baseado em heading+body+facts; query bruta serve só
+          // como seed quando o decider falha.
+          const query =
+            (slide.imageQuery && slide.imageQuery.trim()) ||
+            (slide.heading && slide.heading.trim()) ||
+            (slide.body && slide.body.trim().slice(0, 80)) ||
+            idea.slice(0, 80);
 
           try {
             const res = await fetch("/api/images", {
               method: "POST",
               headers: jsonWithAuth(session),
               body: JSON.stringify({
-                query,
+                query: query.slice(0, 300),
                 count: 1,
-                mode: imageMode,
+                // Decider força generate-only (env IMAGE_DECIDER_MODE default).
+                // mode aqui é só fallback caso decider falhe; mantemos generate
+                // pra nunca cair em search.
+                mode: "generate",
+                useDecider: true,
+                slideNumber: idx + 1,
+                totalSlides,
                 niche,
                 tone,
                 designTemplate,
                 peopleMode: "auto",
                 contextHeading: slide.heading?.slice(0, 400) ?? "",
                 contextBody: slide.body?.slice(0, 500) ?? "",
-                // Flag extra pra /api/images reforçar o prompt do Imagen quando cover.
                 isCover,
+                facts: nerFacts,
               }),
-              // Imagen demora mais que Serper. Capa tem 2-pass (scene + imagen)
-              // então timeout maior ainda — ~50s pra fluxo completo.
-              signal: AbortSignal.timeout(
-                imageMode === "generate"
-                  ? isCover ? 75_000 : 45_000
-                  : 12_000
-              ),
+              // Imagen é o gargalo. Cover roda 2-pass (cover-scene + Imagen),
+              // ~75s P99. Inner slides ~30-45s P99.
+              signal: AbortSignal.timeout(isCover ? 75_000 : 45_000),
             });
             if (!res.ok) throw new Error(`images ${res.status}`);
             const data = (await res.json()) as {
               images?: Array<{ url?: string }>;
             };
             const url = data.images?.[0]?.url;
-            setImagesProgress((prev) =>
-              prev ? { ...prev, done: prev.done + 1 } : null
-            );
-            return url ? { ...slide, imageUrl: url } : slide;
+            if (url) {
+              slidesWithImages[idx] = { ...slide, imageUrl: url };
+            }
           } catch (e) {
-            console.warn("[new] image fetch slide", idx, e);
+            // Sem fallback Serper aqui — slide fica sem imagem e o editor
+            // mostra estado "imageFailed" pro user clicar "regenerar".
+            console.warn(
+              `[new] image gen falhou slide ${idx + 1}/${totalSlides}:`,
+              e instanceof Error ? e.message : e
+            );
+          } finally {
             setImagesProgress((prev) =>
               prev ? { ...prev, done: prev.done + 1 } : null
             );
-            return slide;
           }
-        })
+        }
+      }
+      await Promise.all(
+        Array.from({ length: IMAGE_CONCURRENCY }).map(() => worker())
       );
 
       // 4) Persiste slides com imagens. Template já foi escolhido no briefing

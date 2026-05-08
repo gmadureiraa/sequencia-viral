@@ -105,7 +105,15 @@ export function useGenerate(session: Session | null) {
   const generateCarousel = useCallback(
     async (
       input: GenerateCarouselInput
-    ): Promise<{ variations: CreateVariation[]; promptUsed?: string }> => {
+    ): Promise<{
+      variations: CreateVariation[];
+      promptUsed?: string;
+      facts?: {
+        entities?: string[];
+        dataPoints?: string[];
+        summary?: string[];
+      };
+    }> => {
       setError(null);
       setLoadingCarousel(true);
       try {
@@ -149,6 +157,16 @@ export function useGenerate(session: Session | null) {
           promptUsed?: string;
           error?: string;
           code?: string;
+          meta?: {
+            facts?: {
+              entities?: string[];
+              dataPoints?: string[];
+              keyPoints?: string[];
+              summary?: string[];
+              quotes?: string[];
+              arguments?: string[];
+            } | null;
+          };
         } = await res.json();
         if (!res.ok)
           throw buildError(data.error || "Falha na geração.", res, data.code);
@@ -170,9 +188,32 @@ export function useGenerate(session: Session | null) {
           /* ignore — pixel é fire-and-forget */
         }
 
+        // Propaga facts (NER) pro caller usar no image-decider — sem isso o
+        // decider gera prompts genéricos por slide (sem entidades reais),
+        // qualidade visual cai. Mapeia keyPoints → summary pro shape esperado
+        // pelo decider (que aceita só entities/dataPoints/summary).
+        const rawFacts = data.meta?.facts ?? null;
+        const facts =
+          rawFacts && !Array.isArray(rawFacts)
+            ? {
+                entities: Array.isArray(rawFacts.entities)
+                  ? rawFacts.entities
+                  : [],
+                dataPoints: Array.isArray(rawFacts.dataPoints)
+                  ? rawFacts.dataPoints
+                  : [],
+                summary: Array.isArray(rawFacts.summary)
+                  ? rawFacts.summary
+                  : Array.isArray(rawFacts.keyPoints)
+                    ? rawFacts.keyPoints
+                    : [],
+              }
+            : undefined;
+
         return {
           variations: data.variations,
           promptUsed: data.promptUsed,
+          facts,
         };
       } catch (err) {
         let msg =

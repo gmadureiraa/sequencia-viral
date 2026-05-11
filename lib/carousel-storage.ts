@@ -706,36 +706,66 @@ export async function deleteUserCarousel(
   }
 }
 
+export interface BumpUsageResult {
+  /** Se o increment foi permitido (false = user atingiu o cap mensal). */
+  allowed: boolean;
+  /** Contagem atual após increment (ou tentativa). */
+  newCount: number;
+  /** Cap efetivo (greatest do usage_limit do DB com o plan_cap). */
+  usageLimit: number;
+  /** Plano vigente. */
+  plan: string;
+}
+
+/**
+ * Incrementa atomicamente `profiles.usage_count` respeitando o cap mensal.
+ *
+ * Usa `try_increment_usage_count` (RPC SECURITY DEFINER) — single UPDATE com
+ * `WHERE usage_count < cap` que garante atomicidade contra TOCTOU em chamadas
+ * concorrentes (bulk duplicate, multi-tab, race com /api/generate).
+ *
+ * Audit 2026-05-11 (Gabriel): a RPC anterior `increment_usage_count` NÃO
+ * existe no schema — toda chamada de bumpCarouselUsage caía no fallback
+ * read-then-write non-atomic, e a duplicação não respeitava o cap mensal
+ * (user free podia duplicar 50 mesmo com cap 5).
+ *
+ * Retorna `{ allowed, newCount, usageLimit, plan }` pro caller decidir UX
+ * (toast de bloqueio quando allowed=false).
+ */
 export async function bumpCarouselUsage(
   client: SupabaseClient,
   userId: string
-) {
-  // Prefer atomic RPC — no race conditions between concurrent generates
-  const { error: rpcErr } = await client.rpc("increment_usage_count", { uid: userId });
-  if (!rpcErr) return;
+): Promise<BumpUsageResult> {
+  type RpcRow = {
+    out_allowed: boolean;
+    out_new_count: number;
+    out_usage_limit: number;
+    out_plan: string;
+  };
+  const { data, error } = await client
+    .rpc("try_increment_usage_count", { uid: userId })
+    .returns<RpcRow[]>();
 
-  // Fallback: read-then-write (e.g. if RPC not deployed yet)
-  console.warn("[bumpCarouselUsage] RPC failed, falling back to read-then-write:", rpcErr.message);
-  const { data: prof, error: readErr } = await client
-    .from("profiles")
-    .select("usage_count")
-    .eq("id", userId)
-    .single();
-
-  if (readErr) {
-    console.error("[bumpCarouselUsage] Failed to read profile:", readErr.message);
-    return;
+  if (error) {
+    console.error("[bumpCarouselUsage] try_increment_usage_count error:", error.message);
+    // Fail-open conservador: deixa passar mas loga. Backend (/api/generate)
+    // tem o gate atomic real; aqui (duplicate) preferimos não travar UX em
+    // bug transitório de RPC.
+    return { allowed: true, newCount: 0, usageLimit: 0, plan: "free" };
   }
 
-  const next = (prof?.usage_count ?? 0) + 1;
-  const { error: updateErr } = await client
-    .from("profiles")
-    .update({ usage_count: next })
-    .eq("id", userId);
-
-  if (updateErr) {
-    console.error("[bumpCarouselUsage] Failed to update usage_count:", updateErr.message);
+  const row = Array.isArray(data) ? data[0] : (data as RpcRow | null);
+  if (!row) {
+    console.error("[bumpCarouselUsage] empty RPC result");
+    return { allowed: true, newCount: 0, usageLimit: 0, plan: "free" };
   }
+
+  return {
+    allowed: row.out_allowed,
+    newCount: row.out_new_count,
+    usageLimit: row.out_usage_limit,
+    plan: row.out_plan,
+  };
 }
 
 const MAX_FEEDBACK_COMMENT = 2000;

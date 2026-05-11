@@ -197,7 +197,15 @@ export default function CarouselsPage() {
     if (items.length === 0) return;
     setBulkBusy(true);
     let okCount = 0;
+    let capReached = false;
     for (const carousel of items) {
+      // Atomic check + increment ANTES de cada duplicação — respeita o cap
+      // mensal igual ao /api/generate (antes o duplicate fazia bypass).
+      const bump = await bumpCarouselUsage(supabase, user.id);
+      if (!bump.allowed) {
+        capReached = true;
+        break;
+      }
       try {
         await upsertUserCarousel(supabase, user.id, {
           title: `${carousel.title || "Sem título"} (cópia)`,
@@ -215,13 +223,18 @@ export default function CarouselsPage() {
       }
     }
     if (okCount > 0) {
-      await bumpCarouselUsage(supabase, user.id);
       await refreshProfile();
     }
     await loadCarousels();
     clearSelection();
     setBulkBusy(false);
-    toast.success(`${okCount} duplicado(s).`);
+    if (capReached) {
+      toast.warning(
+        `${okCount} duplicado(s). Limite mensal atingido — restantes não duplicados.`
+      );
+    } else {
+      toast.success(`${okCount} duplicado(s).`);
+    }
   }
 
   function handleBulkExportJson() {
@@ -291,6 +304,14 @@ export default function CarouselsPage() {
         toast.error("Sessão inválida. Entre novamente.");
         return;
       }
+      // Atomic check + increment ANTES de criar a duplicação — respeita cap mensal.
+      const bump = await bumpCarouselUsage(supabase, user.id);
+      if (!bump.allowed) {
+        toast.error(
+          `Limite mensal atingido (${bump.newCount}/${bump.usageLimit}). Atualize seu plano pra duplicar mais.`
+        );
+        return;
+      }
       const { inserted } = await upsertUserCarousel(supabase, user.id, {
         title: `${carousel.title || "Sem título"} (cópia)`,
         slides: carousel.slides,
@@ -302,7 +323,6 @@ export default function CarouselsPage() {
         imagePeopleMode: carousel.imagePeopleMode,
       });
       if (inserted) {
-        await bumpCarouselUsage(supabase, user.id);
         await refreshProfile();
       }
       await loadCarousels();

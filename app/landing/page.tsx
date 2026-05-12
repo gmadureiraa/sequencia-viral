@@ -1,8 +1,9 @@
 import Link from "next/link";
 
 const VARIANTS = [
-  { href: "/", name: "Home — canonical", note: "Landing principal em uso" },
-  { href: "/v2", name: "/v2 — Autopilot", note: "Narrativa Posttar-like: piloto automático em 5min (teste tráfego pago)" },
+  { href: "/", name: "Home — canonical", note: "Landing principal em uso (controle do A/B)" },
+  { href: "/v2", name: "/v2 — Autopilot", note: "Narrativa: 'piloto automático em 5min' (foco constância)" },
+  { href: "/v3", name: "/v3 — Velocidade", note: "Narrativa: 'post pronto em menos de 1 minuto' (foco velocidade extrema)" },
   { href: "/landing/v2", name: "v2 — Brillance (legado)", note: "SaaS limpo, espaçamento generoso, prova social suave" },
 ];
 

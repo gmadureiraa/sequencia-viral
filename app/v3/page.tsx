@@ -6,43 +6,43 @@ import { useEffect, useState } from "react";
 import posthog from "posthog-js";
 
 /**
- * Landing /v2 — ANGLE: AUTOPILOT
- * Narrativa: "Seu Instagram no piloto automático em 5min".
- * Inspiração: posttar.com — direto, simples, foco em constância.
+ * Landing /v3 — ANGLE: VELOCIDADE
+ * Narrativa: "Seu post pronto em menos de 1 minuto".
+ * Mesma estrutura da /v2, pivot pra rapidez extrema (cola link → carrossel).
  * CTAs apontam pra /app/login?mode=signup (5 carrosséis grátis).
  *
- * Evento PostHog: lp_viewed { lp_variant: "autopilot" }
+ * Evento PostHog: lp_viewed { lp_variant: "velocidade" }
  */
 
 const STATS = [
-  { value: "60s", label: "Carrossel pronto" },
+  { value: "60s", label: "Por carrossel" },
   { value: "5 grátis", label: "Pra testar" },
-  { value: "100%", label: "Sem Canva" },
-  { value: "5min", label: "Setup completo" },
+  { value: "1 link", label: "1 input só" },
+  { value: "0", label: "Linhas de copy" },
 ];
 
 const SECTIONS = [
   {
-    eyebrow: "CONSTÂNCIA",
-    title: "Poste todo dia sem precisar começar do zero",
+    eyebrow: "VELOCIDADE",
+    title: "O que demorava 2 horas no Canva, agora sai em 1 minuto",
     body:
-      "Sua constância não depende mais de inspiração. A Sequência Viral cria, agenda e publica pra você, todo dia. Conectou o Instagram, ligou o piloto automático.",
+      "Cola o link de um vídeo, artigo ou só uma ideia. Em 60 segundos a IA escreveu, escolheu imagens, montou os slides e te entregou um carrossel pronto pra postar. Sem etapas. Sem espera.",
     cta: "Ver como funciona",
     accent: true,
   },
   {
-    eyebrow: "SEM DESIGNER",
-    title: "Carrosséis com a sua marca, sem abrir o Canva",
+    eyebrow: "SIMPLICIDADE",
+    title: "1 input. 1 carrossel. Sem briefing, sem etapas, sem espera",
     body:
-      "Conteúdo no padrão de um social media e designer profissionais, com as suas cores, fontes e logo aplicados automaticamente. Você não precisa montar nada — só revisar antes de publicar.",
+      "Você não vai escolher template, não vai ajustar paleta, não vai abrir 4 abas. Cola a fonte, escolhe o template (Futurista ou Twitter) e clica. O resto é a IA fazendo no padrão da sua marca.",
     cta: "Quero testar grátis",
     accent: false,
   },
   {
-    eyebrow: "CONVERSÃO",
-    title: "Seu perfil trabalhando pra trazer clientes, não só curtidas",
+    eyebrow: "FLUXO",
+    title: "Posta de manhã, posta de noite, posta no almoço — sem travar",
     body:
-      "A IA escreve no seu tom, sobre o seu nicho, com hook que dá vontade de ler. Resultado: carrossel salvável, comentário que vira DM, DM que vira venda.",
+      "Tem inspiração? Vira carrossel agora. Não tem? Cola o último vídeo do YouTube que você gosta, vira sua versão. Acabou a fricção entre ter a ideia e ela estar publicada.",
     cta: "Começar agora",
     accent: false,
   },
@@ -51,59 +51,59 @@ const SECTIONS = [
 const HOW = [
   {
     step: "01",
-    title: "Conecte o seu Instagram",
-    body: "1 clique via parceria oficial com a Meta. Zero risco de banimento.",
+    title: "Cola um link ou ideia",
+    body: "Vídeo do YouTube, post do Instagram, artigo ou só uma frase. A IA extrai o que importa.",
   },
   {
     step: "02",
-    title: "Refine o DNA da sua marca",
-    body: "Cores, fontes, logo e tom de voz. O que torna os carrosséis seus.",
+    title: "A IA escreve no seu tom",
+    body: "Voz capturada das suas redes. Hook, slides, fechamento. Imagens IA ou stock automáticas.",
   },
   {
     step: "03",
-    title: "Ligue o Piloto Automático",
+    title: "Exporta PNG e posta",
     body:
-      "Escolha frequência e horários. A máquina cria, monta e publica por você.",
+      "Carrossel pronto em ~60 segundos. PNG otimizado pra Instagram, LinkedIn e X. Publica direto.",
   },
 ];
 
 const FAQ = [
   {
-    q: "Corro risco de banimento no Instagram?",
-    a: "Não. Usamos a parceria oficial da Meta (Graph API), o mesmo padrão de segurança do próprio app do Instagram. Nenhuma senha sai do seu navegador.",
+    q: "60 segundos é real mesmo? Ou é marketing?",
+    a: "É real. O fluxo todo (extrair fonte → IA escrever no seu tom → montar slides → exportar PNG) leva em média 60s. Vídeos do YouTube acima de 2h podem somar alguns segundos pra transcrever.",
   },
   {
-    q: "É automático mesmo? Preciso escolher as imagens?",
-    a: "É automático de verdade. A IA escolhe imagens (banco ou geradas) baseadas no contexto. Mas se você quiser, pode revisar e trocar antes de publicar.",
+    q: "Preciso escrever briefing ou prompt?",
+    a: "Não. Você cola a fonte (link ou ideia em 1 frase) e pronto. Sem prompt engineering, sem briefing, sem etapas de aprovação interna.",
   },
   {
-    q: "Preciso saber de design ou marketing pra usar?",
-    a: "Não. A Sequência Viral substitui o designer e o copywriter. Você cola um link (vídeo, artigo, post) ou só uma ideia — ela escreve, monta e exporta.",
+    q: "A IA escreve no meu tom mesmo?",
+    a: "Sim. Capturamos os últimos posts do seu perfil no onboarding (uma vez só) e usamos como restrição: vocabulário, ritmo, tipo de abertura, tabus. Você ainda pode adicionar regras manuais (ex.: 'sem hashtag').",
   },
   {
-    q: "Os carrosséis vão parecer com a minha marca?",
-    a: "Sim. Você configura cores, fontes e logo uma vez. Todo carrossel novo já sai com a sua identidade visual aplicada.",
+    q: "A IA inventa coisas no carrossel?",
+    a: "Não. A IA trabalha exclusivamente em cima da fonte que você colou. Se não tá na fonte, não entra no carrossel.",
   },
   {
-    q: "Posso editar os posts antes de publicar?",
-    a: "Sim. Tudo é editável: texto, fonte, cor, ordem dos slides, template. Você aprova antes de ir ao ar.",
+    q: "Posso editar antes de publicar?",
+    a: "Sim. Texto, fonte, cor, ordem dos slides, template — tudo editável inline. Aprova com 1 clique.",
   },
   {
     q: "Tem teste grátis?",
     a: "Sim — 5 carrosséis grátis pra testar. Sem cartão. Se gostar, assina por R$ 49,90/mês.",
   },
   {
-    q: "Posso cancelar quando quiser?",
-    a: "Sem fidelidade. Cancela pelo painel em 2 cliques.",
+    q: "Funciona com vídeo do YouTube?",
+    a: "Qualquer vídeo público com áudio. Transcrição em português, inglês e espanhol. Lives e podcasts também rodam (em background, se for muito longo).",
   },
 ];
 
-export default function LandingAutopilot() {
+export default function LandingVelocidade() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   useEffect(() => {
     try {
-      posthog.capture("lp_viewed", { lp_variant: "autopilot" });
+      posthog.capture("lp_viewed", { lp_variant: "velocidade" });
     } catch {
       /* ignore */
     }
@@ -121,7 +121,7 @@ export default function LandingAutopilot() {
       {/* ============ TOP BAR ============ */}
       <header className="border-b" style={{ borderColor: "rgba(10,9,8,0.08)" }}>
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-          <Link href="/v2" className="font-bold tracking-tight text-lg">
+          <Link href="/v3" className="font-bold tracking-tight text-lg">
             Sequência <span style={{ color: "var(--sv-green)" }}>Viral</span>
           </Link>
           <div className="flex items-center gap-2">
@@ -160,7 +160,7 @@ export default function LandingAutopilot() {
             className="h-2 w-2 rounded-full"
             style={{ background: "var(--sv-green)" }}
           />
-          5 carrosséis grátis · sem cartão
+          Pronto em ~60s · 5 grátis · sem cartão
         </motion.div>
 
         <motion.h1
@@ -169,9 +169,9 @@ export default function LandingAutopilot() {
           transition={{ duration: 0.55, delay: 0.05 }}
           className="text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl"
         >
-          Seu Instagram no <br />
-          <span style={{ color: "var(--sv-green)" }}>piloto automático</span>{" "}
-          em 5min
+          Seu post pronto <br />
+          em{" "}
+          <span style={{ color: "var(--sv-green)" }}>menos de 1 minuto</span>
         </motion.h1>
 
         <motion.p
@@ -181,8 +181,9 @@ export default function LandingAutopilot() {
           className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed sm:text-xl"
           style={{ color: "rgba(10,9,8,0.72)" }}
         >
-          Poste carrosséis com a sua marca todo dia no seu perfil sem precisar
-          de designer, copywriter… nem de tempo.
+          Cola um link ou uma ideia. A IA escreve no seu tom, escolhe imagens,
+          monta os slides e te entrega um carrossel pronto pra postar. Em 60
+          segundos.
         </motion.p>
 
         <motion.div
@@ -201,7 +202,7 @@ export default function LandingAutopilot() {
               fontWeight: 700,
             }}
           >
-            Experimente com 5 carrosséis →
+            Criar meu primeiro em 60s →
           </Link>
           <a
             href="#como-funciona"
@@ -241,7 +242,7 @@ export default function LandingAutopilot() {
         </motion.div>
       </section>
 
-      {/* ============ 3 SEÇÕES (CONSTÂNCIA / SEM DESIGNER / CONVERSÃO) ============ */}
+      {/* ============ 3 SEÇÕES (VELOCIDADE / SIMPLICIDADE / FLUXO) ============ */}
       <section className="mx-auto max-w-5xl space-y-12 px-5 pb-20 sm:space-y-20">
         {SECTIONS.map((sec, i) => (
           <motion.div
@@ -366,11 +367,11 @@ export default function LandingAutopilot() {
               className="mb-3 inline-block text-[11px] font-mono font-semibold uppercase tracking-[0.18em]"
               style={{ color: "var(--sv-green)" }}
             >
-              EM 5 MINUTOS VOCÊ TÁ NO AR
+              3 PASSOS · 60 SEGUNDOS
             </div>
             <h2 className="text-3xl font-bold tracking-tight sm:text-5xl">
-              Setup feito uma vez. <br className="hidden sm:block" />
-              Conteúdo todo dia depois.
+              Cola, gera, posta. <br className="hidden sm:block" />
+              Sem etapas no meio.
             </h2>
           </div>
 
@@ -614,15 +615,15 @@ export default function LandingAutopilot() {
       {/* ============ FINAL CTA ============ */}
       <section className="mx-auto max-w-3xl px-5 py-20 text-center sm:py-28">
         <h2 className="text-3xl font-bold leading-tight tracking-tight sm:text-5xl">
-          Ligue o <span style={{ color: "var(--sv-green)" }}>piloto automático</span>{" "}
-          do seu Instagram hoje
+          Seu próximo carrossel sai em{" "}
+          <span style={{ color: "var(--sv-green)" }}>60 segundos</span>
         </h2>
         <p
           className="mx-auto mt-5 max-w-xl text-base sm:text-lg"
           style={{ color: "rgba(10,9,8,0.70)" }}
         >
-          5 carrosséis grátis pra testar. 5 minutos de setup. Sem cartão, sem
-          fidelidade, sem letra miúda.
+          5 carrosséis grátis pra testar. Sem cartão, sem briefing, sem
+          aprovação interna. Cola e gera.
         </p>
         <Link
           href="/app/login?mode=signup"
@@ -634,7 +635,7 @@ export default function LandingAutopilot() {
             fontWeight: 700,
           }}
         >
-          Experimente grátis →
+          Criar meu primeiro em 60s →
         </Link>
         <p
           className="mt-4 text-xs"

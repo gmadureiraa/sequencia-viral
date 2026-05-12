@@ -237,7 +237,7 @@ export function WelcomePopup() {
             {/* CTAs */}
             <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
               <Link
-                href={`/app/login?coupon=${COUPON_CODE}`}
+                href={`/app/login?mode=signup&coupon=${COUPON_CODE}`}
                 onClick={dismiss}
                 className="sv-btn sv-btn-primary"
                 style={{

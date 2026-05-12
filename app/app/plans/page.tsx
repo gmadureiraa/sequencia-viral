@@ -69,7 +69,7 @@ function buildCards(interval: Interval): PlanCard[] {
       tagline: "Pra testar o fluxo sem compromisso.",
       features: FREE_FEATURES,
       ctaLabel: "Começar agora",
-      ctaHref: "/app/login",
+      ctaHref: "/app/login?mode=signup",
     },
     {
       id: "pro",

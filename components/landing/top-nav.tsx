@@ -18,7 +18,7 @@ const NAV_ITEMS = [
 export function TopNav() {
   const [open, setOpen] = useState(false);
   const { isLoggedIn } = useLandingSession();
-  const primaryHref = isLoggedIn ? "/app" : "/app/login";
+  const primaryHref = isLoggedIn ? "/app" : "/app/login?mode=signup";
   const primaryLabel = isLoggedIn ? "Ir pro app →" : "Criar grátis →";
 
   return (

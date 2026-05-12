@@ -44,7 +44,17 @@ export default function LoginPage() {
     }
   }, [authLoading, user, session, router]);
 
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  // Default mode lido de ?mode=signup pra CTAs da landing chegarem direto
+  // no formulário de cadastro (sem fricção extra pro tráfego frio do Meta).
+  const [mode, setMode] = useState<"signin" | "signup">(() => {
+    if (typeof window === "undefined") return "signin";
+    try {
+      const m = new URLSearchParams(window.location.search).get("mode");
+      return m === "signup" ? "signup" : "signin";
+    } catch {
+      return "signin";
+    }
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");

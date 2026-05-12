@@ -301,7 +301,7 @@ export function PricingSection() {
               "Templates Futurista + Twitter",
             ]}
             cta="Começar agora"
-            ctaHref="/app/login"
+            ctaHref="/app/login?mode=signup"
             ctaVariant="outline"
           />
           <PlanCard

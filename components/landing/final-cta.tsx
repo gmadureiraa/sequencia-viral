@@ -20,7 +20,7 @@ export function FinalCTA(props: FinalCTAProps = {}) {
     primaryCtaLabel,
   } = props;
   const { isLoggedIn } = useLandingSession();
-  const primaryHref = isLoggedIn ? "/app" : "/app/login";
+  const primaryHref = isLoggedIn ? "/app" : "/app/login?mode=signup";
   const primaryLabel = isLoggedIn
     ? "Ir pro app →"
     : primaryCtaLabel || "Criar carrossel grátis →";

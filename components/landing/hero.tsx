@@ -245,7 +245,7 @@ export function Hero(props: HeroProps = {}) {
     trustPills,
   } = props;
   const { isLoggedIn } = useLandingSession();
-  const primaryHref = isLoggedIn ? "/app" : "/app/login";
+  const primaryHref = isLoggedIn ? "/app" : "/app/login?mode=signup";
   const primaryLabel = isLoggedIn
     ? "Ir pro app →"
     : primaryCtaLabel || "Criar primeiro grátis";

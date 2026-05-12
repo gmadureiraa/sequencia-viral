@@ -2,7 +2,8 @@ import Link from "next/link";
 
 const VARIANTS = [
   { href: "/", name: "Home — canonical", note: "Landing principal em uso" },
-  { href: "/landing/v2", name: "v2 — Brillance", note: "SaaS limpo, espaçamento generoso, prova social suave (teste A/B ativo)" },
+  { href: "/v2", name: "/v2 — Autopilot", note: "Narrativa Posttar-like: piloto automático em 5min (teste tráfego pago)" },
+  { href: "/landing/v2", name: "v2 — Brillance (legado)", note: "SaaS limpo, espaçamento generoso, prova social suave" },
 ];
 
 export default function LandingVariantsIndex() {

@@ -245,7 +245,19 @@ const ADMIN_EMAILS_LOWER = new Set(ADMIN_EMAILS.map((e) => e.toLowerCase()));
  * Ver `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md`.
  */
 export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
+
+  // A/B Tráfego pago — rewrite por utm_lp.
+  // Tráfego do Meta com `?utm_lp=v2|v3` cai em /v2|/v3 mantendo URL visível
+  // como `/?utm_lp=...` (não muda o que aparece pro user, só serve o
+  // conteúdo certo). Mais limpo que redirect e preserva atribuição.
+  // ATIVO durante teste KAL_SV_BR_LPV_ABO_v3_AB_2026-05-12.
+  if (pathname === "/" && (searchParams.get("utm_lp") === "v2" || searchParams.get("utm_lp") === "v3")) {
+    const target = searchParams.get("utm_lp");
+    const url = request.nextUrl.clone();
+    url.pathname = `/${target}`;
+    return NextResponse.rewrite(url);
+  }
 
   // Edge gate de /app/admin/* foi REMOVIDO em 05/05.
   //

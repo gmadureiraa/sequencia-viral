@@ -27,7 +27,8 @@ export type DesignTemplateId =
   | "ambitious"
   | "blank"
   | "bohdan"
-  | "paper-mono";
+  | "paper-mono"
+  | "madureira-reflection";
 
 /** Template default quando nada é especificado. */
 export const DEFAULT_DESIGN_TEMPLATE: DesignTemplateId = "manifesto";
@@ -92,6 +93,8 @@ export interface DesignTemplateMeta {
   preferPalette: string[];
   /** Palette que o Imagen deve evitar (conflita com accent). */
   avoidPalette: string[];
+  /** Quando true, pipeline pula Serper/Imagen — template é text-only. */
+  textOnly?: boolean;
 }
 
 export const DESIGN_TEMPLATES: DesignTemplateMeta[] = [
@@ -247,6 +250,22 @@ export const DESIGN_TEMPLATES: DesignTemplateMeta[] = [
     preferPalette: ["#ECE9DD", "#0E0E10", "#1A1A1A", "#FFFFFF"],
     avoidPalette: ["#00F0A0", "#1D9BF0", "#D262B2", "#7CF067", "#EACB7C"],
   },
+  {
+    id: "madureira-reflection",
+    emoji: "▮",
+    name: "Madureira Reflexão",
+    desc: "Text-only minimalista do DS Madureira: capa emoji + reflexão longa em Geist sans com ênfase Fraunces italic accent. Fundo preto puro, zero imagem. Admin-only por enquanto.",
+    color: "#e63a1f",
+    blockCount: 7,
+    figmaLabel: "Template Madureira Reflection",
+    imageSearchStyleHint: "",
+    imageGenRealismFragment: "",
+    styleGuidePrompt: "",
+    slideAestheticModifier: "",
+    preferPalette: ["#000000", "#f4f1ea", "#e63a1f"],
+    avoidPalette: [],
+    textOnly: true,
+  },
 ] as const;
 
 export const EDITORIAL_ACCENT = "#FF5500";
@@ -311,6 +330,7 @@ const VALID_TEMPLATE_IDS: readonly DesignTemplateId[] = [
   "blank",
   "bohdan",
   "paper-mono",
+  "madureira-reflection",
 ];
 
 /** Normaliza qualquer string em um DesignTemplateId válido (default: manifesto). */
@@ -339,6 +359,10 @@ export const CONTENT_MACHINE_RENDER_SPECS: Record<
   blank: { blocks: 10, rules: CONTENT_MACHINE_NARRATIVE_RULES },
   bohdan: { blocks: 10, rules: CONTENT_MACHINE_NARRATIVE_RULES },
   "paper-mono": { blocks: 8, rules: CONTENT_MACHINE_NARRATIVE_RULES },
+  "madureira-reflection": {
+    blocks: 7,
+    rules: "Texto corrido em parágrafos curtos (1-3 linhas). Sem listas, sem bullets, sem números no corpo. Capa = título Fraunces italic + emoji opcional. Demais slides = reflexão longa Geist sans, com **palavras-chave em ênfase** (vão renderizar como Fraunces italic accent). Última peça é CTA também em texto corrido com palavra-chave de ManyChat em **bold**. Voz: direta, sem travessão, pronome 'você' dominante.",
+  },
 };
 
 export function usesNativeSlidePreview(_template: DesignTemplateId): boolean {

@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import type { DesignTemplateId, ImagePeopleMode } from "@/lib/carousel-templates";
 import {
   getDesignTemplateMeta,
@@ -281,6 +282,20 @@ export async function POST(request: Request) {
     const mergedSearch = mergeImageSearchText(query, heading, bodyCtx);
     const tmplId = normalizeDesignTemplate(designTemplate);
     const tmplMeta = getDesignTemplateMeta(tmplId);
+
+    // Early-exit pra templates text-only (ex: madureira-reflection). Não
+    // gera nem busca imagem — economiza Serper/Imagen/Gemini Flash. O
+    // renderer ignora imageUrl mesmo, então não tem perda visual.
+    if (tmplMeta.textOnly) {
+      return NextResponse.json({
+        url: null,
+        provider: "text-only",
+        source: "skipped",
+        slideNumber: typeof slideNumber === "number" ? slideNumber : null,
+        skippedReason: "template is text-only",
+      });
+    }
+
     const peopleMode = normalizeImagePeopleMode(peopleModeRaw);
     const peopleSearch = imagePeopleModeSearchSuffix(peopleMode);
 

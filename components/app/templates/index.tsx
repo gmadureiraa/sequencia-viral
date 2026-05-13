@@ -10,6 +10,7 @@ import TemplateBlank from "./template-blank";
 import TemplateBohdan from "./template-bohdan";
 import TemplatePaperMono from "./template-paper-mono";
 import TemplateMadureira from "./template-madureira";
+import TemplateMadureiraReflection from "./template-madureira-reflection";
 import type { SlideProps, TemplateId, TemplateMeta } from "./types";
 
 export type { SlideProps, TemplateId, TemplateMeta } from "./types";
@@ -41,6 +42,8 @@ export const TemplateRenderer = forwardRef<
       return <TemplatePaperMono ref={ref} {...rest} />;
     case "madureira":
       return <TemplateMadureira ref={ref} {...rest} />;
+    case "madureira-reflection":
+      return <TemplateMadureiraReflection ref={ref} {...rest} />;
     default:
       return <TemplateTwitter ref={ref} {...rest} />;
   }
@@ -102,6 +105,12 @@ export const TEMPLATES_META: TemplateMeta[] = [
     kicker: "Nº 09 · CAPA IA",
     palette: ["#0B0F1E", "#00F0A0", "#FFFFFF"],
   },
+  {
+    id: "madureira-reflection",
+    name: "Madureira Reflexão",
+    kicker: "Nº 10 · TEXTO-PURO",
+    palette: ["#000000", "#f4f1ea", "#e63a1f"],
+  },
 ];
 
 export {
@@ -114,4 +123,5 @@ export {
   TemplateBohdan,
   TemplatePaperMono,
   TemplateMadureira,
+  TemplateMadureiraReflection,
 };

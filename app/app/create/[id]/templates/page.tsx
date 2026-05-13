@@ -65,6 +65,7 @@ const TEMPLATE_ORDER: TemplateId[] = [
   "blank",
   "bohdan",
   "paper-mono",
+  "madureira-reflection",
 ];
 
 const TEMPLATE_DESC: Record<TemplateId, string> = {
@@ -77,6 +78,15 @@ const TEMPLATE_DESC: Record<TemplateId, string> = {
   bohdan: "Design-forward · B&W contraste alto · serif italic lime · handwritten",
   "paper-mono": "Confessional · cream paper-grain · sans bold + mono · B&W halftone (ref: tobi.the.og)",
   madureira: "Futurista simples · capa IA dominante · navy + accent verde · slides com quadrado 1:1",
+  "madureira-reflection": "Texto-puro · capa emoji + reflexão longa · Geist sans + Fraunces italic accent · zero imagem (admin)",
+};
+
+/**
+ * Templates que SÓ aparecem pra admin. User comum nem vê no picker.
+ * Diferente de COMING_SOON (que aparece com badge mas não pode selecionar).
+ */
+const ADMIN_ONLY_TEMPLATES: Partial<Record<TemplateId, true>> = {
+  "madureira-reflection": true,
 };
 
 const TEMPLATE_NAME_OVERRIDE: Partial<Record<TemplateId, string>> = {
@@ -268,7 +278,9 @@ export default function TemplatesPage(props: {
       <div
         className="mt-6 grid gap-6 grid-cols-1 sm:grid-cols-2"
       >
-        {TEMPLATE_ORDER.map((tplId) => {
+        {TEMPLATE_ORDER.filter(
+          (tplId) => isAdmin || !ADMIN_ONLY_TEMPLATES[tplId],
+        ).map((tplId) => {
           const meta = TEMPLATES_META.find((m) => m.id === tplId)!;
           const isOn = selected === tplId;
           const comingSoon = Boolean(COMING_SOON[tplId]);

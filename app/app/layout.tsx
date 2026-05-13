@@ -20,6 +20,7 @@ import {
   CalendarClock,
   Rocket,
   Gift,
+  Library,
 } from "lucide-react";
 import Link from "next/link";
 import { Toaster } from "@/components/ui/sonner";
@@ -47,6 +48,7 @@ type NavItem = {
 const PRIMARY_NAV: NavItem[] = [
   { href: "/app", label: "Início", icon: LayoutDashboard },
   { href: "/app/carousels", label: "Carrosséis", icon: FolderOpen },
+  { href: "/app/biblioteca", label: "Biblioteca", icon: Library, badge: "Novo" },
   { href: "/app/zernio/calendar", label: "Planejamento", icon: CalendarClock },
   { href: "/app/zernio/autopilot", label: "Piloto automático", icon: Rocket },
 ];

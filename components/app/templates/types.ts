@@ -14,7 +14,8 @@ export type TemplateId =
   | "blank"
   | "bohdan"
   | "paper-mono"
-  | "madureira";
+  | "madureira"
+  | "madureira-reflection";
 
 export type SlideVariantName =
   | "cover"
